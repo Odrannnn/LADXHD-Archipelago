@@ -1,0 +1,83 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="550" d:DesignHeight="768"
+             MinWidth="550" 
+             MaxWidth="550"
+			 MinHeight="400" 
+			 MaxHeight="768"
+             x:Class="LADXHD_Launcher.HomeView">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="54" />
+        </Grid.RowDefinitions>
+
+        <!-- Background spans both rows -->
+		<Viewbox Grid.Row="0" Grid.RowSpan="2"
+				 Stretch="UniformToFill"
+				 VerticalAlignment="Top"
+				 HorizontalAlignment="Center">
+			<Image Source="avares://Launcher/Resources/background.png"
+				   Width="550"
+				   Height="768" />
+		</Viewbox>
+
+        <!-- Update Button in content row -->
+        <Canvas Grid.Row="0">
+            <Button Canvas.Left="3" Canvas.Top="3" Width="239" Height="44"
+                    x:Name="UpdateButton"
+                    Click="UpdateButton_Click"
+                    IsVisible="False"
+                    Background="Transparent" BorderThickness="0" Padding="0">
+                <Image Source="avares://Launcher/Resources/button_update.png"
+                       Stretch="Fill" />
+            </Button>
+        </Canvas>
+
+        <!-- Sound Toggle Button in content row -->
+        <Canvas Grid.Row="0">
+            <Button Canvas.Left="502" Canvas.Top="10" Width="40" Height="30"
+                    Click="SoundToggle_Click"
+                    Background="Transparent" BorderThickness="0" Padding="0">
+                <Image x:Name="SoundButtonImage"
+                       Source="avares://Launcher/Resources/sound_on.png"
+                       Stretch="Fill" />
+            </Button>
+        </Canvas>
+
+        <!-- Button bar pinned to bottom row -->
+        <Canvas Grid.Row="1">
+            <Button x:Name="PlayButton" Canvas.Left="26" Canvas.Top="6" Width="88" Height="42"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    Click="PlayButton_Click">
+                <Image Source="avares://Launcher/Resources/button_play.png"
+                       Stretch="None"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Button>
+            <Button x:Name="SettingsButton" Canvas.Left="140" Canvas.Top="6" Width="153" Height="44"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    Click="SettingsButton_Click">
+                <Image Source="avares://Launcher/Resources/button_settings.png"
+                       Stretch="None"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Button>
+            <Button x:Name="ModsButton" Canvas.Left="319" Canvas.Top="6" Width="96" Height="43"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    Click="ModsButton_Click">
+                <Image Source="avares://Launcher/Resources/button_mods.png"
+                       Stretch="None"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Button>
+            <Button x:Name="ExitButton" Canvas.Left="441" Canvas.Top="6" Width="83" Height="42"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    Click="ExitButton_Click">
+                <Image Source="avares://Launcher/Resources/button_exit.png"
+                       Stretch="None"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Button>
+        </Canvas>
+
+    </Grid>
+</UserControl>

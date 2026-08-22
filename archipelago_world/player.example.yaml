@@ -1,0 +1,15 @@
+name: Player1
+description: LADXHD Archipelago MVP example
+game: Links Awakening DX HD
+
+Links Awakening DX HD:
+  progression_balancing: 50
+  accessibility: items
+  logic: normal
+  experimental_entrance_shuffle: none
+  experimental_dungeon_shuffle: false
+  hard_mode: none
+  overworld: normal
+  goal: instruments
+  instrument_count: 8
+  tradequest: false

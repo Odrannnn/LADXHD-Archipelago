@@ -1,0 +1,103 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="570"
+        x:Class="LADXHD_Patcher_Lite.MainWindow"
+        Title="Link's Awakening DX HD Patcher-Lite vX.X.X"
+        Width="420"
+        Height="570"
+        MinWidth="420"
+        MinHeight="570"
+        MaxWidth="420"
+        MaxHeight="570"
+		CanMaximize="False"
+        WindowStartupLocation="CenterScreen"
+        Icon="avares://Patcher-Lite/Resources/Icon.ico">
+
+		<Canvas Grid.Row="1">
+			<Image Source="avares://Patcher-Lite/Resources/la.png" Canvas.Left="10" Canvas.Top="10" Width="400" Height="260" />
+
+			<Border Canvas.Left="10" Canvas.Top="280" Width="400" Height="140" BorderBrush="#88FFFFFF" BorderThickness="1" Padding="8">
+				<StackPanel>
+					<TextBlock TextWrapping="Wrap" FontSize="11.5">
+						<Run x:Name="Label_Title" FontWeight="Bold" Text="Legend of Zelda: Link's Awakening DX HD vX.X.X"/>
+					</TextBlock>
+					<TextBlock TextWrapping="Wrap" FontSize="11.5" Margin="0,16,0,0">
+						<Run x:Name="Label_Description" Text="Patches v1.0.0 (or versions beyond v1.1.4) to vX.X.X with the &quot;Patch&quot; button below. All patchers created since v1.1.4 back up the v1.0.0 files so that future patches no longer require v1.0.0. When updating with this version of the patcher, future versions of the patcher can use the stored backup files. Backups are stored in the &quot;Data\Backup&quot; folder. Do not move or delete them!"/>
+					</TextBlock>
+				</StackPanel>
+			</Border>
+
+			<Border Canvas.Left="10" Canvas.Top="428" Width="400" Height="60"
+					BorderBrush="#88FFFFFF" BorderThickness="1" Padding="8">
+				<StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+
+					<TextBlock Text="Platform:" VerticalAlignment="Center" FontSize="11.5"/>
+					<ComboBox x:Name="ComboBox_Platform" Width="130" SelectedIndex="0" FontSize="11.5"
+                        SelectionChanged="comboBox_Platform_SelectionChanged">
+						<ComboBoxItem>Windows</ComboBoxItem>
+						<ComboBoxItem>Android</ComboBoxItem>
+						<ComboBoxItem>Linux (x86-64)</ComboBoxItem>
+						<ComboBoxItem>Linux (Arm64)</ComboBoxItem>
+						<ComboBoxItem>MacOS (x86-64)</ComboBoxItem>
+						<ComboBoxItem>MacOS (Arm64)</ComboBoxItem>
+					</ComboBox>
+
+					<TextBlock Text="Target:" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="11.5"/>
+					<ComboBox x:Name="ComboBox_API" Width="130" SelectedIndex="0" FontSize="11.5"
+                        SelectionChanged="combBox_API_SelectionChanged">
+						<ComboBoxItem>DirectX</ComboBoxItem>
+						<ComboBoxItem>OpenGL</ComboBoxItem>
+					</ComboBox>
+
+				</StackPanel>
+			</Border>
+
+            <Border x:Name="androidOptionsPanel" Canvas.Left="10" Canvas.Top="490" Width="400" Height="30"
+                    IsVisible="False">
+                <CheckBox x:Name="CheckBox_AndroidMods" Margin="0,8,0,0" FontSize="11.5" Content="Pack installed mods into APK"
+                    IsCheckedChanged="CheckBox_AndroidMods_CheckedChanged"/>
+            </Border>
+
+            <ProgressBar x:Name="progressBar"
+                     Canvas.Left="10" Canvas.Top="498" Width="400" Height="14" Minimum="0" Maximum="100" Value="0"/>
+
+            <TextBlock x:Name="successLabel" Text="Success!" FontSize="11.5"
+                       Canvas.Left="10" Canvas.Top="498" Width="400" Height="14"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center"
+                       IsVisible="False"
+                       ZIndex="1"/>
+
+			<Grid Canvas.Left="10" Canvas.Top="522" Width="400" Height="38" x:Name="buttonGrid">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="*"/>
+				</Grid.ColumnDefinitions>
+
+				<Button x:Name="Button_Patch" Grid.Column="0" Content="Patch" Height="38" 
+						HorizontalAlignment="Stretch" 
+						HorizontalContentAlignment="Center" 
+						VerticalContentAlignment="Center" 
+						Margin="0,0,4,0"
+	 					Click="Button_Patch_Click"/>
+
+				<Button x:Name="Button_ChangeLog" Grid.Column="1" Content="Changelog" Height="38" 
+						HorizontalAlignment="Stretch" 
+						HorizontalContentAlignment="Center" 
+						VerticalContentAlignment="Center" 
+						Margin="4,0,4,0"
+                        Click="Button_ChangeLog_Click"/>
+
+				<Button x:Name="Button_Exit" Grid.Column="2" Content="Exit" Height="38" 
+						HorizontalAlignment="Stretch" 
+						HorizontalContentAlignment="Center" 
+						VerticalContentAlignment="Center" 
+						Margin="4,0,0,0"
+	 					Click="Button_Exit_Click"/>
+
+			</Grid>
+		</Canvas>
+</Window>

@@ -1,0 +1,86 @@
+<Project>
+  <PropertyGroup>
+    <ProjectZContentProject>$(MSBuildThisFileDirectory)ProjectZ.Content.csproj</ProjectZContentProject>
+    <ProjectZContentSourceDirectory>$(MSBuildThisFileDirectory)Content</ProjectZContentSourceDirectory>
+    <ProjectZContentAndroidPrecompiledDirectory>$(MSBuildThisFileDirectory)Precompiled\Android</ProjectZContentAndroidPrecompiledDirectory>
+    <ProjectZContentDataDirectory>$(MSBuildThisFileDirectory)..\ProjectZ.Core\Data</ProjectZContentDataDirectory>
+    <ProjectZContentOutputDirectory>$(MSBuildThisFileDirectory)bin/$(ProjectZContentOutputName)/Content</ProjectZContentOutputDirectory>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(ProjectZContentEmbedInAndroid)' != 'true'">
+    <None Include="$(ProjectZContentDataDirectory)\**\*"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          TargetPath="Data\%(RecursiveDir)%(Filename)%(Extension)"
+          ExcludeFromSingleFile="true" />
+  </ItemGroup>
+
+  <Target Name="BuildProjectZContentTool" Condition="'$(TargetFramework)' != ''">
+    <MSBuild Projects="$(ProjectZContentProject)"
+             Targets="Restore;Build"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="RuntimeIdentifier;RuntimeIdentifiers;TargetFramework;TargetFrameworks" />
+    <MSBuild Projects="$(ProjectZContentProject)"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="RuntimeIdentifier;RuntimeIdentifiers;TargetFramework;TargetFrameworks">
+      <Output TaskParameter="TargetOutputs" PropertyName="ProjectZContentToolPath" />
+    </MSBuild>
+  </Target>
+
+  <Target Name="GenerateProjectZContent"
+          DependsOnTargets="BuildProjectZContentTool"
+          BeforeTargets="$(ProjectZContentBeforeTargets)"
+          Condition="'$(TargetFramework)' != '' and '$(DesignTimeBuild)' != 'true'">
+    <Exec Command="dotnet &quot;$(ProjectZContentToolPath)&quot; $(ProjectZContentPlatform) &quot;$(ProjectZContentSourceDirectory)&quot;"
+          StandardOutputImportance="High"
+          StandardErrorImportance="High" />
+
+    <ItemGroup Condition="'$(ProjectZContentEmbedInAndroid)' == 'true'">
+      <_GeneratedProjectZAndroidContent Include="$(ProjectZContentOutputDirectory)\**\*" />
+      <_PrecompiledProjectZAndroidContent Include="$(ProjectZContentAndroidPrecompiledDirectory)\**\*.xnb"
+                                          Exclude="$(ProjectZContentAndroidPrecompiledDirectory)\Fonts\smallFont_chn.xnb;$(ProjectZContentAndroidPrecompiledDirectory)\Fonts\smallFont_chn_redux.xnb" />
+      <AndroidAsset Include="@(_GeneratedProjectZAndroidContent)" Link="Content\%(RecursiveDir)%(Filename)%(Extension)" />
+      <AndroidAsset Include="@(_PrecompiledProjectZAndroidContent)" Link="Content\%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="ValidateProjectZAndroidContent"
+          BeforeTargets="GenerateProjectZContent"
+          Condition="'$(ProjectZContentEmbedInAndroid)' == 'true'">
+    <Error Condition="!Exists('$(ProjectZContentAndroidPrecompiledDirectory)\Shader\EffectBlur.xnb')"
+           Text="Android precompiled content is missing. Generate the Android content overlay from a legally obtained LADXHD v1.0.0 copy and the official patches_android.zip before building." />
+  </Target>
+
+  <Target Name="CopyProjectZContentToOutput"
+          DependsOnTargets="GenerateProjectZContent"
+          AfterTargets="Build"
+          Condition="'$(ProjectZContentEmbedInAndroid)' != 'true' and '$(TargetDir)' != '' and Exists('$(TargetDir)')">
+    <ItemGroup>
+      <_GeneratedProjectZContent Include="$(ProjectZContentOutputDirectory)\**\*" />
+      <_PrecompiledProjectZContent Include="$(ProjectZContentSourceDirectory)\**\*.xnb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_GeneratedProjectZContent)"
+          DestinationFiles="@(_GeneratedProjectZContent->'$(TargetDir)Content\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_PrecompiledProjectZContent)"
+          DestinationFiles="@(_PrecompiledProjectZContent->'$(TargetDir)Content\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyProjectZContentToPublish"
+          DependsOnTargets="GenerateProjectZContent"
+          AfterTargets="Publish"
+          Condition="'$(ProjectZContentEmbedInAndroid)' != 'true'">
+    <ItemGroup>
+      <_GeneratedProjectZContent Include="$(ProjectZContentOutputDirectory)\**\*" />
+      <_PrecompiledProjectZContent Include="$(ProjectZContentSourceDirectory)\**\*.xnb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_GeneratedProjectZContent)"
+          DestinationFiles="@(_GeneratedProjectZContent->'$(PublishDir)Content\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_PrecompiledProjectZContent)"
+          DestinationFiles="@(_PrecompiledProjectZContent->'$(PublishDir)Content\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

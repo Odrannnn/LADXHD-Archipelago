@@ -1,0 +1,98 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="680"
+        x:Class="LADXHD_Launcher.CreateModsWindow"
+        Title="Link's Awakening DX HD Mod Maker vX.X.X"
+        Width="420"
+        Height="680"
+        MinWidth="420"
+        MinHeight="680"
+        MaxWidth="420"
+        MaxHeight="680"
+		CanMaximize="False"
+        WindowStartupLocation="CenterScreen"
+        Icon="avares://Launcher/Resources/Icon.ico">
+
+		<Canvas Grid.Row="1">
+			<Image x:Name="MainImage" Source="avares://Launcher/Resources/la.png" Canvas.Left="10" Canvas.Top="0" Width="400" Height="260" DragDrop.AllowDrop="True"/>
+
+			<Border Canvas.Left="10" Canvas.Top="265" Width="400" Height="348" BorderBrush="#88FFFFFF" BorderThickness="1" Padding="8">
+				<StackPanel>
+
+					<TextBlock Margin="4,0,0,0" TextWrapping="Wrap" FontSize="11.5" FontWeight="Bold" 
+							   Text="Mod Name:"
+							   ToolTip.Tip="The name of the mod and&#10;optionally the mod version." >
+					</TextBlock>
+					<TextBox x:Name="ModNameBox" Watermark="Enter mod name..." Margin="0,7,0,0" MaxLength="100" FontSize="11.5" Width="380" AcceptsReturn="False" 
+							 LostFocus="ModNameBox_LostFocus"/>
+
+					<TextBlock Margin="4,8,0,0" TextWrapping="Wrap" FontSize="11.5" FontWeight="Bold" 
+							   Text="Mod Description:"
+							   ToolTip.Tip="A brief description of the mod.">
+					</TextBlock>
+					<TextBox x:Name="ModDescBox" Watermark="Enter mod description..." Margin="0,7,0,0" FontSize="11.5" Width="380" Height="120" AcceptsReturn="True" TextWrapping="Wrap" 
+							 LostFocus="ModDescBox_LostFocus"/>
+
+					<TextBlock Margin="4,8,0,0" TextWrapping="Wrap" FontSize="11.5" FontWeight="Bold"
+							   Text="Image File (Optional):"
+							   ToolTip.Tip="Replaces default image. Must be formatted&#10;as PNG, BMP, or JPG. For the best fit, resize&#10;your image with the dimensions 400x260.">
+					</TextBlock>
+					<StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+						<TextBox x:Name="ImageFileBox" Watermark="Enter image file path..." FontSize="11.5" Width="346" AcceptsReturn="False"
+								DragDrop.AllowDrop="True"
+								LostFocus="ImageFileBox_LostFocus"/>
+						<Button x:Name="ImageFileButton" Content="..." Width="30" Height="30" Margin="4,0,0,0" 
+								Click="ImageFileButton_Click"/>
+					</StackPanel>
+
+					<TextBlock Margin="4,8,0,0" TextWrapping="Wrap" FontSize="11.5" FontWeight="Bold"
+							   Text="Output Path:"
+							   ToolTip.Tip="The path to output the finalized mod&#10;which will appear in &quot;_ModOutput&quot;.">
+					</TextBlock>
+					<StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+						<TextBox x:Name="OutputPathBox" Watermark="Enter output path..." FontSize="11.5" Width="346" AcceptsReturn="False"
+								DragDrop.AllowDrop="True"
+								LostFocus="OutputPathBox_LostFocus"/>
+						<Button x:Name="OutputPathButton" Content="..." Width="30" Height="30" Margin="4,0,0,0"
+								Click="OutputPathButton_Click"/>
+					</StackPanel>
+
+				</StackPanel>
+			</Border>
+
+			<ProgressBar x:Name="progressBar"
+				Canvas.Left="10" Canvas.Top="620" Width="400" Height="11" Minimum="0" Maximum="100" Value="0"/>
+
+			<Grid Canvas.Left="10" Canvas.Top="636" Width="400" Height="38">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="*"/>
+				</Grid.ColumnDefinitions>
+
+				<Button x:Name="CreateModButton" Grid.Column="0" Content="Create Mod" Height="34" 
+						HorizontalAlignment="Stretch" 
+						HorizontalContentAlignment="Center" 
+						VerticalContentAlignment="Center" 
+						Margin="0,0,4,0"
+						Click="CreateModButton_Click"/>
+
+				<Button x:Name="ModsGitLabButton" Grid.Column="1" Content="GitHub" Height="34" 
+						HorizontalAlignment="Stretch" 
+						HorizontalContentAlignment="Center" 
+						VerticalContentAlignment="Center" 
+						Margin="4,0,4,0"
+	 					Click="ModsGitLabButton_Click"/>
+
+				<Button x:Name="ExitButton" Grid.Column="2" Content="Exit" Height="34" 
+						HorizontalAlignment="Stretch" 
+						HorizontalContentAlignment="Center" 
+						VerticalContentAlignment="Center" 
+						Margin="4,0,0,0"
+						Click="ExitButton_Click"/>
+			</Grid>
+
+		</Canvas>
+</Window>

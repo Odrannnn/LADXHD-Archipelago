@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Link's Awakening DX HD</AssemblyName>
+    <MonoGamePlatform>Windows</MonoGamePlatform>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <ApplicationIcon>Resources\Icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>ProjectZ</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>false</ImplicitUsings>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <TieredCompilation>false</TieredCompilation>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ProjectZContentPlatform>Windows</ProjectZContentPlatform>
+    <ProjectZContentOutputName>DirectX11</ProjectZContentOutputName>
+    <ProjectZContentBeforeTargets>Build;Publish</ProjectZContentBeforeTargets>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProjectZ.Core\ProjectZ.Core.csproj" />
+    <ProjectReference Include="..\ProjectZ.Editor\ProjectZ.Editor.csproj" />
+    <PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.5.1" />
+    <PackageReference Include="NativeFileDialogSharp" Version="0.6.0-alpha" />
+  </ItemGroup>
+
+  <Import Project="..\ProjectZ.Content\BuildContent.targets" />
+
+</Project>

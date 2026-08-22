@@ -1,0 +1,98 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Launcher</AssemblyName>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <!-- Detect target OS from RuntimeIdentifier or host. -->
+  <PropertyGroup>
+    <TargetRID Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier.Split('-')[0])</TargetRID>
+    <TargetOS Condition="'$(TargetRID)' == 'win' or ('$(TargetRID)' == '' and $([MSBuild]::IsOSPlatform('Windows')))">win</TargetOS>
+    <TargetOS Condition="'$(TargetRID)' == 'linux' or ('$(TargetRID)' == '' and $([MSBuild]::IsOSPlatform('Linux')))">linux</TargetOS>
+    <TargetOS Condition="'$(TargetRID)' == 'osx' or ('$(TargetRID)' == '' and $([MSBuild]::IsOSPlatform('OSX')))">osx</TargetOS>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.11" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.11" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.11" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.11" />
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.11">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="NativeFileDialogSharp" Version="0.6.0-alpha" />
+    <PackageReference Include="ppy.SDL2-CS" Version="1.0.741-alpha" />
+    <PackageReference Include="System.Windows.Extensions" Version="8.0.0" Condition="'$(TargetOS)' == 'win'" />
+    <PackageReference Include="VCDiff" Version="5.0.0" />
+  </ItemGroup>
+  
+  <ItemGroup>
+      <TrimmerRootDescriptor Include="TrimmerRoots.xml" />
+  </ItemGroup>
+
+  <ItemGroup>
+      <TrimmerRootAssembly Include="System.Threading.Thread" />
+      <TrimmerRootAssembly Include="System.Private.CoreLib" />
+  </ItemGroup>
+    
+  <PropertyGroup Condition="'$(TargetOS)' == 'win'">
+    <OutputType>WinExe</OutputType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Resources\Icon.ico</ApplicationIcon>
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+    <TargetFramework>net9.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetOS)' == 'linux'">
+    <OutputType>Exe</OutputType>
+    <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetOS)' == 'osx'">
+    <OutputType>Exe</OutputType>
+    <DefineConstants>$(DefineConstants);MACOS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Resources\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Interface\Launcher\HomeView.axaml.cs">
+      <DependentUpon>Interface\Launcher\HomeView.axaml</DependentUpon>
+    </Compile>    
+    <Compile Update="Interface\Launcher\MainWindow.axaml.cs">
+      <DependentUpon>Interface\Launcher\MainWindow.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="Interface\Launcher\ModsView.axaml.cs">
+      <DependentUpon>Interface\Launcher\ModsView.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="Interface\Launcher\SettingsView.axaml.cs">
+      <DependentUpon>Interface\Launcher\SettingsView.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="Interface\ModMaker\CreateModsWindow.axaml.cs">
+      <DependentUpon>Interface\ModMaker\CreateModsWindow.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="Interface\ModMaker\InstallModsWindow.axaml.cs">
+      <DependentUpon>Interface\ModMaker\InstallModsWindow.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="Interface\Patcher\ProgressWindow.axaml.cs">
+      <DependentUpon>Interface\Patcher\ProgressWindow.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="Interface\Shared\OkayWindow.axaml.cs">
+      <DependentUpon>Interface\Shared\OkayWindow.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="Interface\Shared\YesNoWindow.axaml.cs">
+      <DependentUpon>Interface\Shared\YesNoWindow.axaml</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <Target Name="DebugPlatformConstants" BeforeTargets="BeforeBuild">
+    <Message Importance="High" Text="Target OS: $(TargetOS)" />
+    <Message Importance="High" Text="Constants: $(DefineConstants)" />
+  </Target>
+
+</Project>

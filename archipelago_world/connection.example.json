@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "server": "localhost:38281",
+  "slot": "Player1",
+  "password": "",
+  "seed_file": "seed.apladxhd",
+  "save_slot": 0,
+  "auto_connect": true
+}

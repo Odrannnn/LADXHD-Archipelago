@@ -1,0 +1,9 @@
+<Project>
+  <!-- Chain up to the repo-root Directory.Build.props to inherit shared properties (e.g. Version). -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <CheckEolWorkloads>false</CheckEolWorkloads>
+  </PropertyGroup>
+</Project>

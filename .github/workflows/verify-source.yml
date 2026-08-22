@@ -1,0 +1,39 @@
+name: Verify assetless source
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Reject private or original game data
+        run: python tools/verify_public_source.py
+
+      - name: Run Archipelago smoke tests
+        run: dotnet run --project ladxhd_game_source_code/ProjectZ.Archipelago.SmokeTests/ProjectZ.Archipelago.SmokeTests.csproj -c Release
+
+      - name: Build reproducible APWorld
+        shell: bash
+        run: |
+          python tools/build_apworld.py
+          first="$(sha256sum dist/ladxhd.apworld)"
+          python tools/build_apworld.py
+          second="$(sha256sum dist/ladxhd.apworld)"
+          test "$first" = "$second"

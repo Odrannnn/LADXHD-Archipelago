@@ -1,0 +1,115 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="470"
+        x:Class="LADXHD_Migrater.MainWindow"
+        Title="Link's Awakening DX HD Migration Tool"
+        Width="420"
+        Height="480"
+        MinWidth="420"
+        MinHeight="480"
+        MaxWidth="420"
+        MaxHeight="480"
+        CanMaximize="False"
+        WindowStartupLocation="CenterScreen"
+        Icon="avares://Migrater/Resources/Icon.ico">
+
+    <Canvas Grid.Row="1">
+        <Image Source="avares://Migrater/Resources/la.png" Canvas.Left="10" Canvas.Top="10" Width="400" Height="260" />
+
+    <Border Canvas.Left="10" Canvas.Top="280" Width="400" Height="50" BorderBrush="#88FFFFFF" BorderThickness="1" Padding="8">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+            <TextBlock Text="Platform:" VerticalAlignment="Center" FontSize="11.5"/>
+            <ComboBox x:Name="ComboBox_Platform" Width="130" SelectedIndex="0" FontSize="11.5" SelectionChanged="ComboBox_Platform_SelectionChanged">
+                <ComboBoxItem>Windows</ComboBoxItem>
+                <ComboBoxItem>Android</ComboBoxItem>
+                <ComboBoxItem>Linux (x86-64)</ComboBoxItem>
+                <ComboBoxItem>Linux (Arm64)</ComboBoxItem>
+                <ComboBoxItem>MacOS (x86-64)</ComboBoxItem>
+                <ComboBoxItem>MacOS (Arm64)</ComboBoxItem>
+            </ComboBox>
+            <TextBlock Text="Target:" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="11.5"/>
+            <ComboBox x:Name="ComboBox_API" Width="130" SelectedIndex="0" FontSize="11.5" SelectionChanged="ComboBox_API_SelectionChanged">
+                <ComboBoxItem>DirectX11</ComboBoxItem>
+                <ComboBoxItem>DirectX12</ComboBoxItem>
+                <ComboBoxItem>OpenGL</ComboBoxItem>
+                <ComboBoxItem>Vulkan</ComboBoxItem>
+            </ComboBox>
+        </StackPanel>
+    </Border>
+
+    <Border Canvas.Left="10" Canvas.Top="340" Width="400" Height="130" BorderBrush="#88FFFFFF" BorderThickness="1" Padding="8">
+        <Grid>
+            <StackPanel Orientation="Vertical" Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Button x:Name="Button_Migrate" Width="116" Height="50" FontSize="11.5"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Classes="Standard"
+                            Click="Button_Migrate_Click">
+                        <TextBlock Text="Migrate Assets &#x0a;From v1.0.0" TextWrapping="Wrap" TextAlignment="Center"/>
+                    </Button>
+                    <Button x:Name="Button_Patches" Width="116" Height="50" FontSize="11.5"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Classes="Standard"
+                            Click="Button_Patches_Click">
+                        <TextBlock Text="Create Patches of Updated Assets" TextWrapping="Wrap" TextAlignment="Center"/>
+                    </Button>
+                    <Button x:Name="Button_Exit" Width="116" Height="50" FontSize="11.5"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Classes="Standard"
+                            Click="Button_Exit_Click">
+                        <TextBlock Text="Exit" TextWrapping="Wrap" TextAlignment="Center"/>
+                    </Button>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Button x:Name="Button_Clean" Width="182" Height="50" FontSize="11.5"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Classes="Standard"
+                            Click="Button_Clean_Click">
+                        <TextBlock Text="Clean Build Files" TextWrapping="Wrap" TextAlignment="Center"/>
+                    </Button>
+                    <Button x:Name="Button_Build" Width="182" Height="50" FontSize="11.5"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Classes="Standard"
+                            Click="Button_Build_Click">
+                        <TextBlock Text="Create a new Build" TextWrapping="Wrap" TextAlignment="Center"/>
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+    </Canvas>
+    <Window.Styles>
+
+    <Style Selector="Button">
+        <Setter Property="FontFamily" Value="Arial" />
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="BorderBrush" Value="#88FFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button /template/ ContentPresenter">
+        <Setter Property="Background" Value="#1F1F1F" />
+        <Setter Property="BorderBrush" Value="#88FFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#4F4F4F" />
+        <Setter Property="BorderBrush" Value="#88FFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="#676767" />
+        <Setter Property="BorderBrush" Value="#88FFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+		</Style>
+    </Window.Styles>
+</Window>

@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LADXHD_Migrater.YesNoWindow"
+        Title="Yes/No Dialog"
+        Width="304" Height="120"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        CanMaximize="False"
+        Icon="avares://Migrater/Resources/Icon.ico">
+
+    <Grid Margin="0,0,0,0" RowDefinitions="*,Auto">
+        <TextBlock x:Name="MessageLabel" Grid.Row="0"
+                   FontSize="11.5"
+                   TextWrapping="Wrap"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Margin="20,0,20,0" />
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12" Spacing="12">
+            <Button x:Name="YesButton" 
+					FontSize="11.5" 
+					Content="Yes" 
+					Width="80"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Click="YesButton_Click" />
+            <Button x:Name="NoButton" 
+					FontSize="11.5" 
+					Content="No" 
+					Width="80"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Click="NoButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

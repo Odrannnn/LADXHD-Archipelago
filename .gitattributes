@@ -1,0 +1,11 @@
+# Ensure shell scripts are always stored and checked out with Unix (LF) line endings.
+# This prevents Windows tooling from converting \n → \r\n, which breaks /bin/sh execution.
+*.sh text eol=lf
+
+# original map data uses crlf endings, patching will fail if converted to lf
+ladxhd_patcher_source_code/Resources/d3map text eol=crlf
+ladxhd_patcher_source_code/Resources/d3mapdata text eol=crlf
+ladxhd_launcher_source_code/Resources/d3map text eol=crlf
+ladxhd_launcher_source_code/Resources/d3mapdata text eol=crlf
+*.lahdmod filter=lfs diff=lfs merge=lfs -text
+*.lahdpak filter=lfs diff=lfs merge=lfs -text

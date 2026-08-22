@@ -1,0 +1,58 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="544"
+        x:Class="LADXHD_Launcher.InstallModsWindow"
+        Title="Link's Awakening DX HD Mod Maker v2.0.0"
+        Width="420"
+        Height="544"
+        MinWidth="420"
+        MinHeight="544"
+        MaxWidth="420"
+        MaxHeight="544"
+		CanMaximize="False"
+        WindowStartupLocation="CenterScreen"
+        Icon="avares://Launcher/Resources/Icon.ico">
+
+		<Canvas Grid.Row="1">
+			<Image x:Name="ImageBox" Source="avares://Launcher/Resources/la.png" Canvas.Left="10" Canvas.Top="10" Width="400" Height="260" Stretch="Fill"/>
+
+			<Border Canvas.Left="10" Canvas.Top="280" Width="400" Height="196" BorderBrush="#88FFFFFF" BorderThickness="1" Padding="8">
+				<StackPanel>
+					<TextBlock x:Name="ModNameLabel" Margin="4,0,0,0" TextWrapping="Wrap" FontSize="11.5" FontWeight="Bold" 
+							   Text="Mod Description:"
+							   ToolTip.Tip="The mod's description.">
+					</TextBlock>
+					<TextBox x:Name="ModDescBox" Watermark="Mod description..." Margin="0,7,0,0" FontSize="11.5" Width="380" Height="150" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True"/>
+				</StackPanel>
+			</Border>
+
+			<ProgressBar x:Name="progressBar"
+				Canvas.Left="10" Canvas.Top="484" Width="400" Height="11" Minimum="0" Maximum="100" Value="0"/>
+
+			<Grid Canvas.Left="10" Canvas.Top="500" Width="400" Height="38">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="*"/>
+				</Grid.ColumnDefinitions>
+
+				<Button x:Name="InstallModButton" Grid.Column="0" Content="Install Mod" Height="34" 
+						HorizontalAlignment="Stretch" 
+						HorizontalContentAlignment="Center" 
+						VerticalContentAlignment="Center" 
+						Margin="0,0,4,0"
+						Click="InstallModButton_Click"/>   
+
+				<Button x:Name="ExitButton" Grid.Column="2" Content="Exit" Height="34" 
+						HorizontalAlignment="Stretch" 
+						HorizontalContentAlignment="Center" 
+						VerticalContentAlignment="Center" 
+						Margin="4,0,0,0"
+						Click="ExitButton_Click"/>
+			</Grid>
+
+		</Canvas>
+
+</Window>

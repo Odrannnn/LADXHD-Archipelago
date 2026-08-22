@@ -1,0 +1,166 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="550" d:DesignHeight="768"
+        x:Class="LADXHD_Launcher.MainWindow"
+        Title="The Legend of Zelda: Link's Awakening DX HD"
+        Width="550"
+        Height="768"
+        MinWidth="550"
+        MaxWidth="550"
+        MinHeight="400"
+        MaxHeight="768"
+		CanMaximize="False"
+        WindowStartupLocation="CenterScreen"
+        RequestedThemeVariant="Dark"
+        Icon="avares://Launcher/Resources/Icon.ico">
+
+    <Panel>
+        <Image Source="avares://Launcher/Resources/background.png"
+               Stretch="Fill" />
+        <ContentControl x:Name="PageContent" />
+        <Image x:Name="LoadingNotification"
+               Source="avares://Launcher/Resources/load_message.png"
+               Stretch="None"
+               Opacity="0"
+               IsHitTestVisible="False"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center" />
+        <Image x:Name="SavedNotification"
+               Source="avares://Launcher/Resources/saved_message.png"
+               Stretch="None"
+               Opacity="0"
+               IsHitTestVisible="False"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center" />
+		<Image x:Name="ResetNotification"
+			   Source="avares://Launcher/Resources/reset_message.png"
+			   Stretch="None"
+			   Opacity="0"
+			   IsHitTestVisible="False"
+			   HorizontalAlignment="Center"
+			   VerticalAlignment="Center" />
+    </Panel>
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="TooltipBg" Color="#FFFFE1" />
+                    <SolidColorBrush x:Key="TooltipFg" Color="#000000" />
+                    <SolidColorBrush x:Key="TooltipBorder" Color="#888888" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="TooltipBg" Color="#0F0F0F" />
+                    <SolidColorBrush x:Key="TooltipFg" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="TooltipBorder" Color="#88FFFFFF" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!-- Override the border thickness of controls. -->
+            <Thickness x:Key="CheckBoxBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="RadioButtonBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="ButtonBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="TooltipBorderThemeThickness">1</Thickness>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Window.Styles>
+
+        <!-- ToolTip styling -->
+        <Style Selector="ToolTip">
+            <Setter Property="Background" Value="{DynamicResource TooltipBg}" />
+            <Setter Property="Foreground" Value="{DynamicResource TooltipFg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource TooltipBorder}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+
+        <Style Selector="Border">
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+
+        <!-- Bottom Button Style -->
+        <Style Selector="Button">
+            <Setter Property="FontFamily" Value="Arial" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <!-- Standard Button Style -->
+        <Style Selector="Button.Standard">
+            <Setter Property="FontFamily" Value="Arial" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+			<Setter Property="HorizontalContentAlignment" Value="Center" />
+			<Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+		<Style Selector="Button.Standard /template/ ContentPresenter">
+			<Setter Property="Background" Value="#1F1F1F" />
+			<Setter Property="BorderBrush" Value="#88FFFFFF" />
+			<Setter Property="BorderThickness" Value="1" />
+		</Style>
+		<Style Selector="Button.Standard:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#2F2F2F" />
+			<Setter Property="BorderBrush" Value="#88FFFFFF" />
+			<Setter Property="BorderThickness" Value="1" />
+		</Style>
+		<Style Selector="Button.Standard:pressed /template/ ContentPresenter">
+			<Setter Property="Background" Value="#333333" />
+			<Setter Property="BorderBrush" Value="#88FFFFFF" />
+			<Setter Property="BorderThickness" Value="1" />
+		</Style>
+
+        <!-- CheckBox Style -->
+        <Style Selector="CheckBox">
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontFamily" Value="Arial" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+        <Style Selector="CheckBox /template/ Border#NormalRectangle">
+            <Setter Property="BorderBrush" Value="White" />
+        </Style>
+
+        <!-- Controller / keyboard focus ring -->
+        <Style Selector="Window.nav-active Button:focus /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="#FFE9AB00" />
+            <Setter Property="BorderThickness" Value="3" />
+        </Style>
+        <Style Selector="Window.nav-active CheckBox:focus /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="#FFE9AB00" />
+            <Setter Property="BorderThickness" Value="3" />
+        </Style>
+        <Style Selector="Window.nav-active ComboBox:focus">
+            <Setter Property="BorderBrush" Value="#FFE9AB00" />
+            <Setter Property="BorderThickness" Value="3" />
+        </Style>
+        <Style Selector="Window.nav-active NumericUpDown:focus-within">
+            <Setter Property="BorderBrush" Value="#FFE9AB00" />
+            <Setter Property="BorderThickness" Value="3" />
+        </Style>
+
+        <!-- NumericUpDown is controller-driven only: no typing, no text-selection highlight -->
+        <Style Selector="NumericUpDown /template/ TextBox">
+            <Setter Property="TabIndex" Value="-1" />
+        </Style>
+
+        <!-- Disable Avalonia's selection box altogether -->
+        <Style Selector=":is(TemplatedControl)">
+            <Setter Property="FocusAdorner" Value="{x:Null}" />
+        </Style>
+
+    </Window.Styles>
+</Window>

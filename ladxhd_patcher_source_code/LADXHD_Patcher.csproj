@@ -1,0 +1,141 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Patcher</AssemblyName>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+  
+  <PropertyGroup>
+    <TargetRID Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier.Split('-')[0])</TargetRID>
+    <TargetOS Condition="'$(TargetRID)' == 'win' or ('$(TargetRID)' == '' and $([MSBuild]::IsOSPlatform('Windows')))">win</TargetOS>
+    <TargetOS Condition="'$(TargetRID)' == 'linux' or ('$(TargetRID)' == '' and $([MSBuild]::IsOSPlatform('Linux')))">linux</TargetOS>
+    <TargetOS Condition="'$(TargetRID)' == 'osx' or ('$(TargetRID)' == '' and $([MSBuild]::IsOSPlatform('OSX')))">osx</TargetOS>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.11" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.11" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.11" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.11" />
+    <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.11">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="NativeFileDialogSharp" Version="0.6.0-alpha" />
+    <PackageReference Include="System.Windows.Extensions" Version="8.0.0" />
+    <PackageReference Include="VCDiff" Version="5.0.0" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(TargetOS)' == 'win'">
+    <OutputType>WinExe</OutputType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+    <TargetFramework>net9.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetOS)' == 'linux'">
+    <OutputType>Exe</OutputType>
+    <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetOS)' == 'osx'">
+    <OutputType>Exe</OutputType>
+    <DefineConstants>$(DefineConstants);MACOS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Resources\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\shared\Mono.Options.cs" Link="Imported\Mono.Options.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaXaml Remove="Patches\**" />
+    <AvaloniaXaml Remove="_Publish\**" />
+    <Compile Remove="Patches\**" />
+    <Compile Remove="vcdiff-cli\**" />
+    <Compile Remove="_Publish\**" />
+    <EmbeddedResource Remove="Patches\**" />
+    <EmbeddedResource Remove="vcdiff-cli\**" />
+    <EmbeddedResource Remove="_Publish\**" />
+    <None Remove="Patches\**" />
+    <None Remove="vcdiff-cli\**" />
+    <None Remove="_Publish\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="publish.bat" />
+    <None Remove="vcdiff.exe" />
+  </ItemGroup>
+
+  <!-- macOS App Bundle Target -->
+  <Target Name="CreateAppBundle" AfterTargets="Publish" Condition="'$(TargetOS)' == 'osx'">
+    <PropertyGroup>
+      <AppBundleDir>$(PublishDir)$(AssemblyName).app/</AppBundleDir>
+      <AppContentsDir>$(AppBundleDir)Contents/</AppContentsDir>
+      <AppMacOSDir>$(AppContentsDir)MacOS/</AppMacOSDir>
+      <AppResourcesDir>$(AppContentsDir)Resources/</AppResourcesDir>
+      <ArchStr Condition="'$(RuntimeIdentifier)' == 'osx-arm64'">arm64</ArchStr>
+      <ArchStr Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</ArchStr>
+    </PropertyGroup>
+
+    <Message Importance="High" Text="Creating macOS App Bundle: $(AppBundleDir)" />
+
+    <!-- Copy the directory template -->
+    <ItemGroup>
+      <TemplateFiles Include="publish/macOS-bundle/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(TemplateFiles)" DestinationFolder="$(AppBundleDir)%(RecursiveDir)" SkipUnchangedFiles="true" />
+
+    <!-- Move published output into MacOS folder recursively -->
+    <ItemGroup>
+      <FilesToMove Include="$(PublishDir)**/*" Exclude="$(AppBundleDir)**/*" />
+    </ItemGroup>
+    <Move SourceFiles="@(FilesToMove)" DestinationFolder="$(AppMacOSDir)%(RecursiveDir)" />
+
+    <!-- Generate Info.plist from template -->
+    <ItemGroup>
+      <PlistTokens Include="{VERSION}">
+        <Value>$(Version)</Value>
+      </PlistTokens>
+      <PlistTokens Include="{ARCH}">
+        <Value>$(ArchStr)</Value>
+      </PlistTokens>
+    </ItemGroup>
+
+    <ReplaceFileTokens
+      InputFile="$(AppContentsDir)Info.plist.template"
+      OutputFile="$(AppContentsDir)Info.plist"
+      Tokens="@(PlistTokens)" />
+
+    <!-- Clean up template from the bundle -->
+    <Delete Files="$(AppContentsDir)Info.plist.template" />
+  </Target>
+
+  <!-- Inline task to replace tokens in a file -->
+  <UsingTask TaskName="ReplaceFileTokens" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <InputFile ParameterType="System.String" Required="true" />
+      <OutputFile ParameterType="System.String" Required="true" />
+      <Tokens ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+          string content = File.ReadAllText(InputFile);
+          foreach (var token in Tokens) {
+            content = content.Replace(token.ItemSpec, token.GetMetadata("Value"));
+          }
+          File.WriteAllText(OutputFile, content);
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+</Project>

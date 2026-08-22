@@ -1,0 +1,116 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Link's Awakening DX HD</AssemblyName>
+    <MonoGamePlatform>DesktopGL</MonoGamePlatform>
+    <TargetFramework>net9.0</TargetFramework>
+    <RuntimeIdentifiers>win-x64;linux-x64;linux-arm64;osx-arm64;osx-x64</RuntimeIdentifiers>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>ProjectZ</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>false</ImplicitUsings>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <TieredCompilation>false</TieredCompilation>
+    <UseAppHost>true</UseAppHost>
+    <ApplicationIcon>Resources\Icon.ico</ApplicationIcon>
+    <ProjectZContentPlatform>DesktopGL</ProjectZContentPlatform>
+    <ProjectZContentOutputName>DesktopGL</ProjectZContentOutputName>
+    <ProjectZContentBeforeTargets>Build;Publish</ProjectZContentBeforeTargets>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProjectZ.Core\ProjectZ.Core.csproj" />
+    <ProjectReference Include="..\ProjectZ.Editor\ProjectZ.Editor.csproj" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.5.1" />
+    <PackageReference Include="NativeFileDialogSharp" Version="0.6.0-alpha" />
+  </ItemGroup>
+
+  <Import Project="..\ProjectZ.Content\BuildContent.targets" />
+
+  <Target Name="AddPlatformIcon" BeforeTargets="AssignTargetPaths">
+    <PropertyGroup>
+      <EmbeddedIconSource Condition="'$(RuntimeIdentifier)' == 'win-x64'">Resources\Icon.bmp</EmbeddedIconSource>
+      <EmbeddedIconSource Condition="'$(RuntimeIdentifier)' == 'linux-x64' OR '$(RuntimeIdentifier)' == 'linux-arm64'">..\ProjectZ.Core\Data\Icon\Icon.bmp</EmbeddedIconSource>
+      <EmbeddedIconSource Condition="'$(RuntimeIdentifier)' == 'osx-arm64' OR '$(RuntimeIdentifier)' == 'osx-x64'">Resources\Icon.macOS.bmp</EmbeddedIconSource>
+	  <!-- If no RID is defined, default to the high-resolution BMP icon. -->
+	  <EmbeddedIconSource Condition="'$(RuntimeIdentifier)' == ''">..\ProjectZ.Core\Data\Icon\Icon.bmp</EmbeddedIconSource>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(EmbeddedIconSource)' != ''">
+      <EmbeddedResource Include="$(EmbeddedIconSource)" LogicalName="Icon.bmp" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Copy "SDL2.dll" to the Windows OpenGL build. -->
+  <ItemGroup>
+    <None Include="$(MSBuildProjectDirectory)\$(OutputPath)SDL2.dll" 
+          Condition="Exists('$(MSBuildProjectDirectory)\$(OutputPath)SDL2.dll')" 
+          ExcludeFromSingleFile="true" 
+          CopyToPublishDirectory="PreserveNewest" 
+          TargetPath="SDL2.dll" />
+  </ItemGroup>
+
+  <!-- Only support building a macOS app bundle when building from macOS -->
+  <Target Name="CreateAppBundle" AfterTargets="CopyProjectZContentToPublish" Condition="'$(CreateAppBundle)' == 'true' AND $([MSBuild]::IsOSPlatform('OSX'))">
+    <PropertyGroup>
+      <AppBundleDir>$(PublishDir)$(AssemblyName).app/</AppBundleDir>
+      <AppContentsDir>$(AppBundleDir)Contents/</AppContentsDir>
+      <AppMacOSDir>$(AppContentsDir)MacOS/</AppMacOSDir>
+      <AppResourcesDir>$(AppContentsDir)Resources/</AppResourcesDir>
+      <ArchStr Condition="'$(RuntimeIdentifier)' == 'osx-arm64'">arm64</ArchStr>
+      <ArchStr Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</ArchStr>
+    </PropertyGroup>
+
+    <Message Importance="High" Text="Creating macOS App Bundle: $(AppBundleDir)" />
+
+    <ItemGroup>
+      <TemplateFiles Include="Resources/macOS-bundle/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(TemplateFiles)" DestinationFolder="$(AppBundleDir)%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <MakeDir Directories="$(AppMacOSDir);$(AppResourcesDir)" />
+
+    <ItemGroup>
+      <FilesToMove Include="$(PublishDir)**/*" Exclude="$(AppBundleDir)**/*" />
+    </ItemGroup>
+    <Move SourceFiles="@(FilesToMove)" DestinationFolder="$(AppMacOSDir)%(RecursiveDir)" />
+    <RemoveDir Directories="$(PublishDir)Content;$(PublishDir)Data" />
+
+    <ItemGroup>
+      <PlistTokens Include="{EXECUTABLE}">
+        <Value>$(AssemblyName)</Value>
+      </PlistTokens>
+      <PlistTokens Include="{VERSION}">
+        <Value>$(Version)</Value>
+      </PlistTokens>
+      <PlistTokens Include="{ARCH}">
+        <Value>$(ArchStr)</Value>
+      </PlistTokens>
+    </ItemGroup>
+
+    <ReplaceFileTokens InputFile="$(AppContentsDir)Info.plist.template" OutputFile="$(AppContentsDir)Info.plist" Tokens="@(PlistTokens)" />
+    <Delete Files="$(AppContentsDir)Info.plist.template" />
+    <Exec Command="ln -sf ../MacOS/Content &quot;$(AppResourcesDir)Content&quot;" />
+    <Exec Command="chmod +x &quot;$(AppMacOSDir)$(AssemblyName)&quot;" />
+  </Target>
+
+  <UsingTask TaskName="ReplaceFileTokens" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <InputFile ParameterType="System.String" Required="true" />
+      <OutputFile ParameterType="System.String" Required="true" />
+      <Tokens ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+          string content = File.ReadAllText(InputFile);
+          foreach (var token in Tokens) {
+            content = content.Replace(token.ItemSpec, token.GetMetadata("Value"));
+          }
+          File.WriteAllText(OutputFile, content);
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+</Project>

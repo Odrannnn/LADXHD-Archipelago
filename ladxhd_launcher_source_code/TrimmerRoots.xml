@@ -1,0 +1,10 @@
+<linker>
+    <assembly fullname="Launcher">
+        <type fullname="LADXHD_Launcher.App" preserve="all" />
+        <type fullname="LADXHD_Launcher.MainWindow" preserve="all" />
+        <type fullname="LADXHD_Launcher.HomeView" preserve="all" />
+        <type fullname="LADXHD_Launcher.SettingsView" preserve="all" />
+        <type fullname="LADXHD_Launcher.ModsView" preserve="all" />
+    </assembly>
+    <assembly fullname="System.Threading.Thread" preserve="all" />
+</linker>

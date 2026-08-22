@@ -1,0 +1,548 @@
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Game: Advanced Settings]
+// Various options to modify the base game in some way.
+
+//: Game1
+// Forces "Editor Mode" giving access to the map editor and developer/debugging option. Usually accessed via command line option "editor" but can be enabled here too. Press "Escape" in-game to open editor.
+// Default: false
+editor_mode = false
+
+//: Game1
+// Allows background input from both the keyboard and controller when the game window is not in focus.
+// Default: false
+background_input = false
+
+//: Game1
+// Modifies the maximum scaling value available in-game. Game automatically adds +1 for the "Auto-Detect" option (so value of 50 is actually 51).
+// Default: 20
+max_game_scale = 20
+
+//: Game1
+// Modifies the transparency of the pixel grid when enabled. The pixel grid shader can be enabled in "Video Options" and requires "Pixel Snapping" to also be enabled. Accepts a value between 0.00 and 1.00.
+// Default: 0.20
+pixel_grid_alpha = 0.20
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Game: User Interface]
+// This can force the scaling value of the menus and various UI elements. It is highly recommended to use integers! 
+
+//: OverlayManager
+// Allow scrolling to nodes on the map overlay that are not yet discovered.
+// Default: false
+map_free_navigation = false
+
+//: PageManager
+// Menu scaling factor. Use a value of "0" to use the game value. Decimal values (like 2.50) are allowed but not recommended.
+// Default: 0.00
+menu_scale_override = 0.00
+
+//: OverlayManager
+// Inventory scaling factor. Use a value of "0" to use the game value. Decimal values (like 2.50) are allowed but not recommended.
+// Default: 0.00
+inventory_scale_override = 0.00
+
+//: TextboxOverlay
+// The scaling value used for textboxes. Use a value of "0" to use game default. This value should probably not exceed 6-10 on screens even up to 3840x2160 resolution. Decimal values (like 2.50) are allowed but not recommended.
+// Default: 0.00
+textbox_scale = 0.00
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Game: HUD Overlay]
+// Can enable/disable HUD elements, force a specific scaling size, and manually adjust positions of the HUD overlay. It may take a lot of manual tweaking and reloading the game to get everything exactly as you want it.
+
+//: HUDOverlay
+// Item Equipment HUD: Show/Hide with true/false or set scale and offsets. Negative values are valid. Use "0" for game default.
+// Defaults: true / 0 / 0 / 0
+custom_items_show = true
+custom_items_scale = 0
+custom_items_offsetx = 0
+custom_items_offsety = 0
+
+//: HUDOverlay
+// Current Hearts HUD: Show/Hide with true/false or set scale and offsets. Negative values are valid. Use "0" for game default.
+// Defaults: true / 0 / 0 / 0
+custom_heart_show = true
+custom_heart_scale = 0
+custom_heart_offsetx = 0
+custom_heart_offsety = 0
+
+//: HUDOverlay
+// Current Rupees HUD: Show/Hide with true/false or set scale and offsets. Negative values are valid. Use "0" for game default.
+// Defaults: true / 0 / 0 / 0
+custom_rupee_show = true
+custom_rupee_scale = 0
+custom_rupee_offsetx = 0
+custom_rupee_offsety = 0
+
+//: HUDOverlay
+// Current Keys HUD: Show/Hide with true/false or set scale and offsets. Negative values are valid. Use "0" for game default.
+// Defaults: true / 0 / 0 / 0
+custom_keys_show = true
+custom_keys_scale = 0
+custom_keys_offsetx = 0
+custom_keys_offsety = 0
+
+//: HUDOverlay
+// Save Game Icon: Show/Hide with true/false or set scale and offsets. Use "0" for game default.
+// Defaults: true / 0
+custom_sicon_show = true
+custom_sicon_scale = 0
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Camera: Advanced Settings]
+// Modifies the transitioning speed of the Classic Camera when recentering. Slower values such as 0.50 more closely mimic the way the original Game Boy camera pans to a new screen.
+
+//: Camera
+// The speed at which the screen transitions from one field to another. Percentage Based: 1.00 = 100% / 0.75 = 75% / 0.50 = 50% / etc.
+// Default: 1.00
+classic_transition_speed = 1.00
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Player: Link]
+// Modifies various properties for Link.
+
+//: ObjLink
+// Enables sword beam on level 1 sword. Damage is scaled with current sword. 
+// Default: false
+swordbeam_level1 = false
+
+//: ObjLink
+// Always shoot sword beams no matter the current heart count.
+// Default: false
+swordbeam_always = false
+
+//: ObjLink
+// Sword charge is preserved when poking things with the sword.
+// Default: false
+swordpoke_keeps_charge = false
+
+//: ObjLink
+// When swimming in 2D, Roc's Feather accelerates Link in the direction of the Analog Stick or D-Pad.
+// Default: false
+feather_swimming2d = false
+
+//: ObjLink
+// Some objects are "instant pickup" meaning you don't need to press in the opposite direction. This option turns all objects into instant pickups.
+// Default: false
+bracelet_fast_pickup = false
+
+//: ObjLink
+// The time in milliseconds it takes to charge the sword for a spin slash; 500ms = 1/2 of a second.
+// Default: 500
+sword_charge_time = 500
+
+//: ObjLink
+// The time in milliseconds it takes to charge the boots before running; 500ms = 1/2 of a second.
+// Default: 500
+boots_charge_time = 500
+
+//: ObjLink
+// Jump acceleration applied when jumping with Roc's Feather. Small changes have significant impact.
+// Default: 2.35
+feather_velocity = 2.35
+
+//: ObjLink
+// The number of collision pixels along an edge to perform corner auto-correction. This is a feature that nudges Link to the side when pushing against the edge of collision, allowing him to sidestep and continue walking.
+// Default: 2.50
+corner_sidestep = 2.50
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Player: Link Tunic Colors]
+// Modifies Link's tunic colors. Colors set here colorize the "white" pixels in "..\Data\Map Objects\link_cloak.png". The purpose of this lahdmod is to be used with a Graphics mod.
+
+//: ItemDrawHelper
+// Green Tunic
+// Defaults: 16 / 173 / 66
+tunic_grn_r = 16
+tunic_grn_g = 173
+tunic_grn_b = 66
+
+//: ItemDrawHelper
+// Blue Tunic
+// Defaults: 24 / 132 / 255
+tunic_blu_r = 24
+tunic_blu_g = 132
+tunic_blu_b = 255
+
+//: ItemDrawHelper
+// Red Tunic
+// Defaults: 255 / 8 / 41
+tunic_red_r = 255
+tunic_red_g = 8
+tunic_red_b = 41
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Items: Powerups]
+// Disables spawning powerups.
+
+//: ObjLink
+// Disables spawning Guardian Acorns.
+// Default: false
+disable_acorn_spawn = false
+
+//: ObjLink
+// Disables spawning Piece of Power.
+// Default: false
+disable_power_spawn = false
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Items: Sword Shot]
+// Modifies properties of the Level 2 sword shot/beam.
+
+//: ObjSwordShot
+// Base damage override of the sword beam. If set to "0" inherits the damage from sword level.
+// Default: 2
+swordbeam_damage = 0
+
+//: ObjSwordShot
+// The length of time that the sword beam persists. Overrides value set in "ObjLink.lahdmod".
+// Default: 600
+swordbeam_duration = 600
+
+//: ObjSwordShot
+// The speed at which the sword beam travels. Value is a float so decimals work here (ex: 4.55).
+// Default: 4.00
+swordbeam_speed = 4.00
+
+//: ObjSwordShot
+// Fires the sword beam into a 2D space.
+// Default: false
+swordbeam_cast2d = false
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Items: Arrows]
+// Modifies properties and lighting of Magic Rod shots. More properties for Magic Rod can be found in "ObjLink.lahdmod".
+
+//: ObjArrow
+// Base damage override of arrows. Damage is shared between arrows and bomb arrows.
+// Default: 1
+arrows_damage = 1
+
+//: ObjArrow
+// The distance arrows travel before falling or bomb arrow detonates. A tile is 16 pixels; default 112 = 7 tiles of distance.
+// Default: 112
+arrows_distance = 112
+
+//: ObjArrow
+// The speed at which arrows travel. Value is a float so decimals work here (ex: 4.55).
+// Default: 3.00
+arrows_speed = 3.00
+
+//: ObjArrow
+// Shoots arrows into a 2D space.
+// Default: false
+arrows_cast2d = false
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Items: Bombs]
+// Modifies properties of bombs. Changes properties for both player bombs or enemy bombs.
+
+//: ObjBomb
+// The time in milliseconds it takes for a bomb to explode. This only affects bombs placed by Link.
+// Default: 1500
+fuse_timer = 1500
+
+//: ObjBomb
+// Automatically pick up a bomb when setting down a bomb.
+// Default: false
+auto_pickup = false
+
+//: ObjBomb
+// Arrows can always pick up bombs as long as it's before they explode.
+// Default: false
+arrow_pickup = false
+
+//: ObjBomb
+// Makes items knock back bombs. Fire Rod, Hookshot, Magic Powder, etc. interact with bombs knocking them back.
+// Default: false
+item_interact = false
+
+//: ObjBomb
+// Interact with enemy bombs. Makes above items also interact with enemy bombs. 
+// Requires the option "Knockback Bombs" option to be enabled from "Sword Modifiers" for sword knockback.
+// Default: false
+enemy_interact = false
+
+//: ObjBomb
+// Detonates bombs when hitting them with the Fire Rod or Magic Powder.
+// Default: false
+fire_detonates = false
+
+//: ObjBomb
+// Detonates bombs by pressing the bomb button after setting down a bomb.
+// Default: false
+remote_bombs = false
+
+//: ObjBomb
+// Link's bombs can damage both him and enemies.
+// Default: false
+self_damage = false
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Items: Fairies]
+// Modifies properties of the fairy.
+
+//: ObjDungeonFairy
+// Allows collecting a fairy by swinging the sword at it.
+// Default: false
+sword_collect = false
+
+//: ObjDungeonFairy
+// The number of hearts healed when grabbing a fairy.
+// Default: 6
+hearts_healed = 6
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Items: Magic Powder]
+// Modifies properties of Magic Powder.
+
+//: ObjPowder
+// Base damage of Magic Powder.
+// Default: 2
+powder_damage = 2
+
+//: ObjPowder
+// The speed at which powder falls to the ground. Affects when powder hits a target and how long it persists. Lower values make it fall slower.
+// Default: 5.00
+powder_gravity = 5.00
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Items: Magic Rod]
+// Modifies properties and lighting of Magic Rod shots. More properties for Magic Rod can be found in "ObjLink.lahdmod".
+
+//: ObjMagicRodShot
+// Base damage override of the Magic Rod shot.
+// Default: 1
+magicrod_damage = 1
+
+//: ObjMagicRodShot
+// The length of time the Magic Rod shot persists before fading out.
+// Default: 600
+magicrod_duration = 600
+
+//: ObjMagicRodShot
+// The speed at which the Magic Rod shot travels. Value is a float so decimals work here (ex: 4.55).
+// Default: 3.00
+magicrod_speed = 3.00
+
+//: ObjMagicRodShot
+// Cast Magic Rod shots into a 2D space.
+// Default: false
+magicrod_cast2d = false
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Objects: Bushes & Grass]
+// Modifies the transparency of leaves when cutting bushes and grass.
+
+//: ObjBush
+// When the bush is cut, the leaves slowly fall to the ground. When disabled, behaves like original game.
+// Default: false
+fall_to_ground = false
+
+//: ObjBush
+// Bush leaf transparency when chopped with the sword. Use a value between 0.00 and 1.00.
+// Default: 0.90
+bush_leaf_alpha = 0.90
+
+//: ObjBush
+// Grass leaf transparency when chopped with the sword. Use a value between 0.00 and 1.00.
+// Default: 0.50
+grass_leaf_alpha = 0.50
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Objects: Cracked Floor Tiles]
+// Modifies the properties of cracked floor tiles that break under Link when standing on them for a period of time.
+
+//: ObjBreakingFloor
+// The amount of time before the floor gives out. This was 40 frames in the original game.                                      (40 ÷ 59.73 fps ≈ 670 ms)
+// Default: 670
+break_time = 670
+
+//: ObjBreakingFloor
+// The amount of time before a tile will respawn. Note that on-screen tiles only respawn when Modern Camera is selected.
+// Default = 15000
+respawn_time = 15000
+
+//: ObjBreakingFloor
+// Disables using the sword from resetting the timer before the floor gives out.
+// Default: false
+no_sword_interrupt = false
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Objects: BowWow's Chain]
+// Modifies the transparency of BowWow's chain.
+
+//: ObjChain
+// Transparency of the chain. Use a value between 0.00 and 1.00.
+// Default: 0.55
+chain_alpha = 0.55
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Objects: Dungeon Teleporter]
+// Modifies various properties for the dungeon teleporter.
+
+//: ObjDungeonTeleporter
+// Enables or disables teleporters. If set to false, teleporter will not spawn after mid-boss is defeated.
+// Default: true
+enabled = true
+
+//: ObjDungeonTeleporter
+// How close to the teleporter's center you must be to start teleportation.
+// Default: 4.25
+teleport_range = 4.25
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Objects: Lamps]
+// Modifies properties of the lamps that are usually always lit but sometimes need to be lit with magic powder.
+
+//: ObjLamp
+// Determines how long the lamp stays lit after sprinkling it with magic powder in milliseconds (9000ms = 9 seconds). Enter a value of 0 to keep the lamp lit indefinitely (until leaving the map).
+// Default: 9000
+powder_time = 9000
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Boss: Genie]
+// Modifies properties of the "Genie" boss found in the Level 2 Dungeon: Bottle Grotto.
+
+//: BossGenie
+// Fireball Cooldown: The time between fireball attacks. Use 500 for original Link's Awakening or 800 for DX.
+// Default: 800
+genie_fireball_interval = 800
+
+//: BossGenie
+// Fireball Shader: Flashes the fireball with damage shader. Original Link's Awakening uses this, DX does not.
+// Default: false
+genie_fireball_shader = false
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+[Enemy: Lives]
+// Configures the number of "lives" of all enemies in the game. Lives are in essence the number of "Hit Points" the enemies have. The level 1 sword deals 1 damage. The level 2 sword deals 2 damage. Piece of Power, Sword Spin, and Red Tunic multiply damage by (x2). Max possible damage is 16. Level 2 sword (2) * Red Tunic (x2) * Piece of Power (x2) * Sword Spin (x2) = 16 damage.
+
+//: EnemyLives
+// The values here are "base lives", and are cumulative with the option "Extra Enemy HP". So if you set "Extra Enemy HP" to "2", it will
+// add 2 more hit points to all the values that are set here. This file lets you fine tune lives, while Extra Enemy HP is a global setting.
+AnglerFry        = 1
+AntiFairy        = 4
+AntiKirby        = 8
+ArmMimic         = 4
+Armos            = 4
+Beetle           = 1
+Bloober          = 1
+Bomber           = 3
+Bombite          = 4
+BombiteGreen     = 4
+BonePutter       = 1
+BonePutterWing   = 3
+BooBuddy         = 4
+BuzzBlob         = 4
+CamoGoblin       = 1
+CheepCheep       = 1
+Crab             = 2
+Crow             = 2
+Darknut          = 2
+DarknutSpear     = 2
+Fish             = 1
+FlyingTile       = 1
+Gel              = 1
+Ghini            = 8
+GhiniGiant       = 8
+Gibdo            = 6
+Goomba           = 1
+GopongaFlower    = 4
+GopongaGiant     = 4
+GreenZol         = 1
+HardhatBeetle    = 4
+IronMask         = 2
+Karakoro         = 2
+Keese            = 1
+Leever           = 2
+LikeLike         = 2
+MadBomber        = 4
+MaskMimic        = 2
+MiniMoldorm      = 2
+Moblin           = 2
+MoblinSword      = 2
+MoblinPig        = 2
+MoblinPigSword   = 2
+Octorok          = 1
+OctorokWinged    = 1
+Pairodd          = 2
+Peahat           = 1
+Pincer           = 2
+PiranhaPlant     = 1
+Pokey            = 2
+PokeyPart        = 1
+PolsVoice        = 4
+Raven            = 2
+RedZol           = 1
+RiverZora        = 1
+Rope             = 1
+SeaUrchin        = 1
+ShroudedStalfos  = 2
+SpikedBeetle     = 2
+SpinyBeetle      = 1
+StalfosGreen     = 2
+StalfosKnight    = 2
+StalfosOrange    = 2
+Star             = 1
+Tektite          = 2
+Vacuum           = 1
+Vire             = 3
+WaterTektite     = 1
+Wizzrobe         = 4
+Zombie           = 1
+ArmosKnight      = 12
+BaCSoldier       = 8
+Blaino           = 8
+CueBall          = 8
+DesertLanmola    = 8
+DodongoSnake     = 3
+GiantBuzzBlob    = 12
+Ghoma            = 12
+GrimCreeperFly   = 1
+Hinox            = 8
+KingMoblin       = 8
+MStalfos         = 3
+MStalfosMid      = 2
+RollingBones     = 8
+Smasher          = 8
+StoneHinox       = 8
+TurtleRock       = 16
+AnglerFish       = 10
+EvilEagle        = 12
+Facade           = 18
+F_GiantZol       = 3
+F_Agahnim        = 4
+F_Moldorm        = 16
+F_Ganon          = 24
+F_DethI          = 16
+Genie            = 8
+GenieBottle      = 3
+HardHitBeetle    = 1
+HotHead          = 28
+Moldorm          = 4
+SlimeEel         = 8
+SlimeEye         = 2
+SlimeEyeHalf     = 5
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

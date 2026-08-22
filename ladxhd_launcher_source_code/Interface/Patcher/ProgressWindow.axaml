@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LADXHD_Launcher.ProgressWindow"
+        Title="Progress"
+        Width="400" Height="120"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        CanMaximize="False"
+        Icon="avares://Launcher/Resources/Icon.ico">
+
+    <Grid Margin="0,0,0,0" RowDefinitions="Auto,*,Auto">
+
+        <!-- Status text -->
+        <TextBlock x:Name="StatusLabel" Grid.Row="0"
+                   FontSize="11.5"
+                   TextWrapping="Wrap"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Margin="20,12,20,6" />
+
+        <!-- Progress bar -->
+        <ProgressBar x:Name="ProgressBar" Grid.Row="1"
+                     Minimum="0" Maximum="100" Value="0"
+                     Height="18"
+                     Margin="20,0,20,0"
+                     HorizontalAlignment="Stretch" />
+
+        <!-- Percentage label -->
+        <TextBlock x:Name="PercentLabel" Grid.Row="2"
+                   FontSize="11.5"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center"
+                   Margin="0,4,0,10"
+                   Text="0%" />
+
+    </Grid>
+</Window>
