@@ -14,6 +14,7 @@ ZIP.
 [**Releases**](https://github.com/Odrannnn/LADXHD-Archipelago/releases) ·
 [**Android setup**](ANDROID.md) ·
 [**Archipelago guide**](ARCHIPELAGO.md) ·
+[**Telemetry & privacy**](TELEMETRY.md) ·
 [**Release policy**](RELEASING.md) ·
 [**Upstream project**](https://gitlab.com/bighead.0/ladxhd_updated)
 

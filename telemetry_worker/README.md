@@ -29,11 +29,13 @@ Use at least 32 random bytes. Do not commit `.dev.vars`, `.env`, Wrangler state,
 
 ## Deployment
 
-1. Run `wrangler d1 create ladxhd-archipelago-telemetry`.
-2. Replace `REPLACE_AFTER_D1_CREATE` in `wrangler.jsonc` with the returned database ID.
+1. Run `wrangler d1 create ladxhd-archipelago-telemetry` when provisioning a replacement database.
+2. Put the returned database ID in `wrangler.jsonc`.
 3. Run `wrangler d1 migrations apply TELEMETRY_DB --remote`.
 4. Run `wrangler secret put INGEST_SALT` and enter a randomly generated secret.
 5. Run `wrangler deploy`.
 6. Configure Cloudflare rate limiting/WAF controls for `POST /v1/events` and keep the generated `workers.dev` hostname out of unrelated applications.
+
+The currently deployed database ID and Worker hostname are public configuration identifiers, not credentials. `INGEST_SALT` is the only ingestion secret and exists only in Cloudflare's secret store.
 
 The Worker intentionally exposes no query or administration endpoint. Analyze the database through authenticated Cloudflare D1 tooling.

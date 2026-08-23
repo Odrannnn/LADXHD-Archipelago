@@ -3,6 +3,8 @@
   "name": "ladxhd-archipelago-telemetry",
   "main": "src/index.js",
   "compatibility_date": "2026-08-23",
+  "workers_dev": true,
+  "preview_urls": false,
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.05
@@ -14,7 +16,7 @@
     {
       "binding": "TELEMETRY_DB",
       "database_name": "ladxhd-archipelago-telemetry",
-      "database_id": "REPLACE_AFTER_D1_CREATE",
+      "database_id": "b197a425-fac2-462a-88ee-1bdbc1154338",
       "migrations_dir": "migrations"
     }
   ]
