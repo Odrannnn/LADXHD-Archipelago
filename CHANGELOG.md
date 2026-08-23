@@ -1,5 +1,9 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.12**
+### Rooster save-loading crash fix
+  * Prevented the inventory rooster from reading dungeon state before the save's map is initialized. This fixes the null-reference crash while loading affected saves without changing the existing rule that hides the rooster inside dungeons.
+
 ## **v2.0.11-ap1**
 ### Save-loading crash fix
   * Prevented Archipelago world-event updates, including Marin's Mabe Village song override, from running before the gameplay screen, map, Link, and save state are fully initialized. This fixes the null-reference crash encountered while loading a save.
