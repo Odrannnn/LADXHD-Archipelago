@@ -1,5 +1,9 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.11-ap1**
+### Save-loading crash fix
+  * Prevented Archipelago world-event updates, including Marin's Mabe Village song override, from running before the gameplay screen, map, Link, and save state are fully initialized. This fixes the null-reference crash encountered while loading a save.
+
 ## **v2.0.10-ap1**
 ### Raccoon Tarin and actionable crash diagnostics
   * Restored Raccoon Tarin in the Mysterious Forest without requiring the first Progressive Sword. His Archipelago appearance now follows Tail Key access and the pending Tarin's Gift check, including compatible existing saves.
