@@ -117,6 +117,7 @@ namespace ProjectZ.Android
             var client = TelemetryManager.Client;
             if (client == null)
                 return;
+            Game1.GameManager?.ArchipelagoManager.OnApplicationStopping();
             client.RecordAppStopped((int)Math.Min(Runtime.Elapsed.TotalSeconds, 604800));
             _ = FlushSafelyAsync();
         }

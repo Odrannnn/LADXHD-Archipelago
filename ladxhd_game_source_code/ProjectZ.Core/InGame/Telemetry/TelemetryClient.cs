@@ -237,18 +237,21 @@ namespace ProjectZ.InGame.Telemetry
         public void RecordRandomizerManifest(
             string worldVersion,
             string logic,
-            bool tradeQuest,
-            bool rooster,
-            bool warpToStart)
+            bool? tradeQuest,
+            bool? rooster,
+            bool? warpToStart)
         {
             var normalizedLogic = logic is "normal" or "hard" or "glitched" or "hell" ? logic : "unknown";
             var attributes = new Dictionary<string, object>
             {
                 ["logic"] = normalizedLogic,
-                ["trade_quest"] = tradeQuest,
-                ["rooster"] = rooster,
-                ["warp_to_start"] = warpToStart,
             };
+            if (tradeQuest.HasValue)
+                attributes["trade_quest"] = tradeQuest.Value;
+            if (rooster.HasValue)
+                attributes["rooster"] = rooster.Value;
+            if (warpToStart.HasValue)
+                attributes["warp_to_start"] = warpToStart.Value;
             AddWorldVersion(attributes, worldVersion);
             Record("randomizer", "randomizer_manifest", attributes);
         }

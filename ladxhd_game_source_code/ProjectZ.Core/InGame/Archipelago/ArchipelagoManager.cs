@@ -13,6 +13,7 @@ using Archipelago.MultiClient.Net.Models;
 using ProjectZ.InGame.Map;
 using ProjectZ.InGame.Overlay;
 using ProjectZ.InGame.SaveLoad;
+using ProjectZ.InGame.Telemetry;
 using ProjectZ.InGame.Things;
 
 namespace ProjectZ.InGame.Archipelago
@@ -41,6 +42,16 @@ namespace ProjectZ.InGame.Archipelago
         private int _connectionGeneration;
         private int _nextReceivedIndex;
         private DateTime _nextReconnectUtc = DateTime.MinValue;
+        private DateTime _connectionAttemptStartedUtc = DateTime.MinValue;
+        private DateTime _connectedStartedUtc = DateTime.MinValue;
+        private TimeSpan _connectedDuration;
+        private int _telemetryConnectAttempts;
+        private int _telemetryDisconnects;
+        private int _telemetryReconnects;
+        private int _telemetryChecksReported;
+        private int _telemetryItemsReceived;
+        private int _telemetryUnsupportedItems;
+        private bool _telemetrySummaryReported;
         private string _status = "Disabled";
 
         public ArchipelagoManager(GameManager gameManager)
@@ -86,6 +97,7 @@ namespace ProjectZ.InGame.Archipelago
 
         public void OnBeforeSaveChange()
         {
+            ReportTelemetrySummary();
             IsActive = false;
             _nextReceivedIndex = 0;
             while (_receivedItems.TryDequeue(out _)) { }
@@ -215,8 +227,10 @@ namespace ProjectZ.InGame.Archipelago
         private void ActivateBoundSave()
         {
             IsActive = true;
+            ResetTelemetrySession();
             _nextReceivedIndex = Math.Max(0, _gameManager.SaveManager.GetInt(SaveReceivedIndex, 0));
             SetStatus($"Bound: {_seed.SeedName} / {_seed.SlotName}");
+            RecordRandomizerManifest();
             if (_settings.AutoConnect)
                 Connect();
         }
@@ -272,6 +286,7 @@ namespace ProjectZ.InGame.Archipelago
             }
 
             _gameManager.SaveManager.SetString(ArchipelagoLocationKey.PersistentCheck(location.LocationId), "1");
+            Interlocked.Increment(ref _telemetryChecksReported);
 
             var recipientName = !string.IsNullOrWhiteSpace(location.ItemPlayerName)
                 ? location.ItemPlayerName
@@ -388,6 +403,7 @@ namespace ProjectZ.InGame.Archipelago
                 return;
 
             int generation;
+            int attempt;
             ArchipelagoConnectionSettings settings;
             ArchipelagoSeedManifest seed;
             lock (_sessionLock)
@@ -397,25 +413,33 @@ namespace ProjectZ.InGame.Archipelago
                 _session = null;
                 _connecting = true;
                 generation = ++_connectionGeneration;
+                attempt = ++_telemetryConnectAttempts;
+                if (attempt > 1)
+                    _telemetryReconnects++;
+                _connectionAttemptStartedUtc = DateTime.UtcNow;
                 settings = _settings;
                 seed = _seed;
             }
 
+            TelemetryManager.Client?.RecordConnectAttempt(attempt);
             SetStatus($"Connecting to {settings.Server}...");
-            _ = Task.Run(() => ConnectWorker(generation, settings, seed));
+            _ = Task.Run(() => ConnectWorker(generation, attempt, settings, seed));
         }
 
-        private void ConnectWorker(int generation, ArchipelagoConnectionSettings settings,
+        private void ConnectWorker(int generation, int attempt, ArchipelagoConnectionSettings settings,
             ArchipelagoSeedManifest seed)
         {
             ArchipelagoSession newSession = null;
+            var errorCategory = TelemetryConnectionError.Network;
             try
             {
                 newSession = ArchipelagoSessionFactory.CreateSession(settings.Server);
                 newSession.Socket.ErrorReceived += (_, message) => HandleSocketFailure(
-                    generation, newSession, $"Network error: {message}; reconnecting");
+                    generation, newSession, TelemetryDisconnectReason.Network,
+                    $"Network error: {message}; reconnecting");
                 newSession.Socket.SocketClosed += reason => HandleSocketFailure(
-                    generation, newSession, $"Disconnected: {reason}; reconnecting");
+                    generation, newSession, TelemetryDisconnectReason.Server,
+                    $"Disconnected: {reason}; reconnecting");
                 newSession.Items.ItemReceived += helper =>
                 {
                     var item = helper.DequeueItem();
@@ -426,13 +450,20 @@ namespace ProjectZ.InGame.Archipelago
                 var login = newSession.TryConnectAndLogin(GameName, settings.Slot, ItemsHandlingFlags.AllItems,
                     version: ClientVersion, password: settings.Password, requestSlotData: true);
                 if (login is LoginFailure failure)
+                {
+                    errorCategory = TelemetryConnectionError.Authentication;
                     throw new InvalidOperationException(string.Join("; ", failure.Errors));
+                }
 
                 var successful = (LoginSuccessful)login;
                 if (successful.SlotData.TryGetValue("seed_name", out var serverSeed) &&
                     !string.Equals(serverSeed?.ToString(), seed.SeedName, StringComparison.Ordinal))
+                {
+                    errorCategory = TelemetryConnectionError.SeedMismatch;
                     throw new InvalidDataException($"Server seed '{serverSeed}' does not match '{seed.SeedName}'.");
+                }
 
+                int durationMs;
                 lock (_sessionLock)
                 {
                     if (generation != _connectionGeneration || !IsActive)
@@ -443,7 +474,12 @@ namespace ProjectZ.InGame.Archipelago
                     _session = newSession;
                     _connecting = false;
                     _nextReconnectUtc = DateTime.MaxValue;
+                    durationMs = ElapsedMilliseconds(_connectionAttemptStartedUtc);
+                    _connectionAttemptStartedUtc = DateTime.MinValue;
+                    _connectedStartedUtc = DateTime.UtcNow;
                 }
+
+                TelemetryManager.Client?.RecordConnectSuccess(attempt, durationMs, seed.WorldVersion);
 
                 _mainThreadActions.Enqueue(() =>
                 {
@@ -470,7 +506,12 @@ namespace ProjectZ.InGame.Archipelago
                 if (newSession?.Socket.Connected == true)
                     _ = newSession.Socket.DisconnectAsync();
                 if (isCurrentGeneration)
+                {
+                    TelemetryManager.Client?.RecordConnectFailure(
+                        attempt, ElapsedMilliseconds(_connectionAttemptStartedUtc), errorCategory);
+                    TelemetryManager.Client?.RecordReconnectScheduled(attempt + 1, (int)ReconnectDelay.TotalSeconds);
                     SetStatus($"Connection failed: {ex.Message}");
+                }
             }
         }
 
@@ -510,6 +551,8 @@ namespace ProjectZ.InGame.Archipelago
                     GetOwnedEquipmentLevel("shield", "mirrorShield"),
                     GetOwnedEquipmentLevel("stonelifter", "stonelifter2"), out var mapping))
             {
+                Interlocked.Increment(ref _telemetryItemsReceived);
+                Interlocked.Increment(ref _telemetryUnsupportedItems);
                 SetStatus($"Unsupported item skipped: {queued.ItemName}");
                 return true;
             }
@@ -530,6 +573,7 @@ namespace ProjectZ.InGame.Archipelago
 
             AchievementOverlay.PushArchipelagoItem("Received", queued.ItemName, "From", queued.SenderName);
             SetStatus($"Received: {queued.ItemName} from {queued.SenderName}");
+            Interlocked.Increment(ref _telemetryItemsReceived);
             return true;
         }
 
@@ -672,6 +716,7 @@ namespace ProjectZ.InGame.Archipelago
 
         private bool ShouldAttemptReconnect()
         {
+            var detectedSilentDisconnect = false;
             lock (_sessionLock)
             {
                 if (_connecting || _session?.Socket.Connected == true)
@@ -685,10 +730,18 @@ namespace ProjectZ.InGame.Archipelago
                     _session = null;
                     _connectionGeneration++;
                     _nextReconnectUtc = DateTime.UtcNow;
+                    detectedSilentDisconnect = true;
                 }
 
-                return DateTime.UtcNow >= _nextReconnectUtc;
+                var shouldReconnect = DateTime.UtcNow >= _nextReconnectUtc;
+                if (!detectedSilentDisconnect)
+                    return shouldReconnect;
             }
+
+            RecordDisconnect(TelemetryDisconnectReason.Unknown);
+            TelemetryManager.Client?.RecordReconnectScheduled(
+                Math.Max(1, _telemetryConnectAttempts + 1), 0);
+            return true;
         }
 
         private void HandleCurrentSessionFailure(ArchipelagoSession failedSession, string status)
@@ -702,10 +755,11 @@ namespace ProjectZ.InGame.Archipelago
                 generation = _connectionGeneration;
             }
 
-            HandleSocketFailure(generation, failedSession, status);
+            HandleSocketFailure(generation, failedSession, TelemetryDisconnectReason.Network, status);
         }
 
-        private void HandleSocketFailure(int generation, ArchipelagoSession failedSession, string status)
+        private void HandleSocketFailure(int generation, ArchipelagoSession failedSession,
+            TelemetryDisconnectReason reason, string status)
         {
             lock (_sessionLock)
             {
@@ -723,6 +777,9 @@ namespace ProjectZ.InGame.Archipelago
 
             if (failedSession?.Socket.Connected == true)
                 _ = failedSession.Socket.DisconnectAsync();
+            RecordDisconnect(reason);
+            TelemetryManager.Client?.RecordReconnectScheduled(
+                Math.Max(1, _telemetryConnectAttempts + 1), (int)ReconnectDelay.TotalSeconds);
             SetStatus(status);
         }
 
@@ -740,6 +797,126 @@ namespace ProjectZ.InGame.Archipelago
 
             if (oldSession?.Socket.Connected == true)
                 _ = oldSession.Socket.DisconnectAsync();
+            FinalizeConnectedPeriod();
+        }
+
+        public void OnApplicationStopping()
+        {
+            ReportTelemetrySummary();
+        }
+
+        private void ResetTelemetrySession()
+        {
+            lock (_sessionLock)
+            {
+                _connectionAttemptStartedUtc = DateTime.MinValue;
+                _connectedStartedUtc = DateTime.MinValue;
+                _connectedDuration = TimeSpan.Zero;
+                _telemetryConnectAttempts = 0;
+                _telemetryDisconnects = 0;
+                _telemetryReconnects = 0;
+                _telemetryChecksReported = 0;
+                _telemetryItemsReceived = 0;
+                _telemetryUnsupportedItems = 0;
+                _telemetrySummaryReported = false;
+            }
+        }
+
+        private void RecordRandomizerManifest()
+        {
+            TelemetryManager.Client?.RecordRandomizerManifest(
+                _seed.WorldVersion,
+                GetLogicOption(),
+                GetBooleanOption("tradequest"),
+                GetBooleanOption("rooster"),
+                GetBooleanOption("warp_to_start"));
+        }
+
+        private string GetLogicOption()
+        {
+            if (_seed.Options.TryGetValue("logic", out var logic))
+            {
+                if (logic.ValueKind == JsonValueKind.String)
+                {
+                    var value = logic.GetString()?.ToLowerInvariant();
+                    if (value is "normal" or "hard" or "glitched" or "hell")
+                        return value;
+                }
+                if (logic.ValueKind == JsonValueKind.Number && logic.TryGetInt32(out var choice))
+                    return choice switch { 0 => "normal", 1 => "hard", 2 => "glitched", 3 => "hell", _ => "unknown" };
+            }
+            return "unknown";
+        }
+
+        private bool? GetBooleanOption(string name)
+        {
+            if (!_seed.Options.TryGetValue(name, out var option))
+                return null;
+            if (option.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                return option.GetBoolean();
+            if (option.ValueKind == JsonValueKind.Number && option.TryGetInt32(out var number))
+                return number != 0;
+            return null;
+        }
+
+        private void RecordDisconnect(TelemetryDisconnectReason reason)
+        {
+            var connectedSeconds = FinalizeConnectedPeriod();
+            Interlocked.Increment(ref _telemetryDisconnects);
+            TelemetryManager.Client?.RecordDisconnected(connectedSeconds, reason);
+        }
+
+        private int FinalizeConnectedPeriod()
+        {
+            lock (_sessionLock)
+            {
+                var period = TimeSpan.Zero;
+                if (_connectedStartedUtc != DateTime.MinValue)
+                {
+                    period = DateTime.UtcNow - _connectedStartedUtc;
+                    _connectedDuration += period;
+                    _connectedStartedUtc = DateTime.MinValue;
+                }
+                return (int)Math.Min(period.TotalSeconds, 604800);
+            }
+        }
+
+        private int GetTotalConnectedDuration()
+        {
+            lock (_sessionLock)
+            {
+                if (_connectedStartedUtc != DateTime.MinValue)
+                {
+                    _connectedDuration += DateTime.UtcNow - _connectedStartedUtc;
+                    _connectedStartedUtc = DateTime.UtcNow;
+                }
+                return (int)Math.Min(_connectedDuration.TotalSeconds, 604800);
+            }
+        }
+
+        private void ReportTelemetrySummary()
+        {
+            lock (_sessionLock)
+            {
+                if (_telemetrySummaryReported || !IsActive)
+                    return;
+                _telemetrySummaryReported = true;
+            }
+
+            TelemetryManager.Client?.RecordSessionSummary(
+                GetTotalConnectedDuration(),
+                Volatile.Read(ref _telemetryDisconnects),
+                Volatile.Read(ref _telemetryReconnects),
+                Volatile.Read(ref _telemetryChecksReported),
+                Volatile.Read(ref _telemetryItemsReceived),
+                Volatile.Read(ref _telemetryUnsupportedItems));
+        }
+
+        private static int ElapsedMilliseconds(DateTime startedUtc)
+        {
+            if (startedUtc == DateTime.MinValue)
+                return 0;
+            return (int)Math.Min(Math.Max((DateTime.UtcNow - startedUtc).TotalMilliseconds, 0), 3600000);
         }
 
         private static bool TryGetSaveKey(string gameKey, out string saveKey)

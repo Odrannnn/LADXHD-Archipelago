@@ -185,6 +185,12 @@ try
         "Sanitized crash diagnostics were not uploaded.");
     Assert(telemetry.PendingCount == 0, "Accepted telemetry was not removed from the queue.");
 
+    telemetry.RecordRandomizerManifest("private-seed-name", "normal", false, null, null);
+    await telemetry.FlushAsync();
+    Assert(handler.Body.Contains("randomizer_manifest", StringComparison.Ordinal) &&
+           !handler.Body.Contains("private-seed-name", StringComparison.Ordinal),
+        "Manifest telemetry leaked a non-version seed value.");
+
     telemetry.SetConsent(diagnosticsEnabled: false, randomizerEnabled: true);
     telemetry.RecordCrash(new Exception("must remain local"), TelemetryGameState.Unknown, fatal: false);
     telemetry.RecordConnectAttempt(1);
