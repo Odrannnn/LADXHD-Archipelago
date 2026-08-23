@@ -86,6 +86,15 @@ namespace ProjectZ.InGame.Archipelago
             return boundSave && !string.Equals(bossDefeated, "1", StringComparison.Ordinal);
         }
 
+        public static bool ShouldPreserveRoosterAfterDungeonSeven(
+            bool boundSave, string dialogKey, string stateKey)
+        {
+            return boundSave &&
+                   string.Equals(dialogKey, "instrument6", StringComparison.Ordinal) &&
+                   (string.Equals(stateKey, "rooster", StringComparison.Ordinal) ||
+                    string.Equals(stateKey, "has_rooster", StringComparison.Ordinal));
+        }
+
         public static bool ShouldOverrideRaccoonSpawnCondition(
             bool archipelagoActive,
             string conditionKey,

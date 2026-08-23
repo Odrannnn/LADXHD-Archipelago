@@ -146,6 +146,12 @@ namespace ProjectZ.InGame.Overlay
 
         public override bool Execute()
         {
+            if (Archipelago.ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(
+                    Game1.GameManager.ArchipelagoManager.IsBoundSave,
+                    Game1.GameManager.CurrentDialogKey,
+                    _key))
+                return true;
+
             if (_value == "backupname")
                 Game1.GameManager.ThiefState = false;
             else
@@ -832,6 +838,15 @@ namespace ProjectZ.InGame.Overlay
 
         public override bool Execute()
         {
+            if (Archipelago.ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(
+                    Game1.GameManager.ArchipelagoManager.IsBoundSave,
+                    Game1.GameManager.CurrentDialogKey,
+                    _itemName))
+            {
+                Game1.GameManager.SaveManager.SetString(_resultKey, "0");
+                return true;
+            }
+
             // remove the item if possible
             if (Game1.GameManager.RemoveItem(_itemName, _count))
                 Game1.GameManager.SaveManager.SetString(_resultKey, "1");

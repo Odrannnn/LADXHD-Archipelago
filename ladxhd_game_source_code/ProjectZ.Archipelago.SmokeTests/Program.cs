@@ -53,6 +53,11 @@ Assert(ArchipelagoManager.ShouldEnableMoblinCave(true, "0") &&
        !ArchipelagoManager.ShouldEnableMoblinCave(true, "1") &&
        !ArchipelagoManager.ShouldEnableMoblinCave(false, "0"),
        "AP must enable the Moblin Cave encounter before Tail Cave without respawning its boss.");
+Assert(ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(true, "instrument6", "rooster") &&
+       ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(true, "instrument6", "has_rooster") &&
+       !ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(false, "instrument6", "rooster") &&
+       !ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(true, "instrument5", "rooster"),
+       "Dungeon 7 must not remove an AP-delivered rooster or its follower state.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
