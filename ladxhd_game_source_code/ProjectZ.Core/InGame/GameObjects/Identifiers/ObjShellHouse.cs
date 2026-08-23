@@ -41,8 +41,12 @@ namespace ProjectZ.InGame.GameObjects.Identifiers
             EntityPosition = new CPosition(posX, posY + 16, 0);
             EntitySize = new Rectangle(0, -16, 16, 16);
 
-            // already collected the sword
-            if (Game1.GameManager.SaveManager.GetString("hasSword2") == "1")
+            // In AP the mansion's reward is randomized, so completion follows the source
+            // location rather than whether a level-two sword happened to be received elsewhere.
+            if (Archipelago.ArchipelagoManager.IsSeashellMansionComplete(
+                    Game1.GameManager.ArchipelagoManager.IsBoundSave,
+                    Game1.GameManager.SaveManager.GetString("hasSword2", "0"),
+                    Game1.GameManager.SaveManager.GetString("sword2", "0")))
             {
                 IsDead = true;
                 return;

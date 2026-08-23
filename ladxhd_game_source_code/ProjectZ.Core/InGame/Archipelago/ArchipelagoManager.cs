@@ -146,6 +146,14 @@ namespace ProjectZ.InGame.Archipelago
                 effect == ArchipelagoItemEffect.MaxArrowsUpgrade ? 60 : 0;
         }
 
+        public static bool IsSeashellMansionComplete(
+            bool boundSave, string hasLevelTwoSword, string mansionSourceCollected)
+        {
+            return boundSave
+                ? string.Equals(mansionSourceCollected, "1", StringComparison.Ordinal)
+                : string.Equals(hasLevelTwoSword, "1", StringComparison.Ordinal);
+        }
+
         public static bool ShouldOverrideRaccoonSpawnCondition(
             bool archipelagoActive,
             string conditionKey,

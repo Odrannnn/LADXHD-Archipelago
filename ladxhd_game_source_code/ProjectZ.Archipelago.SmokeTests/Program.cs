@@ -91,6 +91,10 @@ Assert(ArchipelagoManager.GetUpgradeAmmoCount(ArchipelagoItemEffect.MaxPowderUpg
        ArchipelagoManager.GetUpgradeAmmoCount(ArchipelagoItemEffect.MaxBombsUpgrade) == 60 &&
        ArchipelagoManager.GetUpgradeAmmoCount(ArchipelagoItemEffect.MaxArrowsUpgrade) == 60,
        "Capacity upgrades must refill to the official AP powder, bomb, and arrow limits.");
+Assert(ArchipelagoManager.IsSeashellMansionComplete(true, "0", "1") &&
+       !ArchipelagoManager.IsSeashellMansionComplete(true, "1", "0") &&
+       ArchipelagoManager.IsSeashellMansionComplete(false, "1", "0"),
+       "The AP Seashell Mansion sequence must follow its checked source location.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
