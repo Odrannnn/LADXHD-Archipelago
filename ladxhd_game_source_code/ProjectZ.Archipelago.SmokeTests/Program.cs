@@ -65,6 +65,10 @@ Assert(ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "npc09", "bowWow") &
        !ArchipelagoManager.ShouldIgnoreBowWowForDialog(false, "npc09", "bowWow") &&
        !ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "photo_mouse_house", "has_bowWow"),
        "AP BowWow must not be returned or block the Kiki and Richard sequences.");
+Assert(ArchipelagoManager.ShouldAllowSecretBookWithoutLens(true, "book8", "trade13") &&
+       !ArchipelagoManager.ShouldAllowSecretBookWithoutLens(false, "book8", "trade13") &&
+       !ArchipelagoManager.ShouldAllowSecretBookWithoutLens(true, "book7", "trade13"),
+       "The AP egg-maze book must not require the trade quest's Magnifying Glass.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(

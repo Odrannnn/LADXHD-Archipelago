@@ -110,6 +110,14 @@ namespace ProjectZ.InGame.Archipelago
                        string.Equals(variableKey, "bowWow", StringComparison.Ordinal);
         }
 
+        public static bool ShouldAllowSecretBookWithoutLens(
+            bool boundSave, string dialogKey, string itemName)
+        {
+            return boundSave &&
+                   string.Equals(dialogKey, "book8", StringComparison.Ordinal) &&
+                   string.Equals(itemName, "trade13", StringComparison.Ordinal);
+        }
+
         public static bool ShouldOverrideRaccoonSpawnCondition(
             bool archipelagoActive,
             string conditionKey,

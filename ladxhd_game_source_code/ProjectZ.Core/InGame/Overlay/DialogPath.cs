@@ -600,7 +600,11 @@ namespace ProjectZ.InGame.Overlay
         {
             // get the item and check if enough are available
             var item = Game1.GameManager.GetItem(_itemName);
-            var checkState = item != null && item.Count >= _count;
+            var checkState = Archipelago.ArchipelagoManager.ShouldAllowSecretBookWithoutLens(
+                                 Game1.GameManager.ArchipelagoManager.IsBoundSave,
+                                 Game1.GameManager.CurrentDialogKey,
+                                 _itemName) ||
+                             item != null && item.Count >= _count;
 
             Game1.GameManager.SaveManager.SetString(_resultKey, checkState ? "1" : "0");
             return true;
