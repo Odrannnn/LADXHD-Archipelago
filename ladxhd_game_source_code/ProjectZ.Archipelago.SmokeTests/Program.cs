@@ -99,6 +99,11 @@ Assert(ArchipelagoManager.ShouldSetLevelTwoSwordFlag(2, "0") &&
        !ArchipelagoManager.ShouldSetLevelTwoSwordFlag(1, "0") &&
        !ArchipelagoManager.ShouldSetLevelTwoSwordFlag(2, "1"),
        "A remotely received level-two sword must retain its native ownership state.");
+Assert(ArchipelagoManager.ShouldRepairRoosterReceipt("0", "0", false) &&
+       ArchipelagoManager.ShouldRepairRoosterReceipt("1", "0", true) &&
+       ArchipelagoManager.ShouldRepairRoosterReceipt("1", "1", false) &&
+       !ArchipelagoManager.ShouldRepairRoosterReceipt("1", "1", true),
+       "Replayed AP history must restore a rooster lost by an older save.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(

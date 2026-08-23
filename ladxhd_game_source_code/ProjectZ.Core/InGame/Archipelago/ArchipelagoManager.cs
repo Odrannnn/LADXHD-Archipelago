@@ -31,6 +31,7 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveReceivedIndex = "ap_received_index";
         private const string SaveGoalPending = "ap_goal_pending";
         private const string SaveBowWowReceived = "ap_received_bowwow";
+        private const string SaveRoosterReceived = "ap_received_rooster";
         private const string SaveProgressiveSwordCount = "ap_progressive_sword_count";
         private const string SaveProgressiveShieldCount = "ap_progressive_shield_count";
         private const string SaveProgressiveBraceletCount = "ap_progressive_bracelet_count";
@@ -159,6 +160,14 @@ namespace ProjectZ.InGame.Archipelago
             return swordLevel >= 2 && !string.Equals(currentFlag, "1", StringComparison.Ordinal);
         }
 
+        public static bool ShouldRepairRoosterReceipt(
+            string receivedMarker, string followerFlag, bool itemOwned)
+        {
+            return !string.Equals(receivedMarker, "1", StringComparison.Ordinal) ||
+                   !string.Equals(followerFlag, "1", StringComparison.Ordinal) ||
+                   !itemOwned;
+        }
+
         public static bool ShouldOverrideRaccoonSpawnCondition(
             bool archipelagoActive,
             string conditionKey,
@@ -281,6 +290,8 @@ namespace ProjectZ.InGame.Archipelago
 
             if (_gameManager.SaveManager.GetString(SaveBowWowReceived, "0") == "1")
                 ApplyEffect(ArchipelagoItemEffect.BowWow);
+            if (_gameManager.SaveManager.GetString(SaveRoosterReceived, "0") == "1")
+                EnsureRoosterReceivedState();
 
             // The updated overworld gates Raccoon Tarin on tarin_state=1, which vanilla writes
             // during the beach sword sequence. AP does not require the randomized Sword before
@@ -851,9 +862,10 @@ namespace ProjectZ.InGame.Archipelago
                     // Remote AP items deliberately skip local pickup scripts, so mirror the
                     // persistent ownership state here while leaving the grave location's own
                     // save key untouched until that check is actually completed.
-                    _gameManager.SaveManager.SetString("chicken_dude", "1");
+                    _gameManager.SaveManager.SetString(SaveRoosterReceived, "1");
+                    PromoteStringState("chicken_dude", 1);
                     _gameManager.SaveManager.SetString("has_rooster", "1");
-                    _gameManager.SaveManager.SetString("ulrira_d7", "2");
+                    PromoteStringState("ulrira_d7", 2);
                     break;
                 case ArchipelagoItemEffect.TradeStick:
                     ApplyStickEventState();
@@ -958,6 +970,17 @@ namespace ProjectZ.InGame.Archipelago
                 return true;
             }
 
+            if (string.Equals(itemName, "Rooster", StringComparison.Ordinal))
+            {
+                var needsRepair = ShouldRepairRoosterReceipt(
+                    _gameManager.SaveManager.GetString(SaveRoosterReceived, "0"),
+                    _gameManager.SaveManager.GetString("has_rooster", "0"),
+                    HasOwnedItem("rooster"));
+                if (needsRepair)
+                    EnsureRoosterReceivedState();
+                return needsRepair;
+            }
+
             if (!string.Equals(itemName, "BowWow", StringComparison.Ordinal))
                 return false;
 
@@ -967,6 +990,13 @@ namespace ProjectZ.InGame.Archipelago
             if (needsRepair)
                 ApplyEffect(ArchipelagoItemEffect.BowWow);
             return needsRepair;
+        }
+
+        private void EnsureRoosterReceivedState()
+        {
+            ApplyEffect(ArchipelagoItemEffect.Rooster);
+            if (!HasOwnedItem("rooster"))
+                _gameManager.CollectItem(new GameItemCollected("rooster") { Count = 1 });
         }
 
         private int GetProgressiveReceiptCount(string itemName, int ownedLevel)
