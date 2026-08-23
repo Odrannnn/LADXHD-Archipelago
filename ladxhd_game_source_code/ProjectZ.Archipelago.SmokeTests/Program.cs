@@ -1,5 +1,6 @@
 using ProjectZ.InGame.Archipelago;
 using ProjectZ.InGame.Assets;
+using ProjectZ.InGame.GameSystems;
 using ProjectZ.InGame.Overlay;
 using ProjectZ.InGame.Telemetry;
 using ProjectZ.InGame.Things;
@@ -170,6 +171,9 @@ Assert(ArchipelagoManager.ShouldRepairRoosterReceipt("0", "0", false) &&
        "Replayed AP history must restore a rooster lost by an older save.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
+Assert(CheatSystem.IsIndependentGiveAllItem("boomerang") &&
+       !CheatSystem.IsIndependentGiveAllItem("rooster"),
+       "Give All Items must include the boomerang without treating follower items as equipment.");
 const int inventoryMapX = 118;
 const int inventoryMapY = 58;
 const int inventoryMapWidth = 144;

@@ -8,8 +8,24 @@ using ProjectZ.InGame.Things;
 
 namespace ProjectZ.InGame.GameSystems
 {
-    internal class CheatSystem
+    public class CheatSystem
     {
+        private static readonly (string Name, int Count)[] IndependentGiveAllItems =
+        {
+            ("pegasusBoots", 1),
+            ("powder", 20),
+            ("bomb", 30),
+            ("bow", 30),
+            ("ocarina", 1),
+            ("flippers", 1),
+            ("boomerang", 1),
+        };
+
+        public static bool IsIndependentGiveAllItem(string itemName)
+        {
+            return IndependentGiveAllItems.Any(item => item.Name == itemName);
+        }
+
         public static void RefreshItemCheat(bool cheatEnabled, string upgrade, int countLow, int countHigh, string itemName)
         {
             // If the cheat is disabled don't do anything.
@@ -89,12 +105,8 @@ namespace ProjectZ.InGame.GameSystems
             Replace("sword2",       1, "sword1", "sword2");
             Replace("mirrorShield", 1, "shield", "mirrorShield");
             Replace("stonelifter2", 1, "stonelifter", "stonelifter2");
-            Replace("pegasusBoots", 1, "pegasusBoots");
-            Replace("powder",      20, "powder");
-            Replace("bomb",        30, "bomb");
-            Replace("bow",         30, "bow");
-            Replace("ocarina",      1, "ocarina");
-            Replace("flippers",     1, "flippers");
+            foreach (var item in IndependentGiveAllItems)
+                Replace(item.Name, item.Count, item.Name);
 
             // Some items can be traded for the boomerang.
             var tradedItem = Game1.GameManager.SaveManager.GetString("tradded_item", "0");
