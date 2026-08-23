@@ -143,7 +143,7 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             // resurrection sequence, so there is no later StartFollowing call to enable its
             // carriable component. Leaving it disabled made an AP rooster follow Link but made
             // it impossible to pick up and fly with it until another unrelated rooster event.
-            _carriableComponent.IsActive = _saveKey == null && !Map.IsDungeon;
+            _carriableComponent.IsActive = _saveKey == null;
         }
 
         public override void SetPosition(Vector2 position)
