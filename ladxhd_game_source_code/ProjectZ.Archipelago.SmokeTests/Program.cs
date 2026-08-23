@@ -45,6 +45,10 @@ Assert(ArchipelagoLocationKey.PersistentCheck(1001) == "ap_location_1001",
        "Persistent check key mapping failed.");
 Assert(ArchipelagoManager.ClientVersion == new Version(0, 6, 7),
        "The client handshake must advertise Archipelago 0.6.7 compatibility.");
+Assert(ArchipelagoManager.HasSaveBinding("Seed", "Link") &&
+       !ArchipelagoManager.HasSaveBinding("", "Link") &&
+       !ArchipelagoManager.HasSaveBinding("Seed", null),
+       "Offline gameplay overrides must follow the persistent AP save binding.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(

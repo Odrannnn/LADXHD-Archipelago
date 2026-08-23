@@ -70,8 +70,16 @@ namespace ProjectZ.InGame.Archipelago
 
         public bool IsActive { get; private set; }
         public bool IsConfigured => _settings?.Enabled == true && _seed != null;
+        public bool IsBoundSave => IsActive || HasSaveBinding(
+            _gameManager.SaveManager.GetString(SaveSeedName),
+            _gameManager.SaveManager.GetString(SaveSlotName));
         public string Status => _status;
         public ArchipelagoSeedManifest Seed => _seed;
+
+        public static bool HasSaveBinding(string seedName, string slotName)
+        {
+            return !string.IsNullOrWhiteSpace(seedName) && !string.IsNullOrWhiteSpace(slotName);
+        }
 
         public static bool ShouldOverrideRaccoonSpawnCondition(
             bool archipelagoActive,

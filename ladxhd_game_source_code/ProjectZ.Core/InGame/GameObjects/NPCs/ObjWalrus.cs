@@ -39,6 +39,15 @@ namespace ProjectZ.InGame.GameObjects.NPCs
 
         public ObjWalrus(Map.Map map, int posX, int posY, string strDespawnKey) : base(map)
         {
+            // The AP overworld logic relocates the Walrus and does not require Marin for desert
+            // access. Remove this vanilla blocker for a bound randomizer save, including while
+            // the save is loading offline before the network session becomes active.
+            if (Game1.GameManager.ArchipelagoManager.IsBoundSave)
+            {
+                IsDead = true;
+                return;
+            }
+
             if (!string.IsNullOrEmpty(strDespawnKey) && Game1.GameManager.SaveManager.GetString(strDespawnKey) == "1")
             {
                 IsDead = true;
