@@ -44,6 +44,7 @@ namespace ProjectZ.InGame.Archipelago
         private const string TarinGiftLocationKey = "script:tarin:2";
         private const string MarinSongLocationKey = "script:maria_song_repeat:1";
         private const string BoomerangGuyLocationKey = "script:npc_hidden_boomerang:2";
+        private const string TrendyGameLocationKey = "item:trade0Collected";
         private const string SaveMarinSongOverride = "ap_marin_song_override";
         private const string SaveMarinSongState = "ap_marin_song_state";
         private const string SaveMarinSongDialog = "ap_marin_song_dialog";
@@ -141,6 +142,18 @@ namespace ProjectZ.InGame.Archipelago
         public static bool ShouldRestoreBoomerangTradeItem(string itemName, bool ownsItem)
         {
             return !ownsItem && itemName is "shovel" or "feather" or "magicRod" or "hookshot";
+        }
+
+        public static bool IsTrendyGamePrize(string saveKey)
+        {
+            return string.Equals(saveKey, "trade0Collected", StringComparison.Ordinal);
+        }
+
+        public static bool ShouldRepairTrendyPrize(
+            bool boundSave, string sourceCollected, string persistentCheck)
+        {
+            return boundSave && string.Equals(sourceCollected, "1", StringComparison.Ordinal) &&
+                   !string.Equals(persistentCheck, "1", StringComparison.Ordinal);
         }
 
         public static bool ShouldEnableMoblinCave(bool boundSave, string bossDefeated)
@@ -341,6 +354,10 @@ namespace ProjectZ.InGame.Archipelago
             if (string.IsNullOrWhiteSpace(saveSeed) || string.IsNullOrWhiteSpace(saveSlot))
                 return;
 
+            // This hook runs before map objects are constructed. Load this save's manifest now
+            // so a prematurely hidden Trendy prize can be repaired in time to spawn.
+            var configurationLoaded = LoadConfigurationForSave(_gameManager.SaveSlot);
+
             // Older AP builds granted the first progressive sword without completing the
             // non-cutscene part of the beach sword event. Repair those saves before map objects
             // choose their music, otherwise every map continues to select the intro track.
@@ -363,6 +380,9 @@ namespace ProjectZ.InGame.Archipelago
                 EnsureBoomerangReceivedState();
 
             RepairBoomerangGuyTradeState();
+
+            if (configurationLoaded)
+                RepairTrendyGamePrizeState();
 
             // The updated overworld gates Raccoon Tarin on tarin_state=1, which vanilla writes
             // during the beach sword sequence. AP does not require the randomized Sword before
@@ -1151,6 +1171,24 @@ namespace ProjectZ.InGame.Archipelago
             _gameManager.SaveManager.RemoveString("boomerang_trade");
             _gameManager.SaveManager.RemoveString("boomerang_trade_return");
             _gameManager.SaveManager.RemoveString("tradded_item");
+        }
+
+        private void RepairTrendyGamePrizeState()
+        {
+            if (_seed?.LocationsByGameKey.TryGetValue(TrendyGameLocationKey, out var location) != true)
+                return;
+
+            var saveManager = _gameManager.SaveManager;
+            if (!ShouldRepairTrendyPrize(
+                    IsBoundSave,
+                    saveManager.GetString("trade0Collected", "0"),
+                    saveManager.GetString(ArchipelagoLocationKey.PersistentCheck(location.LocationId), "0")))
+                return;
+
+            // Older builds wrote trade0Collected as soon as the crane touched the randomized
+            // prize. If the player quit before Link collected it, the object vanished forever.
+            saveManager.RemoveString("trade0Collected");
+            saveManager.RemoveString("trendy_5");
         }
 
         private int GetProgressiveReceiptCount(string itemName, int ownedLevel)

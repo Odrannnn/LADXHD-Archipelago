@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using ProjectZ.Base;
+using ProjectZ.InGame.Archipelago;
 using ProjectZ.InGame.Controls;
 using ProjectZ.InGame.GameObjects.Base;
 using ProjectZ.InGame.GameObjects.Base.CObjects;
@@ -331,7 +332,10 @@ namespace ProjectZ.InGame.GameObjects.Things
                     // disappear forever so we also use an alternate key "trendy_5" which is set when grabbed.
                     if (gameObject is ObjItem objitem)
                     {
-                        if (objitem._itemName == "trade0")
+                        // The randomized prize no longer has the vanilla Yoshi Doll item name.
+                        // Its source save key remains stable, and must not be marked collected
+                        // until Link actually touches the prize.
+                        if (ArchipelagoManager.IsTrendyGamePrize(objitem.SaveKey))
                             Game1.GameManager.SaveManager.SetString("trendy_5", "1");
                         else
                             Game1.GameManager.SaveManager.SetString(objitem.SaveKey, "1");

@@ -98,6 +98,14 @@ Assert(ArchipelagoManager.ShouldRestoreBoomerangTradeItem("shovel", false) &&
        !ArchipelagoManager.ShouldRestoreBoomerangTradeItem("hookshot", true) &&
        !ArchipelagoManager.ShouldRestoreBoomerangTradeItem("sword1", false),
        "Old AP saves must restore only equipment removed by the vanilla boomerang trade.");
+Assert(ArchipelagoManager.IsTrendyGamePrize("trade0Collected") &&
+       !ArchipelagoManager.IsTrendyGamePrize("pieceOfHeartCollected"),
+       "The randomized Trendy prize must be recognized by its stable source key.");
+Assert(ArchipelagoManager.ShouldRepairTrendyPrize(true, "1", "0") &&
+       !ArchipelagoManager.ShouldRepairTrendyPrize(true, "1", "1") &&
+       !ArchipelagoManager.ShouldRepairTrendyPrize(true, "0", "0") &&
+       !ArchipelagoManager.ShouldRepairTrendyPrize(false, "1", "0"),
+       "Only an AP Trendy prize hidden before its persistent check should be respawned.");
 Assert(ArchipelagoManager.ShouldEnableMoblinCave(true, "0") &&
        !ArchipelagoManager.ShouldEnableMoblinCave(true, "1") &&
        !ArchipelagoManager.ShouldEnableMoblinCave(false, "0"),
