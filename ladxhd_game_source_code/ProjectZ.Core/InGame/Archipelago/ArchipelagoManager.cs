@@ -117,6 +117,14 @@ namespace ProjectZ.InGame.Archipelago
                    string.Equals(stateKey, "spawn_ghost", StringComparison.Ordinal);
         }
 
+        public static bool ShouldRepairGhostFollowerState(
+            string spawnGhost, string hasGhost, bool ghostItemOwned)
+        {
+            return string.Equals(spawnGhost, "1", StringComparison.Ordinal) ||
+                   string.Equals(hasGhost, "1", StringComparison.Ordinal) ||
+                   ghostItemOwned;
+        }
+
         public static bool ShouldIgnoreBowWowForDialog(
             bool boundSave, string dialogKey, string variableKey)
         {
@@ -309,6 +317,7 @@ namespace ProjectZ.InGame.Archipelago
             // this forest route, so repair saves where Tarin's opening gift already advanced his
             // dialog but the separate overworld state was never written.
             RepairTarinForestState(tarinGiftCompleted: false);
+            RepairGhostFollowerState();
 
             // AP presents received items without running their vanilla pickup dialog. Repair
             // saves made by older builds where a trade item was granted but the dialog's world
@@ -401,6 +410,21 @@ namespace ProjectZ.InGame.Archipelago
             if (ShouldEnableMoblinCave(IsBoundSave,
                     _gameManager.SaveManager.GetString("mc_boss", "0")))
                 _gameManager.SaveManager.SetString("mc_enemies", "1");
+        }
+
+        private void RepairGhostFollowerState()
+        {
+            var saveManager = _gameManager.SaveManager;
+            if (!ShouldRepairGhostFollowerState(
+                    saveManager.GetString("spawn_ghost", "0"),
+                    saveManager.GetString("has_ghost", "0"),
+                    HasOwnedItem("ghost")))
+                return;
+
+            saveManager.SetString("spawn_ghost", "0");
+            saveManager.SetString("has_ghost", "0");
+            saveManager.SetString("ghost_blockade", "0");
+            _gameManager.RemoveItem("ghost", 99);
         }
 
         public void Update()

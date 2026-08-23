@@ -71,6 +71,11 @@ Assert(ArchipelagoManager.ShouldSuppressGhostAfterDungeonFour(true, "instrument3
        !ArchipelagoManager.ShouldSuppressGhostAfterDungeonFour(false, "instrument3", "spawn_ghost") &&
        !ArchipelagoManager.ShouldSuppressGhostAfterDungeonFour(true, "instrument4", "spawn_ghost"),
        "The randomized Dungeon 4 reward must not start the vanilla ghost follower quest.");
+Assert(ArchipelagoManager.ShouldRepairGhostFollowerState("1", "0", false) &&
+       ArchipelagoManager.ShouldRepairGhostFollowerState("0", "1", false) &&
+       ArchipelagoManager.ShouldRepairGhostFollowerState("0", "0", true) &&
+       !ArchipelagoManager.ShouldRepairGhostFollowerState("0", "0", false),
+       "Older AP saves must discard a ghost follower spawned before the randomizer fix.");
 Assert(ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "npc09", "bowWow") &&
        ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "npc09", "has_bowWow") &&
        ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "castle_monkey", "has_bowWow") &&
