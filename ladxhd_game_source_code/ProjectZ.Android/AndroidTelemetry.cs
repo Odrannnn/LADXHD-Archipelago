@@ -28,6 +28,7 @@ namespace ProjectZ.Android
         private static bool _appStartedRecorded;
         private static string _launchSource = "unknown";
         private static bool _previousCrash;
+        private static volatile bool _disclosurePending;
 
         public static bool IsAvailable => TryGetEndpoint(out _);
 
@@ -37,14 +38,16 @@ namespace ProjectZ.Android
                 return;
 
             var preferences = GetPreferences(activity);
+            var firstRun = preferences.GetInt(ConsentVersionKey, 0) < CurrentConsentVersion;
+            _disclosurePending = firstRun;
             var client = new TelemetryClient(new TelemetryClientOptions
             {
                 Endpoint = endpoint,
                 StorageRoot = storageRoot,
                 AppVersion = Values.VersionString.TrimStart('v'),
                 Platform = "android",
-                DiagnosticsEnabled = preferences.GetBoolean(DiagnosticsEnabledKey, false),
-                RandomizerEnabled = preferences.GetBoolean(RandomizerEnabledKey, false),
+                DiagnosticsEnabled = preferences.GetBoolean(DiagnosticsEnabledKey, true),
+                RandomizerEnabled = preferences.GetBoolean(RandomizerEnabledKey, true),
             });
 
             TelemetryManager.Configure(client);
@@ -57,7 +60,7 @@ namespace ProjectZ.Android
             RecordStartIfEnabled();
             _ = FlushSafelyAsync();
 
-            if (preferences.GetInt(ConsentVersionKey, 0) < CurrentConsentVersion)
+            if (firstRun)
                 activity.RunOnUiThread(() => ShowConsentDialog(activity, firstRun: true));
         }
 
@@ -74,19 +77,19 @@ namespace ProjectZ.Android
 
             layout.AddView(new TextView(activity)
             {
-                Text = "Telemetry is optional and off by default. It never sends Archipelago server addresses or passwords, player/slot names, seed names, save data, exact item/location names, file paths, or raw logs. Anonymous IDs rotate every 30 days and stored events are deleted after 60 days. Cloudflare still processes your IP while accepting a request.",
+                Text = "Telemetry is optional and enabled by default in this early test build. Nothing is uploaded until you acknowledge this notice. It never sends Archipelago server addresses or passwords, player/slot names, seed names, save data, exact item/location names, file paths, or raw logs. Anonymous IDs rotate every 30 days and stored events are deleted after 60 days. Cloudflare still processes your IP while accepting a request.",
                 TextSize = 14,
             });
 
             var diagnostics = new CheckBox(activity)
             {
                 Text = "Share crash diagnostics",
-                Checked = preferences.GetBoolean(DiagnosticsEnabledKey, false),
+                Checked = preferences.GetBoolean(DiagnosticsEnabledKey, true),
             };
             var randomizer = new CheckBox(activity)
             {
                 Text = "Share randomizer connection statistics",
-                Checked = preferences.GetBoolean(RandomizerEnabledKey, false),
+                Checked = preferences.GetBoolean(RandomizerEnabledKey, true),
             };
             layout.AddView(diagnostics);
             layout.AddView(randomizer);
@@ -99,7 +102,8 @@ namespace ProjectZ.Android
 
             if (firstRun)
             {
-                builder.SetNegativeButton("Keep disabled", (_, _) => ApplyConsent(activity, false, false));
+                builder.SetCancelable(false);
+                builder.SetNegativeButton("Disable telemetry", (_, _) => ApplyConsent(activity, false, false));
             }
             else
             {
@@ -143,6 +147,7 @@ namespace ProjectZ.Android
                 .PutBoolean(RandomizerEnabledKey, randomizerEnabled)
                 .Apply();
 
+            _disclosurePending = false;
             var client = TelemetryManager.Client;
             client?.SetConsent(diagnosticsEnabled, randomizerEnabled);
             RecordStartIfEnabled();
@@ -152,7 +157,7 @@ namespace ProjectZ.Android
         private static void RecordStartIfEnabled()
         {
             var client = TelemetryManager.Client;
-            if (_appStartedRecorded || client?.DiagnosticsEnabled != true)
+            if (_disclosurePending || _appStartedRecorded || client?.DiagnosticsEnabled != true)
                 return;
             client.RecordAppStarted(_launchSource, _previousCrash);
             _appStartedRecorded = true;
@@ -193,6 +198,9 @@ namespace ProjectZ.Android
 
         private static async Task FlushSafelyAsync()
         {
+            if (_disclosurePending)
+                return;
+
             try
             {
                 await TelemetryManager.FlushAsync().ConfigureAwait(false);

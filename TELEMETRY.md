@@ -1,6 +1,6 @@
 # Optional telemetry and privacy
 
-LADXHD Archipelago telemetry is optional and disabled by default. The Android app asks before sending anything. You can make separate choices for crash diagnostics and randomizer connection statistics, change either choice later through **Settings > Diagnostics**, or choose **Disable all**. Disabling a category immediately removes queued events of that category from the device.
+LADXHD Archipelago telemetry is optional and enabled by default for new installations of this early test build. Both categories are selected in the mandatory first-run privacy notice, and nothing is uploaded until that notice is acknowledged. You can disable either crash diagnostics or randomizer connection statistics there, change either choice later through **Settings > Diagnostics**, or choose **Disable all**. Existing explicit choices are preserved during updates. Disabling a category immediately removes queued events of that category from the device.
 
 The endpoint is:
 
@@ -31,7 +31,7 @@ The local `location-catalog.jsonl` developer aid is not part of telemetry and is
 
 ## Storage and retention
 
-While offline, opted-in events use a capped app-private queue: at most 256 events or 512 KiB. A successful upload removes them. Withdrawing consent purges the affected local queue.
+While offline, enabled events use a capped app-private queue: at most 256 events or 512 KiB. A successful upload removes them. Disabling a category purges the affected local queue.
 
 The Cloudflare Worker stores allowlisted event rows in D1 for up to 60 days, then a daily retention task deletes them. The Worker does not read or store the request IP address or user-agent. Cloudflare necessarily processes connection metadata, including the source IP, while serving the HTTPS request and may retain platform logs under the Cloudflare account's own service policies.
 
