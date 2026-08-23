@@ -859,10 +859,16 @@ namespace ProjectZ.InGame.GameObjects.Base.Systems
 
         public static bool Collision(BodyComponent body, float posX, float posY, int direction, Values.CollisionTypes collisionTypes, bool ignoreField, ref Box collidingBox)
         {
+            var targetCollisionHeight = body.LockCollisionHeight
+                ? body.JumpStartHeight
+                : Math.Min(body.JumpStartHeight + body.MaxJumpHeight, body.Position.Z + 2);
+            var currentCollisionHeight = body.LockCollisionHeight
+                ? body.JumpStartHeight
+                : Math.Min(body.JumpStartHeight + body.MaxJumpHeight, body.Position.Z);
             var box = new Box(posX + body.OffsetX, posY + body.OffsetY,
-                Math.Min(body.JumpStartHeight + body.MaxJumpHeight, body.Position.Z + 2), body.Width, body.Height, body.Depth);
+                targetCollisionHeight, body.Width, body.Height, body.Depth);
             var oldBox = new Box(body.Position.X + body.OffsetX, body.Position.Y + body.OffsetY,
-                Math.Min(body.JumpStartHeight + body.MaxJumpHeight, body.Position.Z), body.Width, body.Height, body.Depth);
+                currentCollisionHeight, body.Width, body.Height, body.Depth);
 
             // Check if the body is inside the allowed field or if it's left it.
             if (!ignoreField && body.FieldRectangle.Width > 0 &&

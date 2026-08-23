@@ -124,6 +124,10 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             // no saveKey => spawned by the player in the following state
             if (_saveKey == null)
             {
+                // Inventory-spawned roosters are already owned/resurrected. Keep the vanilla
+                // dungeon restriction in Update(): the follower disappears in dungeons and
+                // returns after leaving instead of becoming an unrestricted dungeon flight tool.
+                _resurrected = true;
                 ToActiveState();
                 _aiComponent.ChangeState("following");
             }
@@ -139,7 +143,7 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             // resurrection sequence, so there is no later StartFollowing call to enable its
             // carriable component. Leaving it disabled made an AP rooster follow Link but made
             // it impossible to pick up and fly with it until another unrelated rooster event.
-            _carriableComponent.IsActive = _saveKey == null;
+            _carriableComponent.IsActive = _saveKey == null && !Map.IsDungeon;
         }
 
         public override void SetPosition(Vector2 position)

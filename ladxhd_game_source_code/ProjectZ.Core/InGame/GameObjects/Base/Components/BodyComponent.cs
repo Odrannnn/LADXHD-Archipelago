@@ -106,6 +106,9 @@ namespace ProjectZ.InGame.GameObjects.Base.Components
         public bool IsGrounded = true;
         public bool WasGrounded = true;
         public bool IgnoresZ;
+        // Keep horizontal collision on a fixed elevation while the sprite/body is
+        // visually raised. Used by rooster flight so solid walls remain solid.
+        public bool LockCollisionHeight;
         public bool IgnoreHoles;
         public bool IsPusher;
         public bool IgnoreHeight;

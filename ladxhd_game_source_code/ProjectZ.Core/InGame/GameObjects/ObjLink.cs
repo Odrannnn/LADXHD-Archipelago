@@ -6569,6 +6569,8 @@ namespace ProjectZ.InGame.GameObjects
             _wasFlying = false;
             _objRooster = objCock;
             _flyStartZPos = MathF.Truncate(EntityPosition.Z);
+            _body.JumpStartHeight = _flyStartZPos;
+            _body.LockCollisionHeight = true;
         }
 
         public void StopFlying(Vector2 velocity)
@@ -6578,6 +6580,7 @@ namespace ProjectZ.InGame.GameObjects
 
             _body.IgnoresZ = false;
             _body.IsGrounded = false;
+            _body.LockCollisionHeight = false;
             _body.JumpStartHeight = 0;
 
             _flyStartZPos = 0;
@@ -6742,6 +6745,7 @@ namespace ProjectZ.InGame.GameObjects
             _isRafting = false;
             _isFlying = false;
             _wasFlying = false;
+            _body.LockCollisionHeight = false;
 
             _isClimbing = false;
 
