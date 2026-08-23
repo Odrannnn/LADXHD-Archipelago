@@ -152,6 +152,12 @@ namespace ProjectZ.InGame.Overlay
                     _key))
                 return true;
 
+            if (Archipelago.ArchipelagoManager.ShouldSuppressGhostAfterDungeonFour(
+                    Game1.GameManager.ArchipelagoManager.IsBoundSave,
+                    Game1.GameManager.CurrentDialogKey,
+                    _key))
+                return true;
+
             if (_value == "backupname")
                 Game1.GameManager.ThiefState = false;
             else

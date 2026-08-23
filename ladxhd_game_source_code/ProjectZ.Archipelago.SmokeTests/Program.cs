@@ -67,6 +67,10 @@ Assert(ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(true, "instrume
        !ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(false, "instrument6", "rooster") &&
        !ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(true, "instrument5", "rooster"),
        "Dungeon 7 must not remove an AP-delivered rooster or its follower state.");
+Assert(ArchipelagoManager.ShouldSuppressGhostAfterDungeonFour(true, "instrument3", "spawn_ghost") &&
+       !ArchipelagoManager.ShouldSuppressGhostAfterDungeonFour(false, "instrument3", "spawn_ghost") &&
+       !ArchipelagoManager.ShouldSuppressGhostAfterDungeonFour(true, "instrument4", "spawn_ghost"),
+       "The randomized Dungeon 4 reward must not start the vanilla ghost follower quest.");
 Assert(ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "npc09", "bowWow") &&
        ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "npc09", "has_bowWow") &&
        ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "castle_monkey", "has_bowWow") &&

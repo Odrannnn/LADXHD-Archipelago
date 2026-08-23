@@ -106,6 +106,14 @@ namespace ProjectZ.InGame.Archipelago
                     string.Equals(stateKey, "has_rooster", StringComparison.Ordinal));
         }
 
+        public static bool ShouldSuppressGhostAfterDungeonFour(
+            bool boundSave, string dialogKey, string stateKey)
+        {
+            return boundSave &&
+                   string.Equals(dialogKey, "instrument3", StringComparison.Ordinal) &&
+                   string.Equals(stateKey, "spawn_ghost", StringComparison.Ordinal);
+        }
+
         public static bool ShouldIgnoreBowWowForDialog(
             bool boundSave, string dialogKey, string variableKey)
         {
