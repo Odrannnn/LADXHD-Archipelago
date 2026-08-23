@@ -96,6 +96,12 @@ namespace ProjectZ
         IReadOnlyList<string> OpenMultiple(string extension);
     }
 
+    public interface IDiagnosticsSettingsService
+    {
+        bool IsAvailable { get; }
+        void Show();
+    }
+
     public readonly struct PlatformTouch
     {
         public PlatformTouch(int id, Vector2 position, PlatformTouchState state)
@@ -275,6 +281,12 @@ namespace ProjectZ
         }
 
         public IReadOnlyList<string> OpenMultiple(string extension) => [];
+    }
+
+    public sealed class UnavailableDiagnosticsSettingsService : IDiagnosticsSettingsService
+    {
+        public bool IsAvailable => false;
+        public void Show() { }
     }
 
 }

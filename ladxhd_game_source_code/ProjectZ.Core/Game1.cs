@@ -42,6 +42,7 @@ namespace ProjectZ
         public static IGraphicsCapabilities GraphicsCapabilities { get; private set; } = new GraphicsCapabilities(false, true, true, true);
         public static IPlatformPresentation PlatformPresentation { get; private set; } = new PlatformPresentation(256, false, false, 0);
         public static IFileDialogService FileDialogService { get; private set; } = new UnavailableFileDialogService();
+        public static IDiagnosticsSettingsService DiagnosticsSettingsService { get; private set; } = new UnavailableDiagnosticsSettingsService();
 
         public static int WindowWidth;
         public static int WindowHeight;
@@ -203,6 +204,7 @@ namespace ProjectZ
             GraphicsCapabilities = (IGraphicsCapabilities)Services.GetService(typeof(IGraphicsCapabilities)) ?? GraphicsCapabilities;
             PlatformPresentation = (IPlatformPresentation)Services.GetService(typeof(IPlatformPresentation)) ?? PlatformPresentation;
             FileDialogService = (IFileDialogService)Services.GetService(typeof(IFileDialogService)) ?? FileDialogService;
+            DiagnosticsSettingsService = (IDiagnosticsSettingsService)Services.GetService(typeof(IDiagnosticsSettingsService)) ?? DiagnosticsSettingsService;
             GameManager = new GameManager();
             TextInputService.SetEnabled(false);
             Activated += (_, _) => TextInputService.OnGameActivated();

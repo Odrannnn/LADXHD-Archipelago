@@ -444,6 +444,7 @@ namespace ProjectZ.Android
         private void LaunchGame()
         {
             var launchIntent = new Intent(this, typeof(SplashActivity));
+            launchIntent.PutExtra(MainActivity.ExtraLaunchSource, "companion");
             launchIntent.SetFlags(ActivityFlags.NewTask | ActivityFlags.ClearTask);
             StartActivity(launchIntent);
             Finish();

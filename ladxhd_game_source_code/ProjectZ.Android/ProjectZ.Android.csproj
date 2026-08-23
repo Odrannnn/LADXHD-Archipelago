@@ -17,6 +17,13 @@
     <TieredCompilation>false</TieredCompilation>
   </PropertyGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>TelemetryEndpoint</_Parameter1>
+      <_Parameter2>$(TelemetryEndpoint)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <!-- Release Builds: Most optimizations are disabled for compatibility packing multiple ABIs. -->
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <RunAOTCompilation>false</RunAOTCompilation>

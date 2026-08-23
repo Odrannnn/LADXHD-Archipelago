@@ -25,6 +25,8 @@ namespace ProjectZ.Android
 
     public class MainActivity : AndroidGameActivity
     {
+        public const string ExtraLaunchSource = "com.zelda.ladxhd.archipelago.extra.LAUNCH_SOURCE";
+
         private AndroidPlatformInput _platformInput;
 
         protected override void OnCreate(Bundle savedInstanceState)
@@ -128,6 +130,10 @@ namespace ProjectZ.Android
                 useAnisotropicFiltering: false));
             game.Services.AddService(typeof(IPlatformPresentation), new PlatformPresentation(240, true, true, 1));
             game.Services.AddService(typeof(IFileDialogService), new UnavailableFileDialogService());
+            game.Services.AddService(typeof(IDiagnosticsSettingsService), new AndroidDiagnosticsSettingsService(this));
+
+            var launchSource = Intent?.GetStringExtra(ExtraLaunchSource) ?? "direct";
+            AndroidTelemetry.Initialize(this, root, launchSource);
 
             var view = (View)game.Services.GetService(typeof(View))!;
             var matchParent = new ViewGroup.LayoutParams(
@@ -142,6 +148,20 @@ namespace ProjectZ.Android
             view.FocusableInTouchMode = true;
             view.RequestFocus();
             game.Run();
+        }
+
+        protected override void OnPause()
+        {
+            AndroidTelemetry.OnPause();
+            base.OnPause();
+        }
+
+        protected override void OnDestroy()
+        {
+            if (IsFinishing)
+                AndroidTelemetry.OnFinishing();
+            AndroidTelemetry.Shutdown();
+            base.OnDestroy();
         }
 
         private void ApplyFullscreenFlags()

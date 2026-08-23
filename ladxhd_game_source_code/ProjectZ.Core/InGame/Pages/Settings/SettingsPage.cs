@@ -17,7 +17,7 @@ namespace ProjectZ.InGame.Pages
         private readonly InterfaceLabel _versionLabel;
 
         // Each settings entry: button text key, tooltip key, and the page it opens.
-        private readonly (string Text, string Tooltip, Type Page)[] _entries;
+        private readonly (string Text, string Tooltip, Type Page, bool Translate)[] _entries;
 
         // The horizontal row layouts that hold the buttons (2 per row).
         private readonly List<InterfaceListLayout> _rows = new List<InterfaceListLayout>();
@@ -35,20 +35,24 @@ namespace ProjectZ.InGame.Pages
         {
             EnableTooltips = true;
 
-            _entries = new (string, string, Type)[]
+            var entries = new List<(string Text, string Tooltip, Type Page, bool Translate)>
             {
-                ("settings_menu_game",     "tooltip_menu_game",     typeof(GameSettingsPage)),
-                ("settings_menu_redux",    "tooltip_menu_redux",    typeof(ReduxSettingsPage)),
-                ("settings_menu_video",    "tooltip_menu_video",    typeof(VideoSettingsPage)),
-                ("settings_menu_audio",    "tooltip_menu_audio",    typeof(AudioSettingsPage)),
-                ("settings_menu_graphics", "tooltip_menu_graphics", typeof(GraphicsSettingsPage)),
-                ("settings_menu_camera",   "tooltip_menu_camera",   typeof(CameraSettingsPage)),
-                ("settings_menu_controls", "tooltip_menu_controls", typeof(ControlSettingsPage)),
-                ("settings_menu_mods",     "tooltip_menu_mods",     typeof(ModifierSettingsPage)),
-                ("settings_menu_cheats",   "tooltip_menu_cheats",   typeof(CheatsSettingsPage)),
-                ("settings_menu_presets",  "tooltip_menu_presets",  typeof(PresetOptionsPage)),
-                ("settings_menu_achieve",  "tooltip_menu_achieve",  typeof(AchievementsPage)),
+                ("settings_menu_game",     "tooltip_menu_game",     typeof(GameSettingsPage), true),
+                ("settings_menu_redux",    "tooltip_menu_redux",    typeof(ReduxSettingsPage), true),
+                ("settings_menu_video",    "tooltip_menu_video",    typeof(VideoSettingsPage), true),
+                ("settings_menu_audio",    "tooltip_menu_audio",    typeof(AudioSettingsPage), true),
+                ("settings_menu_graphics", "tooltip_menu_graphics", typeof(GraphicsSettingsPage), true),
+                ("settings_menu_camera",   "tooltip_menu_camera",   typeof(CameraSettingsPage), true),
+                ("settings_menu_controls", "tooltip_menu_controls", typeof(ControlSettingsPage), true),
+                ("settings_menu_mods",     "tooltip_menu_mods",     typeof(ModifierSettingsPage), true),
+                ("settings_menu_cheats",   "tooltip_menu_cheats",   typeof(CheatsSettingsPage), true),
+                ("settings_menu_presets",  "tooltip_menu_presets",  typeof(PresetOptionsPage), true),
+                ("settings_menu_achieve",  "tooltip_menu_achieve",  typeof(AchievementsPage), true),
             };
+            if (Game1.DiagnosticsSettingsService.IsAvailable)
+                entries.Add(("Diagnostics",
+                    "Choose whether anonymous crash and randomizer diagnostics are shared.", null, false));
+            _entries = entries.ToArray();
 
             // Settings Page Layout
             _settingsLayout = new InterfaceListLayout { Size = new Point(width, height - 12), Selectable = true };
@@ -93,11 +97,21 @@ namespace ProjectZ.InGame.Pages
             PageLayout = _settingsLayout;
         }
 
-        private void AddSettingsButton(InterfaceListLayout row, Point size, (string Text, string Tooltip, Type Page) entry)
+        private void AddSettingsButton(InterfaceListLayout row, Point size, (string Text, string Tooltip, Type Page, bool Translate) entry)
         {
             // entry is a per-call parameter, so the closure captures the correct page.
-            row.AddElement(new InterfaceButton(size, new Point(_columnGap / 2, 2), entry.Text,
-                element => { Game1.UiPageManager.ChangePage(entry.Page); }));
+            if (entry.Translate)
+            {
+                row.AddElement(new InterfaceButton(size, new Point(_columnGap / 2, 2), entry.Text,
+                    element => { Game1.UiPageManager.ChangePage(entry.Page); }));
+                return;
+            }
+
+            var button = new InterfaceButton(size, new Point(_columnGap / 2, 2), entry.Text,
+                element => { Game1.DiagnosticsSettingsService.Show(); });
+            button.InsideLabel.Translate = false;
+            button.InsideLabel.OverrideText = entry.Text;
+            row.AddElement(button);
         }
 
         public override void Update(CButtons pressedButtons, GameTime gameTime)
@@ -219,7 +233,9 @@ namespace ProjectZ.InGame.Pages
             if (index < 0 || index >= _entries.Length)
                 return "Select an option to view its tooltip.";
 
-            return Game1.LanguageManager.GetString(_entries[index].Tooltip, "error");
+            return _entries[index].Translate
+                ? Game1.LanguageManager.GetString(_entries[index].Tooltip, "error")
+                : _entries[index].Tooltip;
         }
     }
 }

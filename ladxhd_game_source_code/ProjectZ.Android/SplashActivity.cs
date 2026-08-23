@@ -27,7 +27,10 @@ namespace ProjectZ.Android
             var nextActivity = AndroidAssetInstallation.TryGetActiveRoot(this, out _, out _)
                 ? typeof(MainActivity)
                 : typeof(AssetSetupActivity);
-            StartActivity(new Intent(this, nextActivity));
+            var nextIntent = new Intent(this, nextActivity);
+            nextIntent.PutExtra(MainActivity.ExtraLaunchSource,
+                Intent?.GetStringExtra(MainActivity.ExtraLaunchSource) ?? "direct");
+            StartActivity(nextIntent);
             Finish();
         }
     }
