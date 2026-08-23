@@ -10,6 +10,10 @@ namespace ProjectZ.InGame.Pages
 {
     class GameMenuPage : InterfacePage
     {
+        private readonly InterfaceButton _warpToStartButton;
+        private readonly InterfaceListLayout _footerLayout;
+        private readonly int _footerHeight;
+
         public GameMenuPage(int width, int height)
         {
             // main layout
@@ -22,12 +26,23 @@ namespace ProjectZ.InGame.Pages
             var contentLayout = new InterfaceListLayout { AutoSize = true, Selectable = true };
             contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_back_to_game", e => ClosePage()) { Margin = new Point(0, 2) });
             contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_save_continue", OnClickSaveContinue) { Margin = new Point(0, 2) });
+            _warpToStartButton = new InterfaceButton(new Point(150, 25), Point.Zero, "", OnClickWarpToStart)
+            {
+                Margin = new Point(0, 2),
+                Visible = false,
+                Hidden = true,
+                Selectable = false
+            };
+            _warpToStartButton.InsideLabel.OverrideText = "Warp to Start";
+            contentLayout.AddElement(_warpToStartButton);
             contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_settings", OnClickSettings) { Margin = new Point(0, 2) });
             contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_exit_to_the_menu", OnClickBackToMenu) { Margin = new Point(0, 2) });
             contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_exit_the_game", OnClickExitGame) { Margin = new Point(0, 2) });
 
             mainLayout.AddElement(contentLayout);
-            mainLayout.AddElement(new InterfaceListLayout { Size = new Point(width, (int)(height * Values.MenuFooterSize)) });
+            _footerHeight = (int)(height * Values.MenuFooterSize);
+            _footerLayout = new InterfaceListLayout { Size = new Point(width, _footerHeight) };
+            mainLayout.AddElement(_footerLayout);
 
             PageLayout = mainLayout;
             PageLayout.Select(InterfaceElement.Directions.Top, false);
@@ -36,6 +51,18 @@ namespace ProjectZ.InGame.Pages
         public override void OnLoad(Dictionary<string, object> intent)
         {
             Game1.AudioManager.PauseMusic();
+
+            // This escape hatch is part of the randomizer experience. Keep the vanilla game
+            // menu unchanged when the loaded save is not bound to Archipelago.
+            var showWarpToStart = Game1.GameManager.ArchipelagoManager.IsActive;
+            _warpToStartButton.Visible = showWarpToStart;
+            _warpToStartButton.Hidden = !showWarpToStart;
+            _warpToStartButton.Selectable = showWarpToStart;
+
+            // Six full-size menu buttons plus the normal decorative footer exceed the compact
+            // Android menu height. Collapse only that empty footer while the AP command is shown.
+            _footerLayout.Size = new Point(_footerLayout.Size.X, showWarpToStart ? 0 : _footerHeight);
+            _footerLayout.ChangeUp = true;
 
             // select the "Back to Game" button
             PageLayout.Deselect(false);
@@ -74,6 +101,31 @@ namespace ProjectZ.InGame.Pages
         public void OnClickSettings(InterfaceElement element)
         {
             Game1.UiPageManager.ChangePage(typeof(SettingsPage));
+        }
+
+        public void OnClickWarpToStart(InterfaceElement element)
+        {
+            // Match the initial post-intro save point inside Marin and Tarin's house. The
+            // randomizer may otherwise strand a player whose available progression cannot
+            // return them to the normal overworld route.
+            var link = MapManager.ObjLink;
+            link.SaveMap = "house1.map";
+            link.SavePosition = new Vector2(70, 70);
+            link.SaveDirection = 3;
+
+            if (Game1.GameManager.SaveManager.HistoryEnabled)
+            {
+                Game1.GameManager.SaveManager.RevertHistory();
+                Game1.GameManager.SaveManager.DisableHistory();
+            }
+
+            SettingsSaveLoad.SaveSettings();
+            SaveGameSaveLoad.SaveGame(Game1.GameManager, false);
+            AchievementManager.Save();
+
+            Game1.InProgress = false;
+            MapManager.CameraOffset = Vector2.Zero;
+            Game1.ScreenManager.ChangeScreen(Values.ScreenNameMenu);
         }
 
         public void OnClickBackToMenu(InterfaceElement element)

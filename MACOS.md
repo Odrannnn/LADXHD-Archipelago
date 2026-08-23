@@ -101,7 +101,7 @@ The patcher will generate ready to use .app bundles for game and launcher when r
 set -e
 
 # Change to sync with patcher / game version.
-VERSION="2.0.5"
+VERSION="2.0.6"
 
 TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'ladxhd-app-bundle')
 BASE=$(realpath "${1:-.}")

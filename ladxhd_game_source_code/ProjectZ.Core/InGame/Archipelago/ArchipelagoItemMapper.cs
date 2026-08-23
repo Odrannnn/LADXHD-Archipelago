@@ -8,6 +8,7 @@ namespace ProjectZ.InGame.Archipelago
         None,
         BadHeartContainer,
         BowWow,
+        Rooster,
         MaxPowderUpgrade,
         MaxBombsUpgrade,
         MaxArrowsUpgrade
@@ -68,7 +69,7 @@ namespace ProjectZ.InGame.Archipelago
                 ["BowWow"] = new ArchipelagoItemMapping(null, effect: ArchipelagoItemEffect.BowWow),
                 ["10 Arrows"] = new ArchipelagoItemMapping("arrow", 10),
                 ["Single Arrow"] = new ArchipelagoItemMapping("arrow", 1),
-                ["Rooster"] = new ArchipelagoItemMapping("rooster"),
+                ["Rooster"] = new ArchipelagoItemMapping("rooster", effect: ArchipelagoItemEffect.Rooster),
                 ["Max Powder Upgrade"] = new ArchipelagoItemMapping(null, effect: ArchipelagoItemEffect.MaxPowderUpgrade),
                 ["Max Bombs Upgrade"] = new ArchipelagoItemMapping(null, effect: ArchipelagoItemEffect.MaxBombsUpgrade),
                 ["Max Arrows Upgrade"] = new ArchipelagoItemMapping(null, effect: ArchipelagoItemEffect.MaxArrowsUpgrade),

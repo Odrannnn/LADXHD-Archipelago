@@ -15,6 +15,9 @@ Assert(ArchipelagoItemMapper.TryMap("Small Key (Catfish's Maw)", 0, 0, 0, out va
        key.GameItemName == "smallkey" && key.LocationBounding == "five", "Dungeon key mapping failed.");
 Assert(ArchipelagoItemMapper.TryMap("500 Rupees", 0, 0, 0, out var rupees) &&
        rupees.GameItemName == "ruby" && rupees.Count == 500, "Rupee mapping failed.");
+Assert(ArchipelagoItemMapper.TryMap("Rooster", 0, 0, 0, out var rooster) &&
+       rooster.GameItemName == "rooster" && rooster.Effect == ArchipelagoItemEffect.Rooster,
+       "Rooster mapping must apply its follower ownership state.");
 Assert(!ArchipelagoItemMapper.TryMap("An Item From Another Game", 0, 0, 0, out _),
        "Unknown items must not silently map to a local item.");
 Assert(ArchipelagoLocationKey.Script("marin:reward", 7) == "script:marin%3Areward:7",

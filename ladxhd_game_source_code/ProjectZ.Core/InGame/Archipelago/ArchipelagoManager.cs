@@ -26,6 +26,7 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveSlotName = "ap_slot_name";
         private const string SaveReceivedIndex = "ap_received_index";
         private const string SaveGoalPending = "ap_goal_pending";
+        private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
 
         private readonly GameManager _gameManager;
         private readonly object _sessionLock = new object();
@@ -276,7 +277,7 @@ namespace ProjectZ.InGame.Archipelago
                 }
                 catch (Exception ex)
                 {
-                    SetStatus($"Location queued for reconnect: {ex.Message}");
+                    HandleCurrentSessionFailure(session, $"Location queued for reconnect: {ex.Message}");
                 }
             }
             else
@@ -307,8 +308,9 @@ namespace ProjectZ.InGame.Archipelago
 
             if (location.ItemPlayer == location.LocalPlayer &&
                 string.Equals(location.ItemGame, GameName, StringComparison.Ordinal) &&
-                ArchipelagoItemMapper.TryMap(location.ItemName, _gameManager.SwordLevel, _gameManager.ShieldLevel,
-                    _gameManager.StoneGrabberLevel, out var mapping) &&
+                ArchipelagoItemMapper.TryMap(location.ItemName, GetOwnedEquipmentLevel("sword1", "sword2"),
+                    GetOwnedEquipmentLevel("shield", "mirrorShield"),
+                    GetOwnedEquipmentLevel("stonelifter", "stonelifter2"), out var mapping) &&
                 !string.IsNullOrEmpty(mapping.GameItemName) && _gameManager.ItemManager[mapping.GameItemName] != null)
                 return mapping.GameItemName;
 
@@ -364,7 +366,7 @@ namespace ProjectZ.InGame.Archipelago
             }
             catch (Exception ex)
             {
-                SetStatus($"Goal queued for reconnect: {ex.Message}");
+                HandleCurrentSessionFailure(session, $"Goal queued for reconnect: {ex.Message}");
             }
         }
 
@@ -380,6 +382,7 @@ namespace ProjectZ.InGame.Archipelago
             {
                 if (_connecting || _session?.Socket.Connected == true)
                     return;
+                _session = null;
                 _connecting = true;
                 generation = ++_connectionGeneration;
                 settings = _settings;
@@ -397,12 +400,10 @@ namespace ProjectZ.InGame.Archipelago
             try
             {
                 newSession = ArchipelagoSessionFactory.CreateSession(settings.Server);
-                newSession.Socket.ErrorReceived += (_, message) =>
-                {
-                    if (generation == Volatile.Read(ref _connectionGeneration))
-                        SetStatus($"Network error: {message}");
-                };
-                newSession.Socket.SocketClosed += reason => HandleSocketClosed(generation, newSession, reason);
+                newSession.Socket.ErrorReceived += (_, message) => HandleSocketFailure(
+                    generation, newSession, $"Network error: {message}; reconnecting");
+                newSession.Socket.SocketClosed += reason => HandleSocketFailure(
+                    generation, newSession, $"Disconnected: {reason}; reconnecting");
                 newSession.Items.ItemReceived += helper =>
                 {
                     var item = helper.DequeueItem();
@@ -451,7 +452,7 @@ namespace ProjectZ.InGame.Archipelago
                     {
                         isCurrentGeneration = true;
                         _connecting = false;
-                        _nextReconnectUtc = DateTime.UtcNow.AddSeconds(5);
+                        _nextReconnectUtc = DateTime.UtcNow + ReconnectDelay;
                     }
                 }
                 if (newSession?.Socket.Connected == true)
@@ -478,14 +479,24 @@ namespace ProjectZ.InGame.Archipelago
                     checkedIds.Add(location.LocationId);
             }
 
-            if (checkedIds.Count > 0)
+            if (checkedIds.Count == 0)
+                return;
+
+            try
+            {
                 session.Locations.CompleteLocationChecks(checkedIds.Distinct().ToArray());
+            }
+            catch (Exception ex)
+            {
+                HandleCurrentSessionFailure(session, $"Check recovery queued for reconnect: {ex.Message}");
+            }
         }
 
         private bool TryApplyReceivedItem(QueuedNetworkItem queued)
         {
-            if (!ArchipelagoItemMapper.TryMap(queued.ItemName, _gameManager.SwordLevel, _gameManager.ShieldLevel,
-                    _gameManager.StoneGrabberLevel, out var mapping))
+            if (!ArchipelagoItemMapper.TryMap(queued.ItemName, GetOwnedEquipmentLevel("sword1", "sword2"),
+                    GetOwnedEquipmentLevel("shield", "mirrorShield"),
+                    GetOwnedEquipmentLevel("stonelifter", "stonelifter2"), out var mapping))
             {
                 SetStatus($"Unsupported item skipped: {queued.ItemName}");
                 return true;
@@ -516,9 +527,10 @@ namespace ProjectZ.InGame.Archipelago
             if (receivedItem == null)
                 return;
 
-            var isFirstSword = mapping.GameItemName == "sword1" && _gameManager.SwordLevel == 0;
+            var ownedSwordLevel = GetOwnedEquipmentLevel("sword1", "sword2");
+            var isFirstSword = mapping.GameItemName == "sword1" && ownedSwordLevel == 0;
             var slot = -1;
-            if (mapping.GameItemName == "sword2" && _gameManager.SwordLevel == 1)
+            if (mapping.GameItemName == "sword2" && ownedSwordLevel == 1)
             {
                 slot = _gameManager.GetEquipmentSlot("sword1");
                 _gameManager.RemoveItem("sword1", 99);
@@ -551,6 +563,15 @@ namespace ProjectZ.InGame.Archipelago
                     _gameManager.SaveManager.SetString("bowWow", "2");
                     _gameManager.SaveManager.SetString("has_bowWow", "1");
                     break;
+                case ArchipelagoItemEffect.Rooster:
+                    // The vanilla rooster pickup dialog normally writes these story flags.
+                    // Remote AP items deliberately skip local pickup scripts, so mirror the
+                    // persistent ownership state here while leaving the grave location's own
+                    // save key untouched until that check is actually completed.
+                    _gameManager.SaveManager.SetString("chicken_dude", "1");
+                    _gameManager.SaveManager.SetString("has_rooster", "1");
+                    _gameManager.SaveManager.SetString("ulrira_d7", "2");
+                    break;
                 case ArchipelagoItemEffect.MaxPowderUpgrade:
                     _gameManager.SaveManager.SetString("upgradePowder", "1");
                     break;
@@ -569,24 +590,67 @@ namespace ProjectZ.InGame.Archipelago
                 return _session?.Socket.Connected == true ? _session : null;
         }
 
+        private int GetOwnedEquipmentLevel(string levelOneItem, string levelTwoItem)
+        {
+            if (_gameManager.GetItem(levelTwoItem)?.Count > 0)
+                return 2;
+            return _gameManager.GetItem(levelOneItem)?.Count > 0 ? 1 : 0;
+        }
+
         private bool ShouldAttemptReconnect()
         {
             lock (_sessionLock)
-                return !_connecting && _session?.Socket.Connected != true && DateTime.UtcNow >= _nextReconnectUtc;
+            {
+                if (_connecting || _session?.Socket.Connected == true)
+                    return false;
+
+                // Some Android network changes leave the socket disconnected without raising
+                // SocketClosed. A successful login set the deadline to MaxValue, which used to
+                // suppress reconnect forever in that state until the entire game was restarted.
+                if (_nextReconnectUtc == DateTime.MaxValue)
+                {
+                    _session = null;
+                    _connectionGeneration++;
+                    _nextReconnectUtc = DateTime.UtcNow;
+                }
+
+                return DateTime.UtcNow >= _nextReconnectUtc;
+            }
         }
 
-        private void HandleSocketClosed(int generation, ArchipelagoSession closedSession, string reason)
+        private void HandleCurrentSessionFailure(ArchipelagoSession failedSession, string status)
+        {
+            int generation;
+            lock (_sessionLock)
+            {
+                if (!ReferenceEquals(_session, failedSession))
+                    return;
+
+                generation = _connectionGeneration;
+            }
+
+            HandleSocketFailure(generation, failedSession, status);
+        }
+
+        private void HandleSocketFailure(int generation, ArchipelagoSession failedSession, string status)
         {
             lock (_sessionLock)
             {
                 if (generation != _connectionGeneration)
                     return;
-                if (ReferenceEquals(_session, closedSession))
-                    _session = null;
+
+                // Invalidate every callback belonging to this socket immediately. ErrorReceived
+                // is not guaranteed to be followed by SocketClosed, and send failures can happen
+                // while Socket.Connected still reports its last-known true state.
+                _connectionGeneration++;
+                _session = null;
                 _connecting = false;
-                _nextReconnectUtc = DateTime.UtcNow.AddSeconds(5);
+                _nextReconnectUtc = DateTime.UtcNow + ReconnectDelay;
             }
-            SetStatus($"Disconnected: {reason}; reconnecting");
+
+            if (failedSession?.Socket.Connected == true)
+                _ = failedSession.Socket.DisconnectAsync();
+            SetStatus(status);
         }
 
         private void Disconnect()

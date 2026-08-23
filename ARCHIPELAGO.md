@@ -13,6 +13,8 @@ This branch contains the first native Archipelago integration slice for LADXHD. 
 - Central AP-to-LADXHD item translation, including progressive equipment and dungeon-bounded items.
 - Randomized interception for keyed chests, persistent loose items, scripted rewards,
   shops, trade-sequence rewards, and event-backed checks.
+- An Archipelago-only **Warp to Start** command in the in-game menu, which saves and returns the
+  player to the starting house through the file-select screen.
 - A companion `Links Awakening DX HD` APWorld that inherits the maintained LADX logic and emits `.apladxhd` files instead of ROM patches.
 - A complete stable-key mapping for all 220 checks enabled by the supported default settings.
 - Runtime and offline source-location catalog tools that do not commit copyrighted map data.

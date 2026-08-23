@@ -38,6 +38,7 @@ namespace ProjectZ.InGame.GameObjects.Dungeon
         private void OnKeyChange()
         {
             var reset = true;
+            var useArchipelagoRules = Game1.GameManager.ArchipelagoManager.IsActive;
 
             // Loop through each gravestone.
             for (var i = 0; i < 5; i++)
@@ -71,8 +72,9 @@ namespace ProjectZ.InGame.GameObjects.Dungeon
                             // Increment the current state.
                             CurrentState++;
 
-                            // If it was the final gravestone that was pushed and the player does not have a follower.
-                            if (CurrentState == 5 && !hasFollower && hasInstrument)
+                            // Vanilla applies its Conch Horn/follower restriction here. AP uses
+                            // the inherited randomizer rule and only requires solving the puzzle.
+                            if (CurrentState == 5 && (useArchipelagoRules || !hasFollower && hasInstrument))
                             {
                                 // Spawn the entrance to the Color dungeon.
                                 Game1.GameManager.SaveManager.SetString(_triggerKey, "1");

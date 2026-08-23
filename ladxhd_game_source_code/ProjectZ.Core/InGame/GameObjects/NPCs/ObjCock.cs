@@ -133,7 +133,13 @@ namespace ProjectZ.InGame.GameObjects.NPCs
                 _aiComponent.ChangeState("skeleton");
             }
             _updateCarry = true;
-            _carriableComponent.IsActive = false;
+
+            // A rooster created without a save key represents the follower already owned by
+            // Link (including one received from Archipelago). It does not run the grave's
+            // resurrection sequence, so there is no later StartFollowing call to enable its
+            // carriable component. Leaving it disabled made an AP rooster follow Link but made
+            // it impossible to pick up and fly with it until another unrelated rooster event.
+            _carriableComponent.IsActive = _saveKey == null;
         }
 
         public override void SetPosition(Vector2 position)
@@ -318,7 +324,9 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             // On the first tick only, check if the rooster is alive and can be carried.
             if (_updateCarry && !Map.IsDungeon)
             {
-                _carriableComponent.IsActive = (Game1.GameManager.SaveManager.GetString("rooster_respawned", "0") == "1");
+                _carriableComponent.IsActive =
+                    Game1.GameManager.SaveManager.GetString("rooster_respawned", "0") == "1" ||
+                    Game1.GameManager.SaveManager.GetString("has_rooster", "0") == "1";
                 _updateCarry = false;
             }
             // Import properties from Link to apply to rooster.

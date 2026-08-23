@@ -234,6 +234,13 @@ namespace ProjectZ.InGame.GameObjects.Things
 
         private bool BlockColorDungeonEntry()
         {
+            // The inherited Archipelago LADX rules put the Color Dungeon behind the Power
+            // Bracelet and grave puzzle. LADXHD's later vanilla-only Conch Horn/follower gate
+            // is not part of those placement rules and could otherwise make a valid seed
+            // inaccessible.
+            if (Game1.GameManager.ArchipelagoManager.IsActive)
+                return false;
+
             // Check if it's the grave that opens up the color dungeon.
             if (_type == 1 && _strKey == "ow_grave_4")
             {
