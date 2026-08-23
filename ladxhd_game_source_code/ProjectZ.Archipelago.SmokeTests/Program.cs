@@ -49,6 +49,10 @@ Assert(ArchipelagoManager.HasSaveBinding("Seed", "Link") &&
        !ArchipelagoManager.HasSaveBinding("", "Link") &&
        !ArchipelagoManager.HasSaveBinding("Seed", null),
        "Offline gameplay overrides must follow the persistent AP save binding.");
+Assert(ArchipelagoManager.ShouldEnableMoblinCave(true, "0") &&
+       !ArchipelagoManager.ShouldEnableMoblinCave(true, "1") &&
+       !ArchipelagoManager.ShouldEnableMoblinCave(false, "0"),
+       "AP must enable the Moblin Cave encounter before Tail Cave without respawning its boss.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(

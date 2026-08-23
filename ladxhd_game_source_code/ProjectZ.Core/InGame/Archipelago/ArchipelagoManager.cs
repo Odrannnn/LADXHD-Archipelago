@@ -81,6 +81,11 @@ namespace ProjectZ.InGame.Archipelago
             return !string.IsNullOrWhiteSpace(seedName) && !string.IsNullOrWhiteSpace(slotName);
         }
 
+        public static bool ShouldEnableMoblinCave(bool boundSave, string bossDefeated)
+        {
+            return boundSave && !string.Equals(bossDefeated, "1", StringComparison.Ordinal);
+        }
+
         public static bool ShouldOverrideRaccoonSpawnCondition(
             bool archipelagoActive,
             string conditionKey,
@@ -193,6 +198,8 @@ namespace ProjectZ.InGame.Archipelago
                 _gameManager.SaveManager.GetString("introMusic", "0") == "1")
                 _gameManager.SaveManager.SetString("introMusic", "0");
 
+            RepairMoblinCaveState();
+
             // The updated overworld gates Raccoon Tarin on tarin_state=1, which vanilla writes
             // during the beach sword sequence. AP does not require the randomized Sword before
             // this forest route, so repair saves where Tarin's opening gift already advanced his
@@ -272,6 +279,7 @@ namespace ProjectZ.InGame.Archipelago
         private void ActivateBoundSave()
         {
             IsActive = true;
+            RepairMoblinCaveState();
             ResetTelemetrySession();
             _nextReceivedIndex = Math.Max(0, _gameManager.SaveManager.GetInt(SaveReceivedIndex, 0));
             SetStatus($"Bound: {_seed.SeedName} / {_seed.SlotName}");
@@ -279,6 +287,15 @@ namespace ProjectZ.InGame.Archipelago
             _gameManager.MapManager?.CurrentMap?.Objects?.TriggerKeyChange();
             if (_settings.AutoConnect)
                 Connect();
+        }
+
+        private void RepairMoblinCaveState()
+        {
+            // AP exposes the Moblin Cave check independently of Tail Cave. Vanilla only enables
+            // this encounter when the first instrument sequence advances mc_enemies.
+            if (ShouldEnableMoblinCave(IsBoundSave,
+                    _gameManager.SaveManager.GetString("mc_boss", "0")))
+                _gameManager.SaveManager.SetString("mc_enemies", "1");
         }
 
         public void Update()
