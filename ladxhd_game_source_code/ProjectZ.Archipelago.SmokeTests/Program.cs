@@ -3,8 +3,10 @@ using ProjectZ.InGame.Assets;
 using ProjectZ.InGame.Overlay;
 using ProjectZ.InGame.Telemetry;
 using ProjectZ.InGame.Things;
+using Archipelago.MultiClient.Net.Helpers;
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.WebSockets;
 
 static void Assert(bool condition, string message)
 {
@@ -55,6 +57,30 @@ Assert(ArchipelagoLocationKey.PersistentCheck(1001) == "ap_location_1001",
        "Persistent check key mapping failed.");
 Assert(ArchipelagoManager.ClientVersion == new Version(0, 6, 7),
        "The client handshake must advertise Archipelago 0.6.7 compatibility.");
+Assert(ArchipelagoManager.GetReconnectDelaySeconds(0) == 0 &&
+       ArchipelagoManager.GetReconnectDelaySeconds(1) == 5 &&
+       ArchipelagoManager.GetReconnectDelaySeconds(2) == 10 &&
+       ArchipelagoManager.GetReconnectDelaySeconds(3) == 20 &&
+       ArchipelagoManager.GetReconnectDelaySeconds(5) == 60 &&
+       ArchipelagoManager.GetReconnectDelaySeconds(20) == 60,
+       "Reconnect delays must back off from five seconds and remain capped at one minute.");
+Assert(ArchipelagoManager.ClassifySocketFailure(new WebSocketException()) ==
+           TelemetryDisconnectReason.Network &&
+       ArchipelagoManager.ClassifySocketFailure(new System.Text.Json.JsonException()) ==
+           TelemetryDisconnectReason.Protocol &&
+       ArchipelagoManager.ClassifySocketFailure(new InvalidOperationException()) ==
+           TelemetryDisconnectReason.Unknown,
+       "Socket telemetry must distinguish transport, protocol, and unknown failures.");
+
+var fakeSocket = new BlockingWebSocket();
+var socketHelper = new BaseArchipelagoSocketHelper<BlockingWebSocket>(fakeSocket);
+socketHelper.StartPolling();
+await fakeSocket.ReceiveStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+var socketCleanupStarted = DateTime.UtcNow;
+await socketHelper.DisconnectAsync();
+Assert(fakeSocket.Aborted && fakeSocket.Disposed &&
+       DateTime.UtcNow - socketCleanupStarted < TimeSpan.FromSeconds(1),
+       "Disconnect must cancel idle socket workers and dispose the old WebSocket promptly.");
 Assert(ArchipelagoManager.HasSaveBinding("Seed", "Link") &&
        !ArchipelagoManager.HasSaveBinding("", "Link") &&
        !ArchipelagoManager.HasSaveBinding("Seed", null),
@@ -392,4 +418,56 @@ sealed class CapturingHandler : HttpMessageHandler
             Content = JsonContent.Create(new { accepted = 2 }),
         };
     }
+}
+
+sealed class BlockingWebSocket : WebSocket
+{
+    private WebSocketState _state = WebSocketState.Open;
+
+    public TaskCompletionSource<bool> ReceiveStarted { get; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public bool Aborted { get; private set; }
+    public bool Disposed { get; private set; }
+    public override WebSocketCloseStatus? CloseStatus => null;
+    public override string CloseStatusDescription => null;
+    public override WebSocketState State => _state;
+    public override string SubProtocol => null;
+
+    public override void Abort()
+    {
+        Aborted = true;
+        _state = WebSocketState.Aborted;
+    }
+
+    public override Task CloseAsync(
+        WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
+    {
+        _state = WebSocketState.Closed;
+        return Task.CompletedTask;
+    }
+
+    public override Task CloseOutputAsync(
+        WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
+    {
+        _state = WebSocketState.CloseSent;
+        return Task.CompletedTask;
+    }
+
+    public override void Dispose()
+    {
+        Disposed = true;
+        _state = WebSocketState.Closed;
+    }
+
+    public override async Task<WebSocketReceiveResult> ReceiveAsync(
+        ArraySegment<byte> buffer, CancellationToken cancellationToken)
+    {
+        ReceiveStarted.TrySetResult(true);
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        throw new InvalidOperationException("The blocking receive should only end through cancellation.");
+    }
+
+    public override Task SendAsync(
+        ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage,
+        CancellationToken cancellationToken) => Task.CompletedTask;
 }

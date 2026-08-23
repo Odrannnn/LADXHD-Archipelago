@@ -11,7 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Archipelago.MultiClient.Net" Version="6.7.1" />
+    <ProjectReference Include="..\..\third_party\Archipelago.MultiClient.Net\Archipelago.MultiClient.Net.csproj" />
     <PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" PrivateAssets="all" />
     <PackageReference Include="MonoGame.Extended" Version="6.1.1" />
     <PackageReference Include="NVorbis" Version="0.10.5" />

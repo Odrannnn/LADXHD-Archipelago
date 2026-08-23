@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>Archipelago.MultiClient.Net</AssemblyName>
+    <RootNamespace>Archipelago.MultiClient.Net</RootNamespace>
+    <AssemblyVersion>6.7.1.0</AssemblyVersion>
+    <FileVersion>6.7.1.0</FileVersion>
+    <Version>6.7.1-ladxhd.1</Version>
+    <DefineConstants>$(DefineConstants);NET6_0</DefineConstants>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>

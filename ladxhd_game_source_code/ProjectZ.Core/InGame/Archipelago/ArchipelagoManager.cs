@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,7 +48,8 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveMarinSongDialogPresent = "ap_marin_song_dialog_present";
         private const int MarinMabePositionX = 368;
         private const int MarinMabePositionY = 1216;
-        private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
+        private const int InitialReconnectDelaySeconds = 5;
+        private const int MaximumReconnectDelaySeconds = 60;
 
         private readonly GameManager _gameManager;
         private readonly object _sessionLock = new object();
@@ -64,6 +67,8 @@ namespace ProjectZ.InGame.Archipelago
         private int _replayedProgressiveSwordCount;
         private int _replayedProgressiveShieldCount;
         private int _replayedProgressiveBraceletCount;
+        private int _consecutiveConnectionFailures;
+        private Task _sessionCleanupTask = Task.CompletedTask;
         private DateTime _nextReconnectUtc = DateTime.MinValue;
         private DateTime _connectionAttemptStartedUtc = DateTime.MinValue;
         private DateTime _connectedStartedUtc = DateTime.MinValue;
@@ -93,6 +98,29 @@ namespace ProjectZ.InGame.Archipelago
         public static bool HasSaveBinding(string seedName, string slotName)
         {
             return !string.IsNullOrWhiteSpace(seedName) && !string.IsNullOrWhiteSpace(slotName);
+        }
+
+        public static int GetReconnectDelaySeconds(int consecutiveFailures)
+        {
+            if (consecutiveFailures <= 0)
+                return 0;
+
+            var exponent = Math.Min(consecutiveFailures - 1, 4);
+            return Math.Min(MaximumReconnectDelaySeconds, InitialReconnectDelaySeconds << exponent);
+        }
+
+        public static TelemetryDisconnectReason ClassifySocketFailure(Exception exception)
+        {
+            var root = exception?.GetBaseException();
+            if (root is JsonException ||
+                root?.GetType().Namespace?.StartsWith("Newtonsoft.Json", StringComparison.Ordinal) == true)
+                return TelemetryDisconnectReason.Protocol;
+
+            if (root is WebSocketException || root is SocketException || root is IOException ||
+                root is TimeoutException)
+                return TelemetryDisconnectReason.Network;
+
+            return TelemetryDisconnectReason.Unknown;
         }
 
         public static bool ShouldEnableMoblinCave(bool boundSave, string bossDefeated)
@@ -670,7 +698,7 @@ namespace ProjectZ.InGame.Archipelago
             ArchipelagoSeedManifest seed;
             lock (_sessionLock)
             {
-                if (_connecting || _session?.Socket.Connected == true)
+                if (_connecting || _session?.Socket.Connected == true || !_sessionCleanupTask.IsCompleted)
                     return;
                 _session = null;
                 _connecting = true;
@@ -696,9 +724,12 @@ namespace ProjectZ.InGame.Archipelago
             try
             {
                 newSession = ArchipelagoSessionFactory.CreateSession(settings.Server);
-                newSession.Socket.ErrorReceived += (_, message) => HandleSocketFailure(
-                    generation, newSession, TelemetryDisconnectReason.Network,
-                    $"Network error: {message}; reconnecting");
+                newSession.Socket.ErrorReceived += (exception, _) =>
+                {
+                    var reason = ClassifySocketFailure(exception);
+                    var label = reason == TelemetryDisconnectReason.Protocol ? "Protocol error" : "Network error";
+                    HandleSocketFailure(generation, newSession, reason, $"{label}; reconnecting");
+                };
                 newSession.Socket.SocketClosed += reason => HandleSocketFailure(
                     generation, newSession, TelemetryDisconnectReason.Server,
                     $"Disconnected: {reason}; reconnecting");
@@ -730,11 +761,12 @@ namespace ProjectZ.InGame.Archipelago
                 {
                     if (generation != _connectionGeneration || !IsActive)
                     {
-                        _ = newSession.Socket.DisconnectAsync();
+                        _sessionCleanupTask = CleanupSessionAsync(newSession);
                         return;
                     }
                     _session = newSession;
                     _connecting = false;
+                    _consecutiveConnectionFailures = 0;
                     _nextReconnectUtc = DateTime.MaxValue;
                     durationMs = ElapsedMilliseconds(_connectionAttemptStartedUtc);
                     _connectionAttemptStartedUtc = DateTime.MinValue;
@@ -756,22 +788,25 @@ namespace ProjectZ.InGame.Archipelago
             catch (Exception ex)
             {
                 var isCurrentGeneration = false;
+                var reconnectDelaySeconds = 0;
                 lock (_sessionLock)
                 {
+                    _sessionCleanupTask = CleanupSessionAsync(newSession);
                     if (generation == _connectionGeneration)
                     {
                         isCurrentGeneration = true;
                         _connecting = false;
-                        _nextReconnectUtc = DateTime.UtcNow + ReconnectDelay;
+                        reconnectDelaySeconds = GetReconnectDelaySeconds(++_consecutiveConnectionFailures);
+                        _nextReconnectUtc = DateTime.UtcNow + TimeSpan.FromSeconds(reconnectDelaySeconds);
                     }
                 }
-                if (newSession?.Socket.Connected == true)
-                    _ = newSession.Socket.DisconnectAsync();
                 if (isCurrentGeneration)
                 {
+                    if (errorCategory == TelemetryConnectionError.Network)
+                        errorCategory = ClassifyConnectionFailure(ex);
                     TelemetryManager.Client?.RecordConnectFailure(
                         attempt, ElapsedMilliseconds(_connectionAttemptStartedUtc), errorCategory);
-                    TelemetryManager.Client?.RecordReconnectScheduled(attempt + 1, (int)ReconnectDelay.TotalSeconds);
+                    TelemetryManager.Client?.RecordReconnectScheduled(attempt + 1, reconnectDelaySeconds);
                     SetStatus($"Connection failed: {ex.Message}");
                 }
             }
@@ -1208,7 +1243,8 @@ namespace ProjectZ.InGame.Archipelago
 
         private bool ShouldAttemptReconnect()
         {
-            var detectedSilentDisconnect = false;
+            var scheduledSilentDisconnect = false;
+            var reconnectDelaySeconds = 0;
             lock (_sessionLock)
             {
                 if (_connecting || _session?.Socket.Connected == true)
@@ -1219,21 +1255,23 @@ namespace ProjectZ.InGame.Archipelago
                 // suppress reconnect forever in that state until the entire game was restarted.
                 if (_nextReconnectUtc == DateTime.MaxValue)
                 {
+                    var disconnectedSession = _session;
                     _session = null;
                     _connectionGeneration++;
-                    _nextReconnectUtc = DateTime.UtcNow;
-                    detectedSilentDisconnect = true;
+                    reconnectDelaySeconds = GetReconnectDelaySeconds(++_consecutiveConnectionFailures);
+                    _nextReconnectUtc = DateTime.UtcNow + TimeSpan.FromSeconds(reconnectDelaySeconds);
+                    _sessionCleanupTask = CleanupSessionAsync(disconnectedSession);
+                    scheduledSilentDisconnect = true;
                 }
 
-                var shouldReconnect = DateTime.UtcNow >= _nextReconnectUtc;
-                if (!detectedSilentDisconnect)
-                    return shouldReconnect;
+                if (!scheduledSilentDisconnect)
+                    return _sessionCleanupTask.IsCompleted && DateTime.UtcNow >= _nextReconnectUtc;
             }
 
             RecordDisconnect(TelemetryDisconnectReason.Unknown);
             TelemetryManager.Client?.RecordReconnectScheduled(
-                Math.Max(1, _telemetryConnectAttempts + 1), 0);
-            return true;
+                Math.Max(1, _telemetryConnectAttempts + 1), reconnectDelaySeconds);
+            return false;
         }
 
         private void HandleCurrentSessionFailure(ArchipelagoSession failedSession, string status)
@@ -1253,6 +1291,7 @@ namespace ProjectZ.InGame.Archipelago
         private void HandleSocketFailure(int generation, ArchipelagoSession failedSession,
             TelemetryDisconnectReason reason, string status)
         {
+            int reconnectDelaySeconds;
             lock (_sessionLock)
             {
                 if (generation != _connectionGeneration)
@@ -1264,14 +1303,14 @@ namespace ProjectZ.InGame.Archipelago
                 _connectionGeneration++;
                 _session = null;
                 _connecting = false;
-                _nextReconnectUtc = DateTime.UtcNow + ReconnectDelay;
+                reconnectDelaySeconds = GetReconnectDelaySeconds(++_consecutiveConnectionFailures);
+                _nextReconnectUtc = DateTime.UtcNow + TimeSpan.FromSeconds(reconnectDelaySeconds);
+                _sessionCleanupTask = CleanupSessionAsync(failedSession);
             }
 
-            if (failedSession?.Socket.Connected == true)
-                _ = failedSession.Socket.DisconnectAsync();
             RecordDisconnect(reason);
             TelemetryManager.Client?.RecordReconnectScheduled(
-                Math.Max(1, _telemetryConnectAttempts + 1), (int)ReconnectDelay.TotalSeconds);
+                Math.Max(1, _telemetryConnectAttempts + 1), reconnectDelaySeconds);
             SetStatus(status);
         }
 
@@ -1285,11 +1324,43 @@ namespace ProjectZ.InGame.Archipelago
                 oldSession = _session;
                 _session = null;
                 _nextReconnectUtc = DateTime.MaxValue;
+                _consecutiveConnectionFailures = 0;
+                _sessionCleanupTask = CleanupSessionAsync(oldSession);
             }
 
-            if (oldSession?.Socket.Connected == true)
-                _ = oldSession.Socket.DisconnectAsync();
             FinalizeConnectedPeriod();
+        }
+
+        private static Task CleanupSessionAsync(ArchipelagoSession session)
+        {
+            if (session == null)
+                return Task.CompletedTask;
+
+            // Run outside the socket callback. DisconnectAsync waits for the socket workers, and
+            // awaiting it from one of those workers would otherwise make cleanup wait on itself.
+            return Task.Run(async () =>
+            {
+                try
+                {
+                    await session.Socket.DisconnectAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // The patched socket helper already aborts and disposes before it awaits its
+                    // workers, so an exception here cannot leave the old session alive.
+                }
+            });
+        }
+
+        private static TelemetryConnectionError ClassifyConnectionFailure(Exception exception)
+        {
+            var root = exception?.GetBaseException();
+            if (root is TimeoutException)
+                return TelemetryConnectionError.Timeout;
+
+            return ClassifySocketFailure(root) == TelemetryDisconnectReason.Protocol
+                ? TelemetryConnectionError.Protocol
+                : TelemetryConnectionError.Network;
         }
 
         public void OnApplicationStopping()
