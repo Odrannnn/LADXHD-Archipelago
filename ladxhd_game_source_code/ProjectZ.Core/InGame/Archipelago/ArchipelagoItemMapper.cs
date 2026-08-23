@@ -14,6 +14,8 @@ namespace ProjectZ.InGame.Archipelago
         TradeScale,
         TradeMagnifyingGlass,
         ZolAttack,
+        GuardianAcorn,
+        PieceOfPower,
         MaxPowderUpgrade,
         MaxBombsUpgrade,
         MaxArrowsUpgrade
@@ -81,8 +83,10 @@ namespace ProjectZ.InGame.Archipelago
                 ["Red Tunic"] = new ArchipelagoItemMapping("cloakRed"),
                 ["Blue Tunic"] = new ArchipelagoItemMapping("cloakBlue"),
                 ["Toadstool"] = new ArchipelagoItemMapping("toadstool"),
-                ["Guardian Acorn"] = new ArchipelagoItemMapping("guardianAcorn"),
-                ["Piece Of Power"] = new ArchipelagoItemMapping("pieceOfPower"),
+                ["Guardian Acorn"] = new ArchipelagoItemMapping(
+                    "guardianAcorn", effect: ArchipelagoItemEffect.GuardianAcorn),
+                ["Piece Of Power"] = new ArchipelagoItemMapping(
+                    "pieceOfPower", effect: ArchipelagoItemEffect.PieceOfPower),
                 ["Ballad of the Wind Fish"] = new ArchipelagoItemMapping("ocarina_maria"),
                 ["Manbo's Mambo"] = new ArchipelagoItemMapping("ocarina_manbo"),
                 ["Frog's Song of Soul"] = new ArchipelagoItemMapping("ocarina_frog"),

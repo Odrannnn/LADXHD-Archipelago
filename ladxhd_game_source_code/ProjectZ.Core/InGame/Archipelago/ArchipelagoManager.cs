@@ -844,6 +844,12 @@ namespace ProjectZ.InGame.Archipelago
                 case ArchipelagoItemEffect.ZolAttack:
                     SpawnZolAttack();
                     break;
+                case ArchipelagoItemEffect.GuardianAcorn:
+                    Game1.AudioManager.InitGuardianAcorn();
+                    break;
+                case ArchipelagoItemEffect.PieceOfPower:
+                    Game1.AudioManager.InitPieceOfPower();
+                    break;
                 case ArchipelagoItemEffect.MaxPowderUpgrade:
                     _gameManager.SaveManager.SetString("upgradePowder", "1");
                     break;

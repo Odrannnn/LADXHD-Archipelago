@@ -26,6 +26,11 @@ Assert(ArchipelagoItemMapper.TryMap("Zol Attack", 0, 0, 0, out var zolAttack) &&
        zolAttack.Effect == ArchipelagoItemEffect.ZolAttack &&
        ArchipelagoManager.ZolAttackSpawnCount == 5,
        "Zol Attack must spawn the five enemies used by the official AP trap.");
+Assert(ArchipelagoItemMapper.TryMap("Guardian Acorn", 0, 0, 0, out var guardianAcorn) &&
+       guardianAcorn.Effect == ArchipelagoItemEffect.GuardianAcorn &&
+       ArchipelagoItemMapper.TryMap("Piece Of Power", 0, 0, 0, out var pieceOfPower) &&
+       pieceOfPower.Effect == ArchipelagoItemEffect.PieceOfPower,
+       "Remote temporary powerups must activate their normal gameplay effects.");
 Assert(ArchipelagoItemMapper.TryMap("Stick", 0, 0, 0, out var stick) &&
        stick.GameItemName == "trade4" && stick.Effect == ArchipelagoItemEffect.TradeStick,
        "Stick mapping must spawn Tarin at the honeycomb tree.");
