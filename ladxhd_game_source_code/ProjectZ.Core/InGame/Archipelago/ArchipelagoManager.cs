@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Archipelago.MultiClient.Net;
 using Archipelago.MultiClient.Net.Enums;
 using Archipelago.MultiClient.Net.Models;
+using Microsoft.Xna.Framework;
 using ProjectZ.InGame.Map;
 using ProjectZ.InGame.Overlay;
 using ProjectZ.InGame.SaveLoad;
@@ -27,6 +28,12 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveSlotName = "ap_slot_name";
         private const string SaveReceivedIndex = "ap_received_index";
         private const string SaveGoalPending = "ap_goal_pending";
+        private const string MarinSongLocationKey = "script:maria_song_repeat:1";
+        private const string SaveMarinSongOverride = "ap_marin_song_override";
+        private const string SaveMarinSongState = "ap_marin_song_state";
+        private const string SaveMarinSongDialog = "ap_marin_song_dialog";
+        private const string SaveMarinSongDialogPresent = "ap_marin_song_dialog_present";
+        private static readonly Vector2 MarinMabePosition = new Vector2(368, 1216);
         private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
 
         private readonly GameManager _gameManager;
@@ -98,6 +105,7 @@ namespace ProjectZ.InGame.Archipelago
         public void OnBeforeSaveChange()
         {
             ReportTelemetrySummary();
+            RestoreMarinSongState();
             IsActive = false;
             _nextReceivedIndex = 0;
             while (_receivedItems.TryDequeue(out _)) { }
@@ -252,6 +260,9 @@ namespace ProjectZ.InGame.Archipelago
             if (IsActive && _settings?.AutoConnect == true && ShouldAttemptReconnect())
                 Connect();
 
+            if (IsActive && !_gameManager.SaveManager.HistoryEnabled)
+                UpdateMarinSongAccess();
+
             if (!IsActive || Game1.UiManager.CurrentScreen != Values.ScreenNameGame ||
                 _gameManager.MapManager.CurrentMap == null || MapManager.ObjLink == null ||
                 _gameManager.SaveManager.HistoryEnabled)
@@ -288,6 +299,9 @@ namespace ProjectZ.InGame.Archipelago
             _gameManager.SaveManager.SetString(ArchipelagoLocationKey.PersistentCheck(location.LocationId), "1");
             Interlocked.Increment(ref _telemetryChecksReported);
 
+            if (string.Equals(item.SourceLocationKey, MarinSongLocationKey, StringComparison.Ordinal))
+                RestoreMarinSongState();
+
             var recipientName = !string.IsNullOrWhiteSpace(location.ItemPlayerName)
                 ? location.ItemPlayerName
                 : location.ItemPlayer == location.LocalPlayer
@@ -315,6 +329,58 @@ namespace ProjectZ.InGame.Archipelago
             // The source object stores its normal save key after this method returns. On every
             // successful connection, all mapped save keys are resubmitted; checks are idempotent.
             return true;
+        }
+
+        private void UpdateMarinSongAccess()
+        {
+            var locationPending = _seed?.LocationsByGameKey.ContainsKey(MarinSongLocationKey) == true &&
+                                  !IsLocationCheckComplete(MarinSongLocationKey);
+            var map = _gameManager.MapManager.CurrentMap;
+            var link = MapManager.ObjLink;
+            var inMabeVillage = map?.MapName == "overworld.map" && link != null &&
+                                map.GetField(MarinMabePosition).Contains(link.CenterPosition.Position);
+
+            if (locationPending && HasOwnedItem("ocarina") && inMabeVillage)
+                ApplyMarinSongState();
+            else
+                RestoreMarinSongState();
+        }
+
+        private void ApplyMarinSongState()
+        {
+            var saveManager = _gameManager.SaveManager;
+            if (saveManager.GetString(SaveMarinSongOverride, "0") == "1")
+                return;
+
+            // The AP 0.6.7 LADX rules expose Marin's Mabe Village song check whenever Link has
+            // the Ocarina. Preserve the current vanilla story state while Link is in her Mabe
+            // field so later Marin, beach, and Animal Village sequences can resume unchanged.
+            saveManager.SetString(SaveMarinSongState, saveManager.GetString("maria_state", "0"));
+            var dialogState = saveManager.GetString("maria");
+            saveManager.SetString(SaveMarinSongDialogPresent, dialogState == null ? "0" : "1");
+            if (dialogState != null)
+                saveManager.SetString(SaveMarinSongDialog, dialogState);
+            saveManager.SetString(SaveMarinSongOverride, "1");
+            saveManager.SetString("maria_state", "1");
+            saveManager.RemoveString("maria");
+        }
+
+        private void RestoreMarinSongState()
+        {
+            var saveManager = _gameManager.SaveManager;
+            if (saveManager.GetString(SaveMarinSongOverride, "0") != "1")
+                return;
+
+            saveManager.SetString("maria_state", saveManager.GetString(SaveMarinSongState, "0"));
+            if (saveManager.GetString(SaveMarinSongDialogPresent, "0") == "1")
+                saveManager.SetString("maria", saveManager.GetString(SaveMarinSongDialog, ""));
+            else
+                saveManager.RemoveString("maria");
+
+            saveManager.RemoveString(SaveMarinSongOverride);
+            saveManager.RemoveString(SaveMarinSongState);
+            saveManager.RemoveString(SaveMarinSongDialog);
+            saveManager.RemoveString(SaveMarinSongDialogPresent);
         }
 
         public bool IsLocationCheckComplete(string sourceLocationKey)
