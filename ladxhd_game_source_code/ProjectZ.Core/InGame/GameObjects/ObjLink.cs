@@ -1672,51 +1672,76 @@ namespace ProjectZ.InGame.GameObjects
             var boomerangValue = saveManager.GetString("boomerang_trade");
             if (!string.IsNullOrEmpty(boomerangValue))
             {
-                // Get info about the item from the item slot based on "SwapButtons".
-                var index       = GameSettings.SwapButtons ? 0 : 1;
-                var item        = gameManager.Equipment[index];
-                var itemName    = item != null ? gameManager.Equipment[index].Name : "";
-
-                // Remove the string that initated the trade.
-                saveManager.RemoveString("boomerang_trade");
-
-                // Check if each item has been obtained legit.
-                var shovelCheck   = item != null && itemName == "shovel"   && saveManager.GetString("store_shovel", "0") == "1";
-                var featherCheck  = item != null && itemName == "feather"  && saveManager.GetString("store_feather", "0") == "1";
-                var magicRodCheck = item != null && itemName == "magicRod" && saveManager.GetString("store_magicRod", "0") == "1";
-                var hookshotCheck = item != null && itemName == "hookshot" && saveManager.GetString("store_hookshot", "0") == "1";
-
-                // Check the name of the item to see if it can be traded.
-                if (shovelCheck || featherCheck || magicRodCheck || hookshotCheck)
+                // The AP world uses LADX's default Boomerang Guy "gift" option. The vanilla
+                // engine interprets the same choice as an equipment trade, which could remove
+                // a randomized progression item permanently.
+                if (Archipelago.ArchipelagoManager.ShouldUseBoomerangGiftBehavior(
+                        gameManager.ArchipelagoManager.IsBoundSave))
                 {
-                    // Store the traded item name, null the equipment index so boomerang
-                    // can be added, and start the DialogPath to finish the trade.
-                    saveManager.SetString("tradded_item", itemName);
-                    gameManager.Equipment[index] = null;
+                    saveManager.RemoveString("boomerang_trade");
+                    saveManager.RemoveString("tradded_item");
                     gameManager.StartDialogPath("npc_hidden_boomerang");
-
-                    // Null out the item has been obtained or it will be restored on save load.
-                    saveManager.RemoveString("store_" + itemName);
                 }
-                // The NPC rejected the item.
-                else gameManager.StartDialogPath("npc_hidden_reject");
+                else
+                {
+                    // Get info about the item from the item slot based on "SwapButtons".
+                    var index       = GameSettings.SwapButtons ? 0 : 1;
+                    var item        = gameManager.Equipment[index];
+                    var itemName    = item != null ? gameManager.Equipment[index].Name : "";
+
+                    // Remove the string that initated the trade.
+                    saveManager.RemoveString("boomerang_trade");
+
+                    // Check if each item has been obtained legit.
+                    var shovelCheck   = item != null && itemName == "shovel"   && saveManager.GetString("store_shovel", "0") == "1";
+                    var featherCheck  = item != null && itemName == "feather"  && saveManager.GetString("store_feather", "0") == "1";
+                    var magicRodCheck = item != null && itemName == "magicRod" && saveManager.GetString("store_magicRod", "0") == "1";
+                    var hookshotCheck = item != null && itemName == "hookshot" && saveManager.GetString("store_hookshot", "0") == "1";
+
+                    // Check the name of the item to see if it can be traded.
+                    if (shovelCheck || featherCheck || magicRodCheck || hookshotCheck)
+                    {
+                        // Store the traded item name, null the equipment index so boomerang
+                        // can be added, and start the DialogPath to finish the trade.
+                        saveManager.SetString("tradded_item", itemName);
+                        gameManager.Equipment[index] = null;
+                        gameManager.StartDialogPath("npc_hidden_boomerang");
+
+                        // Null out the item has been obtained or it will be restored on save load.
+                        saveManager.RemoveString("store_" + itemName);
+                    }
+                    // The NPC rejected the item.
+                    else gameManager.StartDialogPath("npc_hidden_reject");
+                }
             }
 
             // Boomerang Return: Hidden Goriya
             var boomerangReturnValue = saveManager.GetString("boomerang_trade_return");
             if (!string.IsNullOrEmpty(boomerangReturnValue))
             {
-                // Remove the boomerang and store that it was traded back.
-                gameManager.RemoveItem("boomerang", 1);
-                saveManager.RemoveString("store_boomerang");
-                saveManager.RemoveString("boomerang_trade_return");
+                if (Archipelago.ArchipelagoManager.ShouldUseBoomerangGiftBehavior(
+                        gameManager.ArchipelagoManager.IsBoundSave))
+                {
+                    // AP never trades the boomerang back. Clear stale vanilla choice state but
+                    // retain the item and Goriya's completed dialog state.
+                    saveManager.RemoveString("boomerang_trade_return");
+                    saveManager.RemoveString("tradded_item");
+                    saveManager.SetString("npc_hidden", "1");
+                }
+                else
+                {
+                    // Remove the boomerang and store that it was traded back.
+                    gameManager.RemoveItem("boomerang", 1);
+                    saveManager.RemoveString("store_boomerang");
+                    saveManager.RemoveString("boomerang_trade_return");
 
-                // Return the traded item.
-                var trade = saveManager.GetString("tradded_item");
-                var item = new GameItemCollected(trade) { Count = 1 };
-                PickUpItem(item, true);
-                _pickupDialogOverride = "npc_hidden_4";
-                saveManager.RemoveString("tradded_item");
+                    // Return the traded item.
+                    var trade = saveManager.GetString("tradded_item");
+                    var item = new GameItemCollected(trade) { Count = 1 };
+                    PickUpItem(item, true);
+                    _pickupDialogOverride = "npc_hidden_4";
+                    saveManager.RemoveString("tradded_item");
+                }
             }
 
             // Spawn the Ghost who wants to go to the house by the bay.

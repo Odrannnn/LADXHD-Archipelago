@@ -85,6 +85,19 @@ Assert(ArchipelagoManager.HasSaveBinding("Seed", "Link") &&
        !ArchipelagoManager.HasSaveBinding("", "Link") &&
        !ArchipelagoManager.HasSaveBinding("Seed", null),
        "Offline gameplay overrides must follow the persistent AP save binding.");
+Assert(ArchipelagoManager.ShouldUseBoomerangGiftBehavior(true) &&
+       !ArchipelagoManager.ShouldUseBoomerangGiftBehavior(false),
+       "Boomerang Guy must use gift behavior only for an AP-bound save.");
+Assert(ArchipelagoManager.ShouldRepairBoomerangReceipt("0", "0", false) &&
+       ArchipelagoManager.ShouldRepairBoomerangReceipt("1", "0", true) &&
+       ArchipelagoManager.ShouldRepairBoomerangReceipt("1", "1", false) &&
+       !ArchipelagoManager.ShouldRepairBoomerangReceipt("1", "1", true),
+       "AP replay must recover a received boomerang missing from save state or inventory.");
+Assert(ArchipelagoManager.ShouldRestoreBoomerangTradeItem("shovel", false) &&
+       ArchipelagoManager.ShouldRestoreBoomerangTradeItem("hookshot", false) &&
+       !ArchipelagoManager.ShouldRestoreBoomerangTradeItem("hookshot", true) &&
+       !ArchipelagoManager.ShouldRestoreBoomerangTradeItem("sword1", false),
+       "Old AP saves must restore only equipment removed by the vanilla boomerang trade.");
 Assert(ArchipelagoManager.ShouldEnableMoblinCave(true, "0") &&
        !ArchipelagoManager.ShouldEnableMoblinCave(true, "1") &&
        !ArchipelagoManager.ShouldEnableMoblinCave(false, "0"),

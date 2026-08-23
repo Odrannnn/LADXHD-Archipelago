@@ -34,6 +34,7 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveGoalPending = "ap_goal_pending";
         private const string SaveBowWowReceived = "ap_received_bowwow";
         private const string SaveRoosterReceived = "ap_received_rooster";
+        private const string SaveBoomerangReceived = "ap_received_boomerang";
         private const string SaveProgressiveSwordCount = "ap_progressive_sword_count";
         private const string SaveProgressiveShieldCount = "ap_progressive_shield_count";
         private const string SaveProgressiveBraceletCount = "ap_progressive_bracelet_count";
@@ -42,6 +43,7 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveMaxArrowsRefillApplied = "ap_max_arrows_refill_applied";
         private const string TarinGiftLocationKey = "script:tarin:2";
         private const string MarinSongLocationKey = "script:maria_song_repeat:1";
+        private const string BoomerangGuyLocationKey = "script:npc_hidden_boomerang:2";
         private const string SaveMarinSongOverride = "ap_marin_song_override";
         private const string SaveMarinSongState = "ap_marin_song_state";
         private const string SaveMarinSongDialog = "ap_marin_song_dialog";
@@ -121,6 +123,24 @@ namespace ProjectZ.InGame.Archipelago
                 return TelemetryDisconnectReason.Network;
 
             return TelemetryDisconnectReason.Unknown;
+        }
+
+        public static bool ShouldUseBoomerangGiftBehavior(bool boundSave)
+        {
+            return boundSave;
+        }
+
+        public static bool ShouldRepairBoomerangReceipt(
+            string receivedMarker, string storeMarker, bool ownsBoomerang)
+        {
+            return !string.Equals(receivedMarker, "1", StringComparison.Ordinal) ||
+                   !string.Equals(storeMarker, "1", StringComparison.Ordinal) ||
+                   !ownsBoomerang;
+        }
+
+        public static bool ShouldRestoreBoomerangTradeItem(string itemName, bool ownsItem)
+        {
+            return !ownsItem && itemName is "shovel" or "feather" or "magicRod" or "hookshot";
         }
 
         public static bool ShouldEnableMoblinCave(bool boundSave, string bossDefeated)
@@ -339,6 +359,10 @@ namespace ProjectZ.InGame.Archipelago
                 ApplyEffect(ArchipelagoItemEffect.BowWow);
             if (_gameManager.SaveManager.GetString(SaveRoosterReceived, "0") == "1")
                 EnsureRoosterReceivedState();
+            if (_gameManager.SaveManager.GetString(SaveBoomerangReceived, "0") == "1")
+                EnsureBoomerangReceivedState();
+
+            RepairBoomerangGuyTradeState();
 
             // The updated overworld gates Raccoon Tarin on tarin_state=1, which vanilla writes
             // during the beach sword sequence. AP does not require the randomized Sword before
@@ -524,6 +548,9 @@ namespace ProjectZ.InGame.Archipelago
 
             if (string.Equals(item.SourceLocationKey, MarinSongLocationKey, StringComparison.Ordinal))
                 RestoreMarinSongState();
+
+            if (string.Equals(item.SourceLocationKey, BoomerangGuyLocationKey, StringComparison.Ordinal))
+                ClearBoomerangTradeFlags();
 
             var recipientName = !string.IsNullOrWhiteSpace(location.ItemPlayerName)
                 ? location.ItemPlayerName
@@ -907,6 +934,11 @@ namespace ProjectZ.InGame.Archipelago
             }
 
             _gameManager.CollectItem(receivedItem, slot);
+            if (string.Equals(archipelagoItemName, "Boomerang", StringComparison.Ordinal))
+            {
+                _gameManager.SaveManager.SetString(SaveBoomerangReceived, "1");
+                _gameManager.SaveManager.SetString("store_boomerang", "1");
+            }
             if (mapping.GameItemName == "sword2")
                 _gameManager.SaveManager.SetString("hasSword2", "1");
             IncrementProgressiveReceiptCount(archipelagoItemName);
@@ -1054,6 +1086,17 @@ namespace ProjectZ.InGame.Archipelago
                 return roosterNeedsRepair;
             }
 
+            if (string.Equals(itemName, "Boomerang", StringComparison.Ordinal))
+            {
+                var boomerangNeedsRepair = ShouldRepairBoomerangReceipt(
+                    _gameManager.SaveManager.GetString(SaveBoomerangReceived, "0"),
+                    _gameManager.SaveManager.GetString("store_boomerang", "0"),
+                    HasOwnedItem("boomerang"));
+                if (boomerangNeedsRepair)
+                    EnsureBoomerangReceivedState();
+                return boomerangNeedsRepair;
+            }
+
             if (TryGetAmmoUpgradeReplay(itemName, out var upgradeEffect, out var appliedKey))
             {
                 if (_gameManager.SaveManager.GetString(appliedKey, "0") == "1")
@@ -1079,6 +1122,35 @@ namespace ProjectZ.InGame.Archipelago
             ApplyEffect(ArchipelagoItemEffect.Rooster);
             if (!HasOwnedItem("rooster"))
                 _gameManager.CollectItem(new GameItemCollected("rooster") { Count = 1 });
+        }
+
+        private void EnsureBoomerangReceivedState()
+        {
+            _gameManager.SaveManager.SetString(SaveBoomerangReceived, "1");
+            _gameManager.SaveManager.SetString("store_boomerang", "1");
+            if (!HasOwnedItem("boomerang"))
+                _gameManager.CollectItem(new GameItemCollected("boomerang") { Count = 1 });
+        }
+
+        private void RepairBoomerangGuyTradeState()
+        {
+            var saveManager = _gameManager.SaveManager;
+            var tradedItem = saveManager.GetString("tradded_item");
+            if (tradedItem is "shovel" or "feather" or "magicRod" or "hookshot" &&
+                ShouldRestoreBoomerangTradeItem(tradedItem, HasOwnedItem(tradedItem)))
+            {
+                _gameManager.CollectItem(new GameItemCollected(tradedItem) { Count = 1 });
+                saveManager.SetString("store_" + tradedItem, "1");
+            }
+
+            ClearBoomerangTradeFlags();
+        }
+
+        private void ClearBoomerangTradeFlags()
+        {
+            _gameManager.SaveManager.RemoveString("boomerang_trade");
+            _gameManager.SaveManager.RemoveString("boomerang_trade_return");
+            _gameManager.SaveManager.RemoveString("tradded_item");
         }
 
         private int GetProgressiveReceiptCount(string itemName, int ownedLevel)
