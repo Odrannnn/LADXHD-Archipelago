@@ -28,6 +28,7 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveSlotName = "ap_slot_name";
         private const string SaveReceivedIndex = "ap_received_index";
         private const string SaveGoalPending = "ap_goal_pending";
+        private const string TarinGiftLocationKey = "script:tarin:2";
         private const string MarinSongLocationKey = "script:maria_song_repeat:1";
         private const string SaveMarinSongOverride = "ap_marin_song_override";
         private const string SaveMarinSongState = "ap_marin_song_state";
@@ -146,6 +147,7 @@ namespace ProjectZ.InGame.Archipelago
                 return;
             }
 
+            RepairTarinForestState(IsPersistentLocationCheckComplete(TarinGiftLocationKey));
             ActivateBoundSave();
         }
 
@@ -162,6 +164,12 @@ namespace ProjectZ.InGame.Archipelago
             if (_gameManager.SwordLevel > 0 &&
                 _gameManager.SaveManager.GetString("introMusic", "0") == "1")
                 _gameManager.SaveManager.SetString("introMusic", "0");
+
+            // The updated overworld gates Raccoon Tarin on tarin_state=1, which vanilla writes
+            // during the beach sword sequence. AP does not require the randomized Sword before
+            // this forest route, so repair saves where Tarin's opening gift already advanced his
+            // dialog but the separate overworld state was never written.
+            RepairTarinForestState(tarinGiftCompleted: false);
 
             // AP presents received items without running their vanilla pickup dialog. Repair
             // saves made by older builds where a trade item was granted but the dialog's world
@@ -299,6 +307,9 @@ namespace ProjectZ.InGame.Archipelago
 
             _gameManager.SaveManager.SetString(ArchipelagoLocationKey.PersistentCheck(location.LocationId), "1");
             Interlocked.Increment(ref _telemetryChecksReported);
+
+            if (string.Equals(item.SourceLocationKey, TarinGiftLocationKey, StringComparison.Ordinal))
+                RepairTarinForestState(tarinGiftCompleted: true);
 
             if (string.Equals(item.SourceLocationKey, MarinSongLocationKey, StringComparison.Ordinal))
                 RestoreMarinSongState();
@@ -756,6 +767,25 @@ namespace ProjectZ.InGame.Archipelago
         {
             if (GetStringState(key) < minimum)
                 _gameManager.SaveManager.SetString(key, minimum.ToString());
+        }
+
+        private void RepairTarinForestState(bool tarinGiftCompleted)
+        {
+            // Never replace state 2 (raccoon cured), state 4 (honeycomb ready), or any later
+            // story state. The exact dialog state check also avoids moving Tarin out of the
+            // opening house before his Archipelago location has been collected.
+            if (GetStringState("tarin_state") != 0 ||
+                (!tarinGiftCompleted && GetStringState("tarin") != 1))
+                return;
+
+            _gameManager.SaveManager.SetString("tarin_state", "1");
+        }
+
+        private bool IsPersistentLocationCheckComplete(string sourceLocationKey)
+        {
+            return _seed?.LocationsByGameKey.TryGetValue(sourceLocationKey, out var location) == true &&
+                   _gameManager.SaveManager.GetString(
+                       ArchipelagoLocationKey.PersistentCheck(location.LocationId)) == "1";
         }
 
         private int GetStringState(string key)
