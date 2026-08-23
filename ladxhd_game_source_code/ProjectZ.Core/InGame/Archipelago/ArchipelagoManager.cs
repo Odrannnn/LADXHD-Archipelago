@@ -154,6 +154,11 @@ namespace ProjectZ.InGame.Archipelago
                 : string.Equals(hasLevelTwoSword, "1", StringComparison.Ordinal);
         }
 
+        public static bool ShouldSetLevelTwoSwordFlag(int swordLevel, string currentFlag)
+        {
+            return swordLevel >= 2 && !string.Equals(currentFlag, "1", StringComparison.Ordinal);
+        }
+
         public static bool ShouldOverrideRaccoonSpawnCondition(
             bool archipelagoActive,
             string conditionKey,
@@ -266,6 +271,11 @@ namespace ProjectZ.InGame.Archipelago
             if (_gameManager.SwordLevel > 0 &&
                 _gameManager.SaveManager.GetString("introMusic", "0") == "1")
                 _gameManager.SaveManager.SetString("introMusic", "0");
+
+            if (ShouldSetLevelTwoSwordFlag(
+                    _gameManager.SwordLevel,
+                    _gameManager.SaveManager.GetString("hasSword2", "0")))
+                _gameManager.SaveManager.SetString("hasSword2", "1");
 
             RepairMoblinCaveState();
 
@@ -816,6 +826,8 @@ namespace ProjectZ.InGame.Archipelago
             }
 
             _gameManager.CollectItem(receivedItem, slot);
+            if (mapping.GameItemName == "sword2")
+                _gameManager.SaveManager.SetString("hasSword2", "1");
             IncrementProgressiveReceiptCount(archipelagoItemName);
             if (isFirstSword)
                 MapManager.ObjLink.CompleteArchipelagoFirstSwordMusic();

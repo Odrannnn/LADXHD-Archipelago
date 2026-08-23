@@ -95,6 +95,10 @@ Assert(ArchipelagoManager.IsSeashellMansionComplete(true, "0", "1") &&
        !ArchipelagoManager.IsSeashellMansionComplete(true, "1", "0") &&
        ArchipelagoManager.IsSeashellMansionComplete(false, "1", "0"),
        "The AP Seashell Mansion sequence must follow its checked source location.");
+Assert(ArchipelagoManager.ShouldSetLevelTwoSwordFlag(2, "0") &&
+       !ArchipelagoManager.ShouldSetLevelTwoSwordFlag(1, "0") &&
+       !ArchipelagoManager.ShouldSetLevelTwoSwordFlag(2, "1"),
+       "A remotely received level-two sword must retain its native ownership state.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
