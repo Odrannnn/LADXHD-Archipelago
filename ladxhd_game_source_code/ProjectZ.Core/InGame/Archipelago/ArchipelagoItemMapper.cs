@@ -13,6 +13,7 @@ namespace ProjectZ.InGame.Archipelago
         TradePineapple,
         TradeScale,
         TradeMagnifyingGlass,
+        ZolAttack,
         MaxPowderUpgrade,
         MaxBombsUpgrade,
         MaxArrowsUpgrade
@@ -65,7 +66,7 @@ namespace ProjectZ.InGame.Archipelago
                 ["500 Rupees"] = new ArchipelagoItemMapping("ruby", 500),
                 ["Seashell"] = new ArchipelagoItemMapping("shell"),
                 ["Nothing"] = new ArchipelagoItemMapping(null),
-                ["Zol Attack"] = new ArchipelagoItemMapping(null),
+                ["Zol Attack"] = new ArchipelagoItemMapping(null, effect: ArchipelagoItemEffect.ZolAttack),
                 ["Boomerang"] = new ArchipelagoItemMapping("boomerang"),
                 ["Heart Piece"] = new ArchipelagoItemMapping("heartMeter"),
                 ["Heart Container"] = new ArchipelagoItemMapping("heartMeterFull", 4),

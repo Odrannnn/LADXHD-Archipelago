@@ -11,6 +11,7 @@ using Archipelago.MultiClient.Net;
 using Archipelago.MultiClient.Net.Enums;
 using Archipelago.MultiClient.Net.Models;
 using Microsoft.Xna.Framework;
+using ProjectZ.InGame.GameObjects.Enemies;
 using ProjectZ.InGame.Map;
 using ProjectZ.InGame.Overlay;
 using ProjectZ.InGame.SaveLoad;
@@ -22,6 +23,7 @@ namespace ProjectZ.InGame.Archipelago
     public sealed class ArchipelagoManager
     {
         public const string GameName = "Links Awakening DX HD";
+        public const int ZolAttackSpawnCount = 5;
         public static readonly Version ClientVersion = new Version(0, 6, 7);
 
         private const string SaveSeedName = "ap_seed_name";
@@ -839,6 +841,9 @@ namespace ProjectZ.InGame.Archipelago
                 case ArchipelagoItemEffect.TradeMagnifyingGlass:
                     PromoteStringState("npc_painter", 2);
                     break;
+                case ArchipelagoItemEffect.ZolAttack:
+                    SpawnZolAttack();
+                    break;
                 case ArchipelagoItemEffect.MaxPowderUpgrade:
                     _gameManager.SaveManager.SetString("upgradePowder", "1");
                     break;
@@ -848,6 +853,33 @@ namespace ProjectZ.InGame.Archipelago
                 case ArchipelagoItemEffect.MaxArrowsUpgrade:
                     _gameManager.SaveManager.SetString("upgradeBow", "1");
                     break;
+            }
+        }
+
+        private void SpawnZolAttack()
+        {
+            var map = _gameManager.MapManager?.CurrentMap;
+            var link = MapManager.ObjLink;
+            if (map?.Objects == null || link == null)
+                return;
+
+            var offsets = new[]
+            {
+                new Point(-24, -16),
+                new Point(24, -16),
+                new Point(-24, 16),
+                new Point(24, 16),
+                new Point(0, -32)
+            };
+            for (var index = 0; index < ZolAttackSpawnCount; index++)
+            {
+                var offset = offsets[index];
+                map.Objects.SpawnObject(new EnemyGreenZol(
+                    map,
+                    (int)link.Position.X + offset.X - 8,
+                    (int)link.Position.Y + offset.Y - 13,
+                    24,
+                    true));
             }
         }
 
