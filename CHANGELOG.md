@@ -1,5 +1,11 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.16**
+### Expanded inventory layout fix
+  * Kept all 16 equipment positions inside the inventory panel's map-safe area so the minimap no longer covers the expanded storage slots.
+  * Used a compact four-column grid in both four-button and six-button modes while retaining enough room for item sprites, counts, and level labels.
+  * Moved the Rooster ownership indicator into the unused inventory header so it remains visible instead of being drawn behind the minimap.
+
 ## **v2.0.15**
 ### Randomizer behavior and save-repair update
   * Decoupled the desert Walrus, Moblin Cave encounter, BowWow, Flying Rooster, Wind Fish egg book, and Seashell Mansion checks from vanilla story state so they follow Archipelago ownership and location progress.
