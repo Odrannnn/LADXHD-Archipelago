@@ -33,7 +33,8 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveMarinSongState = "ap_marin_song_state";
         private const string SaveMarinSongDialog = "ap_marin_song_dialog";
         private const string SaveMarinSongDialogPresent = "ap_marin_song_dialog_present";
-        private static readonly Vector2 MarinMabePosition = new Vector2(368, 1216);
+        private const int MarinMabePositionX = 368;
+        private const int MarinMabePositionY = 1216;
         private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
 
         private readonly GameManager _gameManager;
@@ -338,7 +339,8 @@ namespace ProjectZ.InGame.Archipelago
             var map = _gameManager.MapManager.CurrentMap;
             var link = MapManager.ObjLink;
             var inMabeVillage = map?.MapName == "overworld.map" && link != null &&
-                                map.GetField(MarinMabePosition).Contains(link.CenterPosition.Position);
+                                map.GetField(new Vector2(MarinMabePositionX, MarinMabePositionY))
+                                   .Contains(link.CenterPosition.Position);
 
             if (locationPending && HasOwnedItem("ocarina") && inMabeVillage)
                 ApplyMarinSongState();
