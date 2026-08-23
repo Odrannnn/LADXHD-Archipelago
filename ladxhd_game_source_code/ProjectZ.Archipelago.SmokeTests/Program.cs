@@ -74,6 +74,10 @@ Assert(ArchipelagoManager.ShouldSuppressBombDrop(true, false, "bomb_1") &&
        !ArchipelagoManager.ShouldSuppressBombDrop(false, false, "bomb_1") &&
        !ArchipelagoManager.ShouldSuppressBombDrop(true, false, "heart"),
        "Enemy drops must not grant Bombs before AP delivers the Bomb item.");
+Assert(ArchipelagoManager.ReconcileProgressiveCount(1, 0, 0) == 1 &&
+       ArchipelagoManager.ReconcileProgressiveCount(0, 2, 0) == 2 &&
+       ArchipelagoManager.ReconcileProgressiveCount(0, 0, 1) == 1,
+       "Progressive tiers must follow monotonic AP receipt history, not removable inventory alone.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(

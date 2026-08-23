@@ -29,6 +29,9 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveReceivedIndex = "ap_received_index";
         private const string SaveGoalPending = "ap_goal_pending";
         private const string SaveBowWowReceived = "ap_received_bowwow";
+        private const string SaveProgressiveSwordCount = "ap_progressive_sword_count";
+        private const string SaveProgressiveShieldCount = "ap_progressive_shield_count";
+        private const string SaveProgressiveBraceletCount = "ap_progressive_bracelet_count";
         private const string TarinGiftLocationKey = "script:tarin:2";
         private const string MarinSongLocationKey = "script:maria_song_repeat:1";
         private const string SaveMarinSongOverride = "ap_marin_song_override";
@@ -44,6 +47,7 @@ namespace ProjectZ.InGame.Archipelago
         private readonly ConcurrentQueue<QueuedNetworkItem> _receivedItems = new ConcurrentQueue<QueuedNetworkItem>();
         private readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
         private readonly HashSet<string> _cataloguedLocationKeys = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<int> _replayedProgressiveIndexes = new HashSet<int>();
 
         private ArchipelagoConnectionSettings _settings;
         private ArchipelagoSeedManifest _seed;
@@ -51,6 +55,9 @@ namespace ProjectZ.InGame.Archipelago
         private bool _connecting;
         private int _connectionGeneration;
         private int _nextReceivedIndex;
+        private int _replayedProgressiveSwordCount;
+        private int _replayedProgressiveShieldCount;
+        private int _replayedProgressiveBraceletCount;
         private DateTime _nextReconnectUtc = DateTime.MinValue;
         private DateTime _connectionAttemptStartedUtc = DateTime.MinValue;
         private DateTime _connectedStartedUtc = DateTime.MinValue;
@@ -125,6 +132,11 @@ namespace ProjectZ.InGame.Archipelago
                    string.Equals(itemName, "bomb_1", StringComparison.Ordinal);
         }
 
+        public static int ReconcileProgressiveCount(int savedCount, int replayedCount, int ownedLevel)
+        {
+            return Math.Max(0, Math.Max(savedCount, Math.Max(replayedCount, ownedLevel)));
+        }
+
         public static bool ShouldOverrideRaccoonSpawnCondition(
             bool archipelagoActive,
             string conditionKey,
@@ -182,6 +194,7 @@ namespace ProjectZ.InGame.Archipelago
             RestoreMarinSongState();
             IsActive = false;
             _nextReceivedIndex = 0;
+            ResetReplayedProgressiveCounts();
             while (_receivedItems.TryDequeue(out _)) { }
             Disconnect();
         }
@@ -321,6 +334,7 @@ namespace ProjectZ.InGame.Archipelago
         private void ActivateBoundSave()
         {
             IsActive = true;
+            ResetReplayedProgressiveCounts();
             RepairMoblinCaveState();
             ResetTelemetrySession();
             _nextReceivedIndex = Math.Max(0, _gameManager.SaveManager.GetInt(SaveReceivedIndex, 0));
@@ -369,7 +383,7 @@ namespace ProjectZ.InGame.Archipelago
             var repairedReplayState = false;
             while (_receivedItems.TryPeek(out var queued) && queued.Index < _nextReceivedIndex)
             {
-                repairedReplayState |= RepairPreviouslyReceivedItem(queued.ItemName);
+                repairedReplayState |= RepairPreviouslyReceivedItem(queued.Index, queued.ItemName);
                 _receivedItems.TryDequeue(out _);
             }
 
@@ -722,9 +736,15 @@ namespace ProjectZ.InGame.Archipelago
 
         private bool TryApplyReceivedItem(QueuedNetworkItem queued)
         {
-            if (!ArchipelagoItemMapper.TryMap(queued.ItemName, GetOwnedEquipmentLevel("sword1", "sword2"),
-                    GetOwnedEquipmentLevel("shield", "mirrorShield"),
-                    GetOwnedEquipmentLevel("stonelifter", "stonelifter2"), out var mapping))
+            var swordCount = GetProgressiveReceiptCount(
+                "Progressive Sword", GetOwnedEquipmentLevel("sword1", "sword2"));
+            var shieldCount = GetProgressiveReceiptCount(
+                "Progressive Shield", GetOwnedEquipmentLevel("shield", "mirrorShield"));
+            var braceletCount = GetProgressiveReceiptCount(
+                "Progressive Power Bracelet", GetOwnedEquipmentLevel("stonelifter", "stonelifter2"));
+
+            if (!ArchipelagoItemMapper.TryMap(
+                    queued.ItemName, swordCount, shieldCount, braceletCount, out var mapping))
             {
                 Interlocked.Increment(ref _telemetryItemsReceived);
                 Interlocked.Increment(ref _telemetryUnsupportedItems);
@@ -743,7 +763,7 @@ namespace ProjectZ.InGame.Archipelago
             }
 
             if (!MapManager.ObjLink.TryPresentArchipelagoItem(receivedItem, () =>
-                GrantReceivedItem(mapping, receivedItem)))
+                GrantReceivedItem(queued.ItemName, mapping, receivedItem)))
                 return false;
 
             AchievementOverlay.PushArchipelagoItem("Received", queued.ItemName, "From", queued.SenderName);
@@ -752,7 +772,8 @@ namespace ProjectZ.InGame.Archipelago
             return true;
         }
 
-        private void GrantReceivedItem(ArchipelagoItemMapping mapping, GameItemCollected receivedItem)
+        private void GrantReceivedItem(
+            string archipelagoItemName, ArchipelagoItemMapping mapping, GameItemCollected receivedItem)
         {
             ApplyEffect(mapping.Effect);
             if (receivedItem == null)
@@ -778,6 +799,7 @@ namespace ProjectZ.InGame.Archipelago
             }
 
             _gameManager.CollectItem(receivedItem, slot);
+            IncrementProgressiveReceiptCount(archipelagoItemName);
             if (isFirstSword)
                 MapManager.ObjLink.CompleteArchipelagoFirstSwordMusic();
         }
@@ -829,8 +851,23 @@ namespace ProjectZ.InGame.Archipelago
             }
         }
 
-        private bool RepairPreviouslyReceivedItem(string itemName)
+        private bool RepairPreviouslyReceivedItem(int itemIndex, string itemName)
         {
+            if (TryGetProgressiveSaveKey(itemName, out var saveKey))
+            {
+                if (!_replayedProgressiveIndexes.Add(itemIndex))
+                    return false;
+
+                var replayedCount = IncrementReplayedProgressiveCount(itemName);
+                var savedCount = _gameManager.SaveManager.GetInt(saveKey, 0);
+                var reconciledCount = ReconcileProgressiveCount(savedCount, replayedCount, 0);
+                if (reconciledCount == savedCount)
+                    return false;
+
+                _gameManager.SaveManager.SetInt(saveKey, reconciledCount);
+                return true;
+            }
+
             if (!string.Equals(itemName, "BowWow", StringComparison.Ordinal))
                 return false;
 
@@ -840,6 +877,70 @@ namespace ProjectZ.InGame.Archipelago
             if (needsRepair)
                 ApplyEffect(ArchipelagoItemEffect.BowWow);
             return needsRepair;
+        }
+
+        private int GetProgressiveReceiptCount(string itemName, int ownedLevel)
+        {
+            if (!TryGetProgressiveSaveKey(itemName, out var saveKey))
+                return ownedLevel;
+
+            var savedCount = _gameManager.SaveManager.GetInt(saveKey, 0);
+            var replayedCount = GetReplayedProgressiveCount(itemName);
+            var reconciledCount = ReconcileProgressiveCount(savedCount, replayedCount, ownedLevel);
+            if (reconciledCount != savedCount)
+                _gameManager.SaveManager.SetInt(saveKey, reconciledCount);
+            return reconciledCount;
+        }
+
+        private void IncrementProgressiveReceiptCount(string itemName)
+        {
+            if (!TryGetProgressiveSaveKey(itemName, out var saveKey))
+                return;
+
+            var currentCount = _gameManager.SaveManager.GetInt(saveKey, 0);
+            _gameManager.SaveManager.SetInt(saveKey, currentCount + 1);
+        }
+
+        private static bool TryGetProgressiveSaveKey(string itemName, out string saveKey)
+        {
+            saveKey = itemName switch
+            {
+                "Progressive Sword" => SaveProgressiveSwordCount,
+                "Progressive Shield" => SaveProgressiveShieldCount,
+                "Progressive Power Bracelet" => SaveProgressiveBraceletCount,
+                _ => null
+            };
+            return saveKey != null;
+        }
+
+        private int IncrementReplayedProgressiveCount(string itemName)
+        {
+            return itemName switch
+            {
+                "Progressive Sword" => ++_replayedProgressiveSwordCount,
+                "Progressive Shield" => ++_replayedProgressiveShieldCount,
+                "Progressive Power Bracelet" => ++_replayedProgressiveBraceletCount,
+                _ => 0
+            };
+        }
+
+        private int GetReplayedProgressiveCount(string itemName)
+        {
+            return itemName switch
+            {
+                "Progressive Sword" => _replayedProgressiveSwordCount,
+                "Progressive Shield" => _replayedProgressiveShieldCount,
+                "Progressive Power Bracelet" => _replayedProgressiveBraceletCount,
+                _ => 0
+            };
+        }
+
+        private void ResetReplayedProgressiveCounts()
+        {
+            _replayedProgressiveIndexes.Clear();
+            _replayedProgressiveSwordCount = 0;
+            _replayedProgressiveShieldCount = 0;
+            _replayedProgressiveBraceletCount = 0;
         }
 
         private void ApplyStickEventState()
