@@ -241,8 +241,9 @@ namespace ProjectZ.InGame.GameObjects.Things
             if (hitType == HitType.ThrownObject && gameObject.GetType() == typeof(ObjBush))
                 return Values.HitCollision.None;
 
-            // Boomerangs and Magic Rod create a small explosion.
-            if (!OnSpinyBeetle && (hitType & HitType.Boomerang) != 0 || (hitType & HitType.MagicRod) != 0)
+            // Magic Rod creates a small explosion. Boomerang must continue through the normal
+            // destruction path below so bushes create leaves and reveal their contained item.
+            if (!OnSpinyBeetle && (hitType & HitType.MagicRod) != 0)
             {
                 // Don't do this to grass, only bushes.
                 if (!_setGrassField)
