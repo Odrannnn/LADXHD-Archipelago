@@ -1,5 +1,10 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.14**
+### Raccoon Tarin event fix
+  * Kept Raccoon Tarin present in the Mysterious Forest until Link actually cures him, even when randomized trade items advance Tarin's shared vanilla event state out of order.
+  * Re-evaluated the current map's conditional objects when an Archipelago save becomes active so compatible existing saves receive the corrected spawn immediately.
+
 ## **v2.0.13**
 ### Expanded randomizer inventory
   * Expanded the equipment inventory from 12 to 16 positions so independently randomized items such as the Shovel and Boomerang can coexist without exhausting the vanilla trade-based capacity.
