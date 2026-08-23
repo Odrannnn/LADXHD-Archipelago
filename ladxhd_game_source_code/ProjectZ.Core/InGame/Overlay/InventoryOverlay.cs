@@ -8,6 +8,66 @@ using ProjectZ.InGame.Things;
 
 namespace ProjectZ.InGame.Overlay
 {
+    public readonly struct InventoryEquipmentLayout
+    {
+        public int X { get; }
+        public int Y { get; }
+        public int CellWidth { get; }
+        public int CellHeight { get; }
+        public int Columns { get; }
+        public int Rows { get; }
+        public int Width => Columns * CellWidth;
+        public int Height => Rows * CellHeight;
+
+        public InventoryEquipmentLayout(
+            int x,
+            int y,
+            int cellWidth,
+            int cellHeight,
+            int columns,
+            int rows)
+        {
+            X = x;
+            Y = y;
+            CellWidth = cellWidth;
+            CellHeight = cellHeight;
+            Columns = columns;
+            Rows = rows;
+        }
+    }
+
+    public static class InventoryOverlayLayout
+    {
+        public const int ContentOffsetY = 26;
+        public const int EquipmentPanelWidth = 108;
+        public const int EquipmentPanelHeight = 52;
+        public const int RoosterX = 180;
+        public const int RoosterY = 1;
+        public const int RoosterWidth = 28;
+        public const int RoosterHeight = 22;
+
+        public static InventoryEquipmentLayout GetEquipmentLayout(bool sixButtons, int equipmentSlots)
+        {
+            var handSlots = sixButtons ? 6 : 4;
+            var storageSlots = equipmentSlots - handSlots;
+            if (storageSlots <= 0)
+                throw new ArgumentOutOfRangeException(nameof(equipmentSlots));
+
+            // Four columns retain enough horizontal room for item counts and level labels.
+            // The expanded inventory needs three compact rows, which still fit 16-pixel icons.
+            const int columns = 4;
+            var rows = (storageSlots + columns - 1) / columns;
+
+            return new InventoryEquipmentLayout(
+                6,
+                sixButtons ? 124 : 123,
+                EquipmentPanelWidth / columns,
+                EquipmentPanelHeight / rows,
+                columns,
+                rows);
+        }
+    }
+
     class InventoryOverlay
     {
         private const int Margin = 6;
@@ -61,7 +121,11 @@ namespace ProjectZ.InGame.Overlay
 
         private Point _equipmentPosition;
         private Rectangle _itemsRectangle;
-        private readonly Rectangle _roosterRectangle = new Rectangle(234, 124, 28, 26);
+        private readonly Rectangle _roosterRectangle = new Rectangle(
+            InventoryOverlayLayout.RoosterX,
+            InventoryOverlayLayout.RoosterY,
+            InventoryOverlayLayout.RoosterWidth,
+            InventoryOverlayLayout.RoosterHeight);
         private readonly Animator _roosterAnimator;
 
         private int _width;
@@ -130,8 +194,6 @@ namespace ProjectZ.InGame.Overlay
                         RecItemselection.Width, RecItemselection.Height)
                 };
                 _itemSlotsPosition = new Point(14, 55);
-                _itemRectangleSize = new Point(36, 26);
-                _equipmentPosition = new Point(6, 124);
             }
             // The setting was set to use four buttons.
             else
@@ -150,19 +212,22 @@ namespace ProjectZ.InGame.Overlay
                         RecItemselection.Width, RecItemselection.Height)
                 };
                 _itemSlotsPosition = new Point(14, 41);
-                _itemRectangleSize = new Point(27, 26);
-                _equipmentPosition = new Point(6, 123);
             }
 
-            // Keep the expanded equipment inventory to two rows in both controller modes.
-            // Four-button mode has 12 storage cells; six-button mode has 10.
-            var storageSlots = GameManager.EquipmentSlots - _itemSlots.Length;
-            _itemSlotWidth = (storageSlots + 1) / 2;
+            // Keep all expanded storage cells inside the original map-safe equipment panel.
+            // The minimap begins at x=118 and is drawn after the inventory, so allowing this
+            // panel to grow horizontally causes its rightmost cells to disappear behind it.
+            var equipmentLayout = InventoryOverlayLayout.GetEquipmentLayout(
+                sixButtons,
+                GameManager.EquipmentSlots);
+            _equipmentPosition = new Point(equipmentLayout.X, equipmentLayout.Y);
+            _itemRectangleSize = new Point(equipmentLayout.CellWidth, equipmentLayout.CellHeight);
+            _itemSlotWidth = equipmentLayout.Columns;
             _itemsRectangle = new Rectangle(
-                _equipmentPosition.X,
-                _equipmentPosition.Y,
-                _itemSlotWidth * _itemRectangleSize.X,
-                2 * _itemRectangleSize.Y);
+                equipmentLayout.X,
+                equipmentLayout.Y,
+                equipmentLayout.Width,
+                equipmentLayout.Height);
 
             // Update the number of equippable items.
             _itemSlotString = new string[_itemSlots.Length];
@@ -330,7 +395,7 @@ namespace ProjectZ.InGame.Overlay
             DrawBackground(spriteBatch, offset, _relictsRectangle);
             DrawBackground(spriteBatch, offset, _itemsRectangle);
             DrawBackground(spriteBatch, offset, _tradeStuffRectangle);
-            DrawBackground(spriteBatch, offset, _roosterRectangle);
+            DrawBackground(spriteBatch, Point.Zero, _roosterRectangle);
 
             // Draw item selection box.
             var selectionPosition = new Point(
@@ -354,7 +419,7 @@ namespace ProjectZ.InGame.Overlay
                 var missingRooster = new Rectangle(
                     _roosterRectangle.X + _roosterRectangle.Width / 2 - 2,
                     _roosterRectangle.Bottom - 8, 4, 2);
-                DrawBackground(spriteBatch, offset, missingRooster, 1);
+                DrawBackground(spriteBatch, Point.Zero, missingRooster, 1);
             }
 
             // Key background dots.
@@ -430,7 +495,7 @@ namespace ProjectZ.InGame.Overlay
                 ItemDrawHelper.DrawItemWithInfo(spriteBatch, Game1.GameManager.GetItem("goldLeaf"), offsetBottom, _leafRectangle, 1, Color.White, !GameSettings.ClassicSprites);
             }
             DrawEquipment(spriteBatch, offsetBottom + _equipmentPosition);
-            DrawRooster(spriteBatch, offsetBottom);
+            DrawRooster(spriteBatch, Point.Zero);
 
             // Draw slot labels and items.
             for (int y = 0; y < _itemSlots.Length; y++)

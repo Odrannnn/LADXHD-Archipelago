@@ -1,5 +1,6 @@
 using ProjectZ.InGame.Archipelago;
 using ProjectZ.InGame.Assets;
+using ProjectZ.InGame.Overlay;
 using ProjectZ.InGame.Telemetry;
 using ProjectZ.InGame.Things;
 using System.Net;
@@ -122,6 +123,45 @@ Assert(ArchipelagoManager.ShouldRepairRoosterReceipt("0", "0", false) &&
        "Replayed AP history must restore a rooster lost by an older save.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
+const int inventoryMapX = 118;
+const int inventoryMapY = 58;
+const int inventoryMapWidth = 144;
+const int inventoryMapHeight = 144;
+static bool RectanglesIntersect(
+    int firstX, int firstY, int firstWidth, int firstHeight,
+    int secondX, int secondY, int secondWidth, int secondHeight) =>
+    firstX < secondX + secondWidth && firstX + firstWidth > secondX &&
+    firstY < secondY + secondHeight && firstY + firstHeight > secondY;
+foreach (var sixButtons in new[] { false, true })
+{
+    var layout = InventoryOverlayLayout.GetEquipmentLayout(sixButtons, GameManager.EquipmentSlots);
+    var storageSlots = GameManager.EquipmentSlots - (sixButtons ? 6 : 4);
+
+    Assert(layout.Columns * layout.Rows >= storageSlots,
+           "The compact inventory layout must retain every expanded storage slot.");
+    Assert(layout.CellWidth >= 16 && layout.CellHeight >= 16,
+           "Expanded inventory cells must remain large enough for item sprites.");
+    Assert(!RectanglesIntersect(
+               layout.X,
+               layout.Y + InventoryOverlayLayout.ContentOffsetY,
+               layout.Width,
+               layout.Height,
+               inventoryMapX,
+               inventoryMapY,
+               inventoryMapWidth,
+               inventoryMapHeight),
+           "Expanded inventory storage must not be covered by the minimap.");
+}
+Assert(!RectanglesIntersect(
+           InventoryOverlayLayout.RoosterX,
+           InventoryOverlayLayout.RoosterY,
+           InventoryOverlayLayout.RoosterWidth,
+           InventoryOverlayLayout.RoosterHeight,
+           inventoryMapX,
+           inventoryMapY,
+           inventoryMapWidth,
+           inventoryMapHeight),
+       "The Rooster ownership indicator must remain visible outside the minimap.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
            true, "tarin_state", "1", "raccoon", "0", "0") &&
        ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
