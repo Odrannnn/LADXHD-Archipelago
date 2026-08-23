@@ -73,6 +73,26 @@ namespace ProjectZ.InGame.Archipelago
         public string Status => _status;
         public ArchipelagoSeedManifest Seed => _seed;
 
+        public static bool ShouldOverrideRaccoonSpawnCondition(
+            bool archipelagoActive,
+            string conditionKey,
+            string conditionValue,
+            string spawnObjectId,
+            string currentValue,
+            string raccoonTransformedValue)
+        {
+            // The AP logic always models Raccoon Tarin as the forest obstacle, even before the
+            // Start House item is collected. Keep the house Tarin available for that location by
+            // overriding only this map spawner instead of prematurely advancing tarin_state.
+            return archipelagoActive &&
+                   string.Equals(conditionKey, "tarin_state", StringComparison.Ordinal) &&
+                   string.Equals(conditionValue, "1", StringComparison.Ordinal) &&
+                   string.Equals(spawnObjectId, "raccoon", StringComparison.Ordinal) &&
+                   !string.Equals(currentValue, "1", StringComparison.Ordinal) &&
+                   !string.Equals(currentValue, "2", StringComparison.Ordinal) &&
+                   !string.Equals(raccoonTransformedValue, "1", StringComparison.Ordinal);
+        }
+
         public void PrepareFiles()
         {
             try
@@ -248,6 +268,7 @@ namespace ProjectZ.InGame.Archipelago
             _nextReceivedIndex = Math.Max(0, _gameManager.SaveManager.GetInt(SaveReceivedIndex, 0));
             SetStatus($"Bound: {_seed.SeedName} / {_seed.SlotName}");
             RecordRandomizerManifest();
+            _gameManager.MapManager?.CurrentMap?.Objects?.TriggerKeyChange();
             if (_settings.AutoConnect)
                 Connect();
         }

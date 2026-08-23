@@ -47,6 +47,20 @@ Assert(ArchipelagoManager.ClientVersion == new Version(0, 6, 7),
        "The client handshake must advertise Archipelago 0.6.7 compatibility.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
+Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
+           true, "tarin_state", "1", "raccoon", "0", "0") &&
+       ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
+           true, "tarin_state", "1", "raccoon", "4", "0") &&
+       ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
+           true, "tarin_state", "1", "raccoon", "5", "0"),
+       "An active AP save must spawn Raccoon Tarin before his cure, including out-of-order trade states.");
+Assert(!ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
+           false, "tarin_state", "1", "raccoon", "0", "0") &&
+       !ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
+           true, "tarin_state", "1", "raccoon", "0", "1") &&
+       !ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
+           true, "tarin_state", "1", "raccoon", "2", "0"),
+       "The Raccoon Tarin override must not affect vanilla or cured states.");
 
 var seedPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.apladxhd");
 try

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ProjectZ.InGame.Archipelago;
 using ProjectZ.InGame.GameObjects.Base;
 using ProjectZ.InGame.GameObjects.Base.Components;
 using ProjectZ.InGame.GameObjects.NPCs;
@@ -121,8 +122,16 @@ namespace ProjectZ.InGame.GameObjects.Things
         private void KeyChanged()
         {
             var value = Game1.GameManager.SaveManager.GetString(_strKey, "0");
+            var conditionMatched = value == _strValue ||
+                ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
+                    Game1.GameManager.ArchipelagoManager.IsActive,
+                    _strKey,
+                    _strValue,
+                    _strSpawnObjectId,
+                    value,
+                    Game1.GameManager.SaveManager.GetString("raccoon_transformed", "0"));
 
-            if (!_isSpawned && value == _strValue)
+            if (!_isSpawned && conditionMatched)
             {
                 // Activate the object.
                 _spawnObject.IsActive = true;
@@ -132,7 +141,7 @@ namespace ProjectZ.InGame.GameObjects.Things
                 if (!_canDespawn)
                     Map.Objects.DeleteObjects.Add(this);
             }
-            else if (_isSpawned && value != _strValue)
+            else if (_isSpawned && !conditionMatched)
             {
                 // Despawn the object.
                 if (_canDespawn)
