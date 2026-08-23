@@ -451,6 +451,12 @@ namespace ProjectZ.InGame.Things
             var value = SaveManager.GetString(path.VariableKey)
                         ?? SaveManager.GetInt(path.VariableKey, 0).ToString();
 
+            // The AP BowWow item is permanent. Vanilla story dialogs must behave as if BowWow
+            // is not following Link so they cannot return him or block unrelated trades.
+            if (ProjectZ.InGame.Archipelago.ArchipelagoManager.ShouldIgnoreBowWowForDialog(
+                    ArchipelagoManager.IsBoundSave, CurrentDialogKey, path.VariableKey))
+                value = "0";
+
             if (value == path.Condition)
                 return true;
 

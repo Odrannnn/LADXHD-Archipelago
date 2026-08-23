@@ -133,7 +133,8 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             AddComponent(KeyChangeListenerComponent.Index, new KeyChangeListenerComponent(KeyChanged));
             AddComponent(UpdateComponent.Index, new UpdateComponent(Update));
 
-            if (Game1.GameManager.SaveManager.GetString("has_bowWow", "0") == "1")
+            if (!Game1.GameManager.ArchipelagoManager.IsBoundSave &&
+                Game1.GameManager.SaveManager.GetString("has_bowWow", "0") == "1")
             {
                 Tags = Values.GameObjectTag.Enemy;
                 _bowWow = (ObjBowWow)Map.Objects.GetObjectOfType((int)EntityPosition.X - 120, (int)EntityPosition.Y - 120, 240, 240, typeof(ObjBowWow));
@@ -232,6 +233,9 @@ namespace ProjectZ.InGame.GameObjects.NPCs
 
         private void UpdateWaiting()
         {
+            if (Game1.GameManager.ArchipelagoManager.IsBoundSave)
+                return;
+
             var distance = MapManager.ObjLink.Position - EntityPosition.Position;
             if (distance.Length() < 24)
             {

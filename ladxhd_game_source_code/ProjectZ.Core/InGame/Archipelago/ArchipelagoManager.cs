@@ -28,6 +28,7 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveSlotName = "ap_slot_name";
         private const string SaveReceivedIndex = "ap_received_index";
         private const string SaveGoalPending = "ap_goal_pending";
+        private const string SaveBowWowReceived = "ap_received_bowwow";
         private const string TarinGiftLocationKey = "script:tarin:2";
         private const string MarinSongLocationKey = "script:maria_song_repeat:1";
         private const string SaveMarinSongOverride = "ap_marin_song_override";
@@ -93,6 +94,20 @@ namespace ProjectZ.InGame.Archipelago
                    string.Equals(dialogKey, "instrument6", StringComparison.Ordinal) &&
                    (string.Equals(stateKey, "rooster", StringComparison.Ordinal) ||
                     string.Equals(stateKey, "has_rooster", StringComparison.Ordinal));
+        }
+
+        public static bool ShouldIgnoreBowWowForDialog(
+            bool boundSave, string dialogKey, string variableKey)
+        {
+            if (!boundSave)
+                return false;
+
+            return string.Equals(variableKey, "has_bowWow", StringComparison.Ordinal) &&
+                       (string.Equals(dialogKey, "castle_monkey", StringComparison.Ordinal) ||
+                        string.Equals(dialogKey, "npc_frog_boy", StringComparison.Ordinal) ||
+                        string.Equals(dialogKey, "npc09", StringComparison.Ordinal)) ||
+                   string.Equals(dialogKey, "npc09", StringComparison.Ordinal) &&
+                       string.Equals(variableKey, "bowWow", StringComparison.Ordinal);
         }
 
         public static bool ShouldOverrideRaccoonSpawnCondition(
@@ -208,6 +223,9 @@ namespace ProjectZ.InGame.Archipelago
                 _gameManager.SaveManager.SetString("introMusic", "0");
 
             RepairMoblinCaveState();
+
+            if (_gameManager.SaveManager.GetString(SaveBowWowReceived, "0") == "1")
+                ApplyEffect(ArchipelagoItemEffect.BowWow);
 
             // The updated overworld gates Raccoon Tarin on tarin_state=1, which vanilla writes
             // during the beach sword sequence. AP does not require the randomized Sword before
@@ -333,8 +351,15 @@ namespace ProjectZ.InGame.Archipelago
 
             UpdateMarinSongAccess();
 
+            var repairedReplayState = false;
             while (_receivedItems.TryPeek(out var queued) && queued.Index < _nextReceivedIndex)
+            {
+                repairedReplayState |= RepairPreviouslyReceivedItem(queued.ItemName);
                 _receivedItems.TryDequeue(out _);
+            }
+
+            if (repairedReplayState)
+                SaveGameSaveLoad.SaveGame(_gameManager, false);
 
             if (!_receivedItems.TryPeek(out var next) || next.Index != _nextReceivedIndex)
                 return;
@@ -751,6 +776,7 @@ namespace ProjectZ.InGame.Archipelago
                     _gameManager.CurrentHealth = Math.Min(_gameManager.CurrentHealth, _gameManager.MaxHearts * 4);
                     break;
                 case ArchipelagoItemEffect.BowWow:
+                    _gameManager.SaveManager.SetString(SaveBowWowReceived, "1");
                     _gameManager.SaveManager.SetString("bowWow", "2");
                     _gameManager.SaveManager.SetString("has_bowWow", "1");
                     break;
@@ -786,6 +812,19 @@ namespace ProjectZ.InGame.Archipelago
                     _gameManager.SaveManager.SetString("upgradeBow", "1");
                     break;
             }
+        }
+
+        private bool RepairPreviouslyReceivedItem(string itemName)
+        {
+            if (!string.Equals(itemName, "BowWow", StringComparison.Ordinal))
+                return false;
+
+            var needsRepair = _gameManager.SaveManager.GetString(SaveBowWowReceived, "0") != "1" ||
+                              _gameManager.SaveManager.GetString("has_bowWow", "0") != "1" ||
+                              _gameManager.SaveManager.GetString("bowWow", "0") != "2";
+            if (needsRepair)
+                ApplyEffect(ArchipelagoItemEffect.BowWow);
+            return needsRepair;
         }
 
         private void ApplyStickEventState()

@@ -58,6 +58,13 @@ Assert(ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(true, "instrume
        !ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(false, "instrument6", "rooster") &&
        !ArchipelagoManager.ShouldPreserveRoosterAfterDungeonSeven(true, "instrument5", "rooster"),
        "Dungeon 7 must not remove an AP-delivered rooster or its follower state.");
+Assert(ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "npc09", "bowWow") &&
+       ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "npc09", "has_bowWow") &&
+       ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "castle_monkey", "has_bowWow") &&
+       ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "npc_frog_boy", "has_bowWow") &&
+       !ArchipelagoManager.ShouldIgnoreBowWowForDialog(false, "npc09", "bowWow") &&
+       !ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "photo_mouse_house", "has_bowWow"),
+       "AP BowWow must not be returned or block the Kiki and Richard sequences.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
