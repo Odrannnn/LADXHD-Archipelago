@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <GameVersion>2.0.6</GameVersion>
+    <GameVersion>2.0.7</GameVersion>
     <Version>$(GameVersion)</Version>
   </PropertyGroup>
 </Project>
