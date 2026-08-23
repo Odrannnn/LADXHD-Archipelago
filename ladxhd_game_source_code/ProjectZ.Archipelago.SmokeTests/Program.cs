@@ -1,5 +1,8 @@
 using ProjectZ.InGame.Archipelago;
 using ProjectZ.InGame.Assets;
+using ProjectZ.InGame.Telemetry;
+using System.Net;
+using System.Net.Http.Json;
 
 static void Assert(bool condition, string message)
 {
@@ -149,6 +152,52 @@ finally
         Directory.Delete(profileRoot, true);
 }
 
+var telemetryRoot = Path.Combine(Path.GetTempPath(), $"ladxhd-telemetry-{Guid.NewGuid():N}");
+try
+{
+    var handler = new CapturingHandler();
+    using var telemetry = new TelemetryClient(new TelemetryClientOptions
+    {
+        Endpoint = new Uri("https://telemetry.example/v1/events"),
+        StorageRoot = telemetryRoot,
+        AppVersion = "2.0.7-ap1",
+        Platform = "android",
+        DiagnosticsEnabled = true,
+        RandomizerEnabled = true,
+        HttpClient = new HttpClient(handler),
+        FlushInterval = TimeSpan.FromHours(1),
+    });
+
+    telemetry.RecordCrash(new InvalidOperationException("password=do-not-upload C:\\private\\save.dat"),
+        TelemetryGameState.Gameplay, fatal: true);
+    telemetry.RecordConnectFailure(2, 3500, TelemetryConnectionError.Network);
+    Assert(telemetry.PendingCount == 2 && telemetry.HasPendingCrash,
+        "Telemetry events were not durably queued.");
+
+    await telemetry.FlushAsync();
+    Assert(handler.Body != null, "Telemetry flush did not send a request.");
+    Assert(!handler.Body.Contains("do-not-upload", StringComparison.Ordinal) &&
+           !handler.Body.Contains("private", StringComparison.OrdinalIgnoreCase) &&
+           !handler.Body.Contains("save.dat", StringComparison.OrdinalIgnoreCase),
+        "Crash telemetry leaked exception messages or paths.");
+    Assert(handler.Body.Contains("stack_hash", StringComparison.Ordinal) &&
+           handler.Body.Contains("System.InvalidOperationException", StringComparison.Ordinal),
+        "Sanitized crash diagnostics were not uploaded.");
+    Assert(telemetry.PendingCount == 0, "Accepted telemetry was not removed from the queue.");
+
+    telemetry.SetConsent(diagnosticsEnabled: false, randomizerEnabled: true);
+    telemetry.RecordCrash(new Exception("must remain local"), TelemetryGameState.Unknown, fatal: false);
+    telemetry.RecordConnectAttempt(1);
+    Assert(telemetry.PendingCount == 1, "Disabled diagnostic telemetry was queued.");
+    telemetry.SetConsent(diagnosticsEnabled: false, randomizerEnabled: false);
+    Assert(telemetry.PendingCount == 0, "Consent withdrawal did not purge the local queue.");
+}
+finally
+{
+    if (Directory.Exists(telemetryRoot))
+        Directory.Delete(telemetryRoot, true);
+}
+
 if (args.Length > 0)
 {
     var generatedSeed = ArchipelagoSeedManifest.Load(args[0]);
@@ -177,3 +226,21 @@ if (!string.IsNullOrWhiteSpace(sourceArchive) && !string.IsNullOrWhiteSpace(boot
 }
 
 Console.WriteLine("Archipelago smoke tests passed.");
+
+sealed class CapturingHandler : HttpMessageHandler
+{
+    public string Body { get; private set; }
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        if (request.Method != HttpMethod.Post)
+            throw new InvalidOperationException("Telemetry must use POST.");
+        if (request.RequestUri != new Uri("https://telemetry.example/v1/events"))
+            throw new InvalidOperationException("Telemetry used an unexpected endpoint.");
+        Body = await request.Content.ReadAsStringAsync(cancellationToken);
+        return new HttpResponseMessage(HttpStatusCode.Accepted)
+        {
+            Content = JsonContent.Create(new { accepted = 2 }),
+        };
+    }
+}
