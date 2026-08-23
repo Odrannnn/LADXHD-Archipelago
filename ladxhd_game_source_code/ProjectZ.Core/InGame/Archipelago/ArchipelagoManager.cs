@@ -980,13 +980,13 @@ namespace ProjectZ.InGame.Archipelago
 
             if (string.Equals(itemName, "Rooster", StringComparison.Ordinal))
             {
-                var needsRepair = ShouldRepairRoosterReceipt(
+                var roosterNeedsRepair = ShouldRepairRoosterReceipt(
                     _gameManager.SaveManager.GetString(SaveRoosterReceived, "0"),
                     _gameManager.SaveManager.GetString("has_rooster", "0"),
                     HasOwnedItem("rooster"));
-                if (needsRepair)
+                if (roosterNeedsRepair)
                     EnsureRoosterReceivedState();
-                return needsRepair;
+                return roosterNeedsRepair;
             }
 
             if (!string.Equals(itemName, "BowWow", StringComparison.Ordinal))
