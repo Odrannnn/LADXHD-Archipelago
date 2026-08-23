@@ -15,12 +15,17 @@ from worlds.ladx.Locations import (
     ladxr_region_to_name,
 )
 from worlds.ladx.Options import (
+    BootsControls,
     DungeonShuffle,
     EntranceShuffle,
     Goal,
     HardMode,
     Logic,
     Overworld,
+    Quickswap,
+    Stealing,
+    TrendyGame,
+    Warps,
     ladx_option_groups,
 )
 
@@ -134,6 +139,18 @@ class LinksAwakeningDXHDWorld(LinksAwakeningWorld):
             unsupported.append("instrument count must be 8")
         if self.options.tradequest:
             unsupported.append("trade quest shuffle is not hooked yet")
+        if not self.options.rooster:
+            unsupported.append("rooster must be enabled until roosterless map routes are implemented")
+        if self.options.warps.value != Warps.option_vanilla:
+            unsupported.append("warps must be vanilla")
+        if self.options.trendy_game.value != TrendyGame.option_normal:
+            unsupported.append("Trendy Game must be normal")
+        if self.options.boots_controls.value != BootsControls.option_vanilla:
+            unsupported.append("boots controls must be vanilla")
+        if self.options.quickswap.value != Quickswap.option_none:
+            unsupported.append("quickswap must be disabled")
+        if self.options.stealing.value == Stealing.option_disabled:
+            unsupported.append("stealing cannot be disabled by the HD runtime")
 
         if unsupported:
             raise ValueError("LADXHD MVP does not support these options: " + "; ".join(unsupported))

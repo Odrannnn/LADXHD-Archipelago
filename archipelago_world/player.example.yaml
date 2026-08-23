@@ -13,3 +13,9 @@ Links Awakening DX HD:
   goal: instruments
   instrument_count: 8
   tradequest: false
+  rooster: true
+  warps: vanilla
+  trendy_game: normal
+  boots_controls: vanilla
+  quickswap: none
+  stealing: out_of_logic

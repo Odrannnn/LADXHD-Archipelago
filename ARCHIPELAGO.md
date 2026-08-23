@@ -111,7 +111,10 @@ For maintenance against another asset revision, `tools/catalog_ladxhd_sources.py
 an offline inventory from the migrated `ProjectZ.Core/Data` directory. Scripted full-item
 grants use `script:<escaped-script-key>:<action-index>` and shop checks use `shop:<price>`.
 
-Entrance shuffle, dungeon shuffle, non-normal logic, modified overworlds, non-instrument goals, and trade-quest shuffle are rejected by the APWorld MVP.
+Entrance shuffle, dungeon shuffle, non-normal logic, modified overworlds, non-instrument goals,
+trade-quest shuffle, roosterless routes, non-vanilla warps/boots/quickswap/Trendy Game behavior,
+and disabled stealing are rejected by the APWorld MVP. These settings require ROM/map or control
+patches that the native HD runtime does not currently apply.
 
 ## Verification
 
