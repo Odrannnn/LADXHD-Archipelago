@@ -1,5 +1,13 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.8-ap1**
+### Optional privacy-safe diagnostics
+  * Added separate, disabled-by-default consent choices for crash diagnostics and randomizer connection statistics on Android.
+  * Added a bounded offline event queue, next-launch crash delivery, 30-day anonymous identifier rotation, and immediate queue purging when consent is withdrawn.
+  * Added aggregate Archipelago diagnostics for connection attempts, disconnects, reconnects, checks, received items, and unsupported item mappings.
+  * Added a Cloudflare Worker and D1 ingestion service with a strict allowlist, keyed identifier hashing, request/rate limits, and automatic 60-day retention.
+  * Server addresses, passwords, player/slot/seed names, save or seed data, exact items/locations, file paths, arbitrary logs, exception messages, and raw stack traces are never accepted by the telemetry schema.
+
 ## **v2.0.5**
 ## The "Next Big Thing" Update
   * Added updated German language files for menus and dialog by user [mrmercy82](https://gitlab.com/mrmercy82).
