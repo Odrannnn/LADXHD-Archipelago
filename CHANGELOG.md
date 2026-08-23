@@ -1,5 +1,15 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.15**
+### Randomizer behavior and save-repair update
+  * Decoupled the desert Walrus, Moblin Cave encounter, BowWow, Flying Rooster, Wind Fish egg book, and Seashell Mansion checks from vanilla story state so they follow Archipelago ownership and location progress.
+  * Kept the randomizer Rooster after Eagle Tower, suppressed the vanilla Ghost follower event, and repaired Rooster, BowWow, Ghost, level-two Sword, progressive equipment, and capacity-upgrade state in compatible existing saves after item replay.
+  * Implemented Zol Attack traps and the normal Piece of Power and Guardian Acorn effects for remote items.
+  * Made capacity upgrades refill their matching ammunition and prevented bushes or enemies from dropping Bombs before Archipelago grants Bombs.
+  * Corrected progressive Sword, Shield, and Bracelet tier tracking when higher tiers arrive before lower tiers or native state is temporarily changed.
+  * Rejected APWorld settings whose required runtime behavior is not implemented, including roosterless routes and non-vanilla warps, controls, stealing, and Trendy Game behavior. The APWorld is now version 0.2.0.
+  * Added regression coverage for randomizer event independence, replay migration, progressive tiers, traps, temporary powerups, capacity refills, and supported-option validation.
+
 ## **v2.0.14**
 ### Raccoon Tarin event fix
   * Kept Raccoon Tarin present in the Mysterious Forest until Link actually cures him, even when randomized trade items advance Tarin's shared vanilla event state out of order.

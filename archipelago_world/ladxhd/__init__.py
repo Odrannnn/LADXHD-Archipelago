@@ -225,7 +225,7 @@ class LinksAwakeningDXHDWorld(LinksAwakeningWorld):
             "game": GAME_NAME,
             "seed_name": self.multiworld.seed_name,
             "slot_name": self.player_name,
-            "world_version": slot_data.get("world_version", "0.1.0"),
+            "world_version": slot_data.get("world_version", "0.2.0"),
             "mapping_complete": not unmapped,
             "unmapped_locations": unmapped,
             "locations": locations,
