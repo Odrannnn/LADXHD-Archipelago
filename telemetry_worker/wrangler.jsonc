@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ladxhd-archipelago-telemetry",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-23",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.05
+  },
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "TELEMETRY_DB",
+      "database_name": "ladxhd-archipelago-telemetry",
+      "database_id": "REPLACE_AFTER_D1_CREATE",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

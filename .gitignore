@@ -18,6 +18,12 @@ dist/ap-test/
 dist/*.apk
 dist/*.idsig
 .local/
+.wrangler/
+**/node_modules/
+**/.dev.vars
+**/.env
+**/.env.*
+!**/.env.example
 *.keystore
 *.jks
 *.p12
