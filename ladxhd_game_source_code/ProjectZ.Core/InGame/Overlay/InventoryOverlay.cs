@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using ProjectZ.InGame.Controls;
+using ProjectZ.InGame.GameObjects.Base;
 using ProjectZ.InGame.SaveLoad;
 using ProjectZ.InGame.Things;
 
@@ -59,7 +60,9 @@ namespace ProjectZ.InGame.Overlay
         private readonly Point _itemRecMargin = new Point(0, 0);
 
         private Point _equipmentPosition;
-        private readonly Rectangle _itemsRectangle = new Rectangle(6, 124, 108, 52);
+        private Rectangle _itemsRectangle;
+        private readonly Rectangle _roosterRectangle = new Rectangle(234, 124, 28, 26);
+        private readonly Animator _roosterAnimator;
 
         private int _width;
         private int _height;
@@ -95,6 +98,11 @@ namespace ProjectZ.InGame.Overlay
             _ocarinaFaces[1] = Resources.GetSprite("ocarina2");
             _ocarinaFaces[2] = Resources.GetSprite("ocarina3");
 
+            // Followers are passive items and are not assignable to a hand button. Use the
+            // rooster's real sprite for its dedicated inventory ownership indicator.
+            _roosterAnimator = AnimatorSaveLoad.LoadAnimator("NPCs/cock");
+            _roosterAnimator?.Play("stand_0");
+
             // Set the initial button layout which creates 4 or 6 equippable buttons.
             UpdateButtonLayout(GameSettings.SixButtons);
         }
@@ -121,7 +129,6 @@ namespace ProjectZ.InGame.Overlay
                     new Rectangle(RecItemselection.Width + pos.X, -RecItemselection.Height - pos.Y,
                         RecItemselection.Width, RecItemselection.Height)
                 };
-                _itemSlotWidth = 3;
                 _itemSlotsPosition = new Point(14, 55);
                 _itemRectangleSize = new Point(36, 26);
                 _equipmentPosition = new Point(6, 124);
@@ -142,11 +149,21 @@ namespace ProjectZ.InGame.Overlay
                     new Rectangle(RecItemselection.Width + pos.X / 2 - RecItemselection.Width / 2, 0,
                         RecItemselection.Width, RecItemselection.Height)
                 };
-                _itemSlotWidth = 4;
                 _itemSlotsPosition = new Point(14, 41);
                 _itemRectangleSize = new Point(27, 26);
                 _equipmentPosition = new Point(6, 123);
             }
+
+            // Keep the expanded equipment inventory to two rows in both controller modes.
+            // Four-button mode has 12 storage cells; six-button mode has 10.
+            var storageSlots = GameManager.EquipmentSlots - _itemSlots.Length;
+            _itemSlotWidth = (storageSlots + 1) / 2;
+            _itemsRectangle = new Rectangle(
+                _equipmentPosition.X,
+                _equipmentPosition.Y,
+                _itemSlotWidth * _itemRectangleSize.X,
+                2 * _itemRectangleSize.Y);
+
             // Update the number of equippable items.
             _itemSlotString = new string[_itemSlots.Length];
             Values.HandItemSlots = _itemSlots.Length;
@@ -181,6 +198,8 @@ namespace ProjectZ.InGame.Overlay
 
         public void UpdateMenu()
         {
+            _roosterAnimator?.Update();
+
             for (var i = 0; i < _itemSlots.Length; i++)
             {
                 if (ControlHandler.ButtonPressed((CButtons)((int)CButtons.A * Math.Pow(2, i))))
@@ -311,6 +330,7 @@ namespace ProjectZ.InGame.Overlay
             DrawBackground(spriteBatch, offset, _relictsRectangle);
             DrawBackground(spriteBatch, offset, _itemsRectangle);
             DrawBackground(spriteBatch, offset, _tradeStuffRectangle);
+            DrawBackground(spriteBatch, offset, _roosterRectangle);
 
             // Draw item selection box.
             var selectionPosition = new Point(
@@ -327,6 +347,14 @@ namespace ProjectZ.InGame.Overlay
 
                 if (Game1.GameManager.Equipment[Values.HandItemSlots + i] == null)
                     DrawBackground(spriteBatch, offset + _equipmentPosition, slotRectangle, 1);
+            }
+
+            if (Game1.GameManager.GetItem("rooster") == null)
+            {
+                var missingRooster = new Rectangle(
+                    _roosterRectangle.X + _roosterRectangle.Width / 2 - 2,
+                    _roosterRectangle.Bottom - 8, 4, 2);
+                DrawBackground(spriteBatch, offset, missingRooster, 1);
             }
 
             // Key background dots.
@@ -402,6 +430,7 @@ namespace ProjectZ.InGame.Overlay
                 ItemDrawHelper.DrawItemWithInfo(spriteBatch, Game1.GameManager.GetItem("goldLeaf"), offsetBottom, _leafRectangle, 1, Color.White, !GameSettings.ClassicSprites);
             }
             DrawEquipment(spriteBatch, offsetBottom + _equipmentPosition);
+            DrawRooster(spriteBatch, offsetBottom);
 
             // Draw slot labels and items.
             for (int y = 0; y < _itemSlots.Length; y++)
@@ -497,6 +526,18 @@ namespace ProjectZ.InGame.Overlay
                     ItemDrawHelper.DrawInstrument(spriteBatch, item.Sprite, new Vector2(
                         drawPosition.X + _relicOffsets[i].X, drawPosition.Y + _relicOffsets[i].Y));
             }
+        }
+
+        private void DrawRooster(SpriteBatch spriteBatch, Point drawPosition)
+        {
+            if (Game1.GameManager.GetItem("rooster") == null || _roosterAnimator == null)
+                return;
+
+            var source = _roosterAnimator.CurrentFrame.SourceRectangle;
+            var position = new Vector2(
+                drawPosition.X + _roosterRectangle.X + (_roosterRectangle.Width - source.Width) / 2,
+                drawPosition.Y + _roosterRectangle.Y + (_roosterRectangle.Height - source.Height) / 2);
+            spriteBatch.Draw(_roosterAnimator.SprTexture, position, source, Color.White);
         }
 
         public void DrawHeartContainer(SpriteBatch spriteBatch, Point drawPosition)

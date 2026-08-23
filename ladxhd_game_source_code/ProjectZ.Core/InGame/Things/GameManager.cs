@@ -83,7 +83,10 @@ namespace ProjectZ.InGame.Things
         public float ForestColorState;
         public bool UseShockEffect;
 
-        public const int EquipmentSlots = 12;
+        // Randomizer seeds can place the shovel and boomerang independently, while the
+        // vanilla game normally trades one for the other. Keep enough capacity for every
+        // distinct equippable item at once, plus room for future randomized equipment.
+        public const int EquipmentSlots = 16;
         public GameItemCollected[] Equipment = new GameItemCollected[EquipmentSlots];
         public List<GameItemCollected> CollectedItems = new List<GameItemCollected>();
 
@@ -1391,8 +1394,9 @@ namespace ProjectZ.InGame.Things
                     return;
                 }
 
-                // add item to the collected item list
-                var start = equipmentSlot < 0 ? 4 : 0;
+                // Prefer unequipped storage slots. The number of hand slots can be four or
+                // six, so this must not use the old hard-coded four-slot boundary.
+                var start = equipmentSlot < 0 ? Values.HandItemSlots : 0;
                 for (var i = start; i < Equipment.Length; i++)
                 {
                     if (Equipment[i] != null)
@@ -1400,6 +1404,21 @@ namespace ProjectZ.InGame.Things
 
                     SetEquipment(i, itemCollected);
                     return;
+                }
+
+                // A randomizer can deliver every equipment item before the player has
+                // rearranged the inventory. If storage is full, use an empty hand slot
+                // rather than silently discarding the received item.
+                if (equipmentSlot < 0)
+                {
+                    for (var i = 0; i < Math.Min(Values.HandItemSlots, Equipment.Length); i++)
+                    {
+                        if (Equipment[i] != null)
+                            continue;
+
+                        SetEquipment(i, itemCollected);
+                        return;
+                    }
                 }
             }
             // The item picked up is not an equippable item.

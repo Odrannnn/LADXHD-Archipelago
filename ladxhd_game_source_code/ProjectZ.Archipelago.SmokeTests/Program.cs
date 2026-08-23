@@ -1,6 +1,7 @@
 using ProjectZ.InGame.Archipelago;
 using ProjectZ.InGame.Assets;
 using ProjectZ.InGame.Telemetry;
+using ProjectZ.InGame.Things;
 using System.Net;
 using System.Net.Http.Json;
 
@@ -44,6 +45,8 @@ Assert(ArchipelagoLocationKey.PersistentCheck(1001) == "ap_location_1001",
        "Persistent check key mapping failed.");
 Assert(ArchipelagoManager.ClientVersion == new Version(0, 6, 7),
        "The client handshake must advertise Archipelago 0.6.7 compatibility.");
+Assert(GameManager.EquipmentSlots == 16,
+       "The expanded inventory must retain every independently randomized equipment item.");
 
 var seedPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.apladxhd");
 try
