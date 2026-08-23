@@ -191,7 +191,15 @@ namespace ProjectZ.InGame.GameObjects.NPCs
                         Count = 1,
                         SourceLocationKey = sourceLocationKey
                     }))
+                {
+                    // The vanilla dialog normally clears the rollback history and advances the
+                    // batter out of its player-locking state. Archipelago replaces that reward
+                    // dialog with a location check, so complete both pieces explicitly.
+                    SaveGameSaveLoad.ClearSaveState();
+                    Game1.GameManager.SaveManager.DisableHistory();
+                    _aiComponent.ChangeState("preDespawn");
                     return;
+                }
             }
 
             Game1.GameManager.StartDialogPath("npcBat");
