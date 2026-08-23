@@ -35,6 +35,9 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveProgressiveSwordCount = "ap_progressive_sword_count";
         private const string SaveProgressiveShieldCount = "ap_progressive_shield_count";
         private const string SaveProgressiveBraceletCount = "ap_progressive_bracelet_count";
+        private const string SaveMaxPowderRefillApplied = "ap_max_powder_refill_applied";
+        private const string SaveMaxBombsRefillApplied = "ap_max_bombs_refill_applied";
+        private const string SaveMaxArrowsRefillApplied = "ap_max_arrows_refill_applied";
         private const string TarinGiftLocationKey = "script:tarin:2";
         private const string MarinSongLocationKey = "script:maria_song_repeat:1";
         private const string SaveMarinSongOverride = "ap_marin_song_override";
@@ -900,14 +903,17 @@ namespace ProjectZ.InGame.Archipelago
                 case ArchipelagoItemEffect.MaxPowderUpgrade:
                     _gameManager.SaveManager.SetString("upgradePowder", "1");
                     RefillAmmo("powder", GetUpgradeAmmoCount(effect), createIfMissing: false);
+                    _gameManager.SaveManager.SetString(SaveMaxPowderRefillApplied, "1");
                     break;
                 case ArchipelagoItemEffect.MaxBombsUpgrade:
                     _gameManager.SaveManager.SetString("upgradeBomb", "1");
                     RefillAmmo("bomb", GetUpgradeAmmoCount(effect), createIfMissing: true);
+                    _gameManager.SaveManager.SetString(SaveMaxBombsRefillApplied, "1");
                     break;
                 case ArchipelagoItemEffect.MaxArrowsUpgrade:
                     _gameManager.SaveManager.SetString("upgradeBow", "1");
                     RefillArrows(GetUpgradeAmmoCount(effect));
+                    _gameManager.SaveManager.SetString(SaveMaxArrowsRefillApplied, "1");
                     break;
             }
         }
@@ -989,6 +995,15 @@ namespace ProjectZ.InGame.Archipelago
                 return roosterNeedsRepair;
             }
 
+            if (TryGetAmmoUpgradeReplay(itemName, out var upgradeEffect, out var appliedKey))
+            {
+                if (_gameManager.SaveManager.GetString(appliedKey, "0") == "1")
+                    return false;
+
+                ApplyEffect(upgradeEffect);
+                return true;
+            }
+
             if (!string.Equals(itemName, "BowWow", StringComparison.Ordinal))
                 return false;
 
@@ -1039,6 +1054,22 @@ namespace ProjectZ.InGame.Archipelago
                 _ => null
             };
             return saveKey != null;
+        }
+
+        private static bool TryGetAmmoUpgradeReplay(
+            string itemName, out ArchipelagoItemEffect effect, out string appliedKey)
+        {
+            (effect, appliedKey) = itemName switch
+            {
+                "Max Powder Upgrade" =>
+                    (ArchipelagoItemEffect.MaxPowderUpgrade, SaveMaxPowderRefillApplied),
+                "Max Bombs Upgrade" =>
+                    (ArchipelagoItemEffect.MaxBombsUpgrade, SaveMaxBombsRefillApplied),
+                "Max Arrows Upgrade" =>
+                    (ArchipelagoItemEffect.MaxArrowsUpgrade, SaveMaxArrowsRefillApplied),
+                _ => (ArchipelagoItemEffect.None, null)
+            };
+            return appliedKey != null;
         }
 
         private int IncrementReplayedProgressiveCount(string itemName)

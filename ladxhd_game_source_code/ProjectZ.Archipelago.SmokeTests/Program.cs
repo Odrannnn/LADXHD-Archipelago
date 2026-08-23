@@ -95,6 +95,13 @@ Assert(ArchipelagoManager.GetUpgradeAmmoCount(ArchipelagoItemEffect.MaxPowderUpg
        ArchipelagoManager.GetUpgradeAmmoCount(ArchipelagoItemEffect.MaxBombsUpgrade) == 60 &&
        ArchipelagoManager.GetUpgradeAmmoCount(ArchipelagoItemEffect.MaxArrowsUpgrade) == 60,
        "Capacity upgrades must refill to the official AP powder, bomb, and arrow limits.");
+Assert(ArchipelagoItemMapper.TryMap("Max Powder Upgrade", 0, 0, 0, out var maxPowder) &&
+       maxPowder.Effect == ArchipelagoItemEffect.MaxPowderUpgrade &&
+       ArchipelagoItemMapper.TryMap("Max Bombs Upgrade", 0, 0, 0, out var maxBombs) &&
+       maxBombs.Effect == ArchipelagoItemEffect.MaxBombsUpgrade &&
+       ArchipelagoItemMapper.TryMap("Max Arrows Upgrade", 0, 0, 0, out var maxArrows) &&
+       maxArrows.Effect == ArchipelagoItemEffect.MaxArrowsUpgrade,
+       "Capacity upgrade replay must retain distinct refill effects.");
 Assert(ArchipelagoManager.IsSeashellMansionComplete(true, "0", "1") &&
        !ArchipelagoManager.IsSeashellMansionComplete(true, "1", "0") &&
        ArchipelagoManager.IsSeashellMansionComplete(false, "1", "0"),
