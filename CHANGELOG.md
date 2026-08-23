@@ -1,5 +1,10 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.10-ap1**
+### Raccoon Tarin and actionable crash diagnostics
+  * Restored Raccoon Tarin in the Mysterious Forest without requiring the first Progressive Sword. His Archipelago appearance now follows Tail Key access and the pending Tarin's Gift check, including compatible existing saves.
+  * Added an exact build identifier and up to eight privacy-safe game frames to crash telemetry. Frames contain only game assembly, type and method identifiers, metadata tokens, and IL offsets; raw stacks, paths, messages, arguments, locals, and framework frames remain excluded.
+
 ## **v2.0.9-ap1**
 ### Randomizer event fixes and test diagnostics
   * Fixed the Mad Batter reward softlocking Link when Archipelago replaces the vanilla capacity-upgrade dialog with a location check.
