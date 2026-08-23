@@ -1,5 +1,12 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.17**
+### Connection and randomized item recovery fixes
+  * Reworked Archipelago socket shutdown so dropped sessions cancel their receive and send workers, dispose the old WebSocket before reconnecting, and use capped exponential backoff instead of accumulating abandoned sessions until a game restart.
+  * Made the Trendy Game identify its randomized prize by source location instead of displayed item. The crane no longer permanently collects a prize before Link receives it, and compatible affected saves respawn an unchecked vanished prize.
+  * Changed Boomerang Guy to the APWorld's gift behavior so he never removes randomized equipment. Existing saves restore equipment removed by the old trade, and Archipelago item replay restores a received but missing Boomerang.
+  * Added the Boomerang to the Give All Items cheat.
+
 ## **v2.0.16**
 ### Expanded inventory layout fix
   * Kept all 16 equipment positions inside the inventory panel's map-safe area so the minimap no longer covers the expanded storage slots.
