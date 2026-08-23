@@ -87,6 +87,10 @@ Assert(ArchipelagoManager.ReconcileProgressiveCount(1, 0, 0) == 1 &&
        ArchipelagoManager.ReconcileProgressiveCount(0, 2, 0) == 2 &&
        ArchipelagoManager.ReconcileProgressiveCount(0, 0, 1) == 1,
        "Progressive tiers must follow monotonic AP receipt history, not removable inventory alone.");
+Assert(ArchipelagoManager.GetUpgradeAmmoCount(ArchipelagoItemEffect.MaxPowderUpgrade) == 40 &&
+       ArchipelagoManager.GetUpgradeAmmoCount(ArchipelagoItemEffect.MaxBombsUpgrade) == 60 &&
+       ArchipelagoManager.GetUpgradeAmmoCount(ArchipelagoItemEffect.MaxArrowsUpgrade) == 60,
+       "Capacity upgrades must refill to the official AP powder, bomb, and arrow limits.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(

@@ -139,6 +139,13 @@ namespace ProjectZ.InGame.Archipelago
             return Math.Max(0, Math.Max(savedCount, Math.Max(replayedCount, ownedLevel)));
         }
 
+        public static int GetUpgradeAmmoCount(ArchipelagoItemEffect effect)
+        {
+            return effect == ArchipelagoItemEffect.MaxPowderUpgrade ? 40 :
+                effect == ArchipelagoItemEffect.MaxBombsUpgrade ||
+                effect == ArchipelagoItemEffect.MaxArrowsUpgrade ? 60 : 0;
+        }
+
         public static bool ShouldOverrideRaccoonSpawnCondition(
             bool archipelagoActive,
             string conditionKey,
@@ -852,14 +859,39 @@ namespace ProjectZ.InGame.Archipelago
                     break;
                 case ArchipelagoItemEffect.MaxPowderUpgrade:
                     _gameManager.SaveManager.SetString("upgradePowder", "1");
+                    RefillAmmo("powder", GetUpgradeAmmoCount(effect), createIfMissing: false);
                     break;
                 case ArchipelagoItemEffect.MaxBombsUpgrade:
                     _gameManager.SaveManager.SetString("upgradeBomb", "1");
+                    RefillAmmo("bomb", GetUpgradeAmmoCount(effect), createIfMissing: true);
                     break;
                 case ArchipelagoItemEffect.MaxArrowsUpgrade:
                     _gameManager.SaveManager.SetString("upgradeBow", "1");
+                    RefillArrows(GetUpgradeAmmoCount(effect));
                     break;
             }
+        }
+
+        private void RefillAmmo(string itemName, int count, bool createIfMissing)
+        {
+            var item = _gameManager.GetItem(itemName);
+            if (item != null)
+            {
+                item.Count = count;
+                return;
+            }
+
+            if (createIfMissing)
+                _gameManager.CollectItem(new GameItemCollected(itemName) { Count = count });
+        }
+
+        private void RefillArrows(int count)
+        {
+            var arrows = _gameManager.GetItem("bow") ?? _gameManager.GetItem("arrow");
+            if (arrows != null)
+                arrows.Count = count;
+            else
+                _gameManager.CollectItem(new GameItemCollected("arrow") { Count = count });
         }
 
         private void SpawnZolAttack()
