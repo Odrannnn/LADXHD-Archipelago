@@ -69,6 +69,11 @@ Assert(ArchipelagoManager.ShouldAllowSecretBookWithoutLens(true, "book8", "trade
        !ArchipelagoManager.ShouldAllowSecretBookWithoutLens(false, "book8", "trade13") &&
        !ArchipelagoManager.ShouldAllowSecretBookWithoutLens(true, "book7", "trade13"),
        "The AP egg-maze book must not require the trade quest's Magnifying Glass.");
+Assert(ArchipelagoManager.ShouldSuppressBombDrop(true, false, "bomb_1") &&
+       !ArchipelagoManager.ShouldSuppressBombDrop(true, true, "bomb_1") &&
+       !ArchipelagoManager.ShouldSuppressBombDrop(false, false, "bomb_1") &&
+       !ArchipelagoManager.ShouldSuppressBombDrop(true, false, "heart"),
+       "Enemy drops must not grant Bombs before AP delivers the Bomb item.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(

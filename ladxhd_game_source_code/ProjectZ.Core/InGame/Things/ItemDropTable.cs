@@ -93,6 +93,12 @@ namespace ProjectZ.InGame.Things
             if (GameSettings.NoHeartDrops && returnItem == "heart")
                 returnItem = "";
 
+            if (Archipelago.ArchipelagoManager.ShouldSuppressBombDrop(
+                    Game1.GameManager.ArchipelagoManager.IsBoundSave,
+                    Game1.GameManager.GetItem("bomb") != null,
+                    returnItem))
+                returnItem = "";
+
             // If it was not a hit, return an empty string.
             return returnItem;
         }
@@ -126,6 +132,12 @@ namespace ProjectZ.InGame.Things
             }
             // If it's a heart and the player disabled them clear the string.
             if (GameSettings.NoHeartDrops && returnItem == "heart")
+                returnItem = "";
+
+            if (Archipelago.ArchipelagoManager.ShouldSuppressBombDrop(
+                    Game1.GameManager.ArchipelagoManager.IsBoundSave,
+                    Game1.GameManager.GetItem("bomb") != null,
+                    returnItem))
                 returnItem = "";
 
             // If it was not a hit, return an empty string.

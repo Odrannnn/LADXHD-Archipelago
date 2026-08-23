@@ -118,6 +118,13 @@ namespace ProjectZ.InGame.Archipelago
                    string.Equals(itemName, "trade13", StringComparison.Ordinal);
         }
 
+        public static bool ShouldSuppressBombDrop(
+            bool boundSave, bool hasBombs, string itemName)
+        {
+            return boundSave && !hasBombs &&
+                   string.Equals(itemName, "bomb_1", StringComparison.Ordinal);
+        }
+
         public static bool ShouldOverrideRaccoonSpawnCondition(
             bool archipelagoActive,
             string conditionKey,
