@@ -141,6 +141,18 @@ namespace ProjectZ.InGame.Archipelago
             if (_gameManager.SwordLevel > 0 &&
                 _gameManager.SaveManager.GetString("introMusic", "0") == "1")
                 _gameManager.SaveManager.SetString("introMusic", "0");
+
+            // AP presents received items without running their vanilla pickup dialog. Repair
+            // saves made by older builds where a trade item was granted but the dialog's world
+            // state changes were therefore never applied.
+            if (HasOwnedItem("trade4"))
+                ApplyEffect(ArchipelagoItemEffect.TradeStick);
+            if (HasOwnedItem("trade6"))
+                ApplyEffect(ArchipelagoItemEffect.TradePineapple);
+            if (HasOwnedItem("trade12"))
+                ApplyEffect(ArchipelagoItemEffect.TradeScale);
+            if (HasOwnedItem("trade13"))
+                ApplyEffect(ArchipelagoItemEffect.TradeMagnifyingGlass);
         }
 
         private bool LoadConfigurationForSave(int saveSlot)
@@ -572,6 +584,19 @@ namespace ProjectZ.InGame.Archipelago
                     _gameManager.SaveManager.SetString("has_rooster", "1");
                     _gameManager.SaveManager.SetString("ulrira_d7", "2");
                     break;
+                case ArchipelagoItemEffect.TradeStick:
+                    ApplyStickEventState();
+                    break;
+                case ArchipelagoItemEffect.TradePineapple:
+                    ApplyPineappleEventState();
+                    break;
+                case ArchipelagoItemEffect.TradeScale:
+                    _gameManager.SaveManager.SetString("npc_mermaid_leave", "1");
+                    _gameManager.SaveManager.SetString("npc_mermaid_gone", "1");
+                    break;
+                case ArchipelagoItemEffect.TradeMagnifyingGlass:
+                    PromoteStringState("npc_painter", 2);
+                    break;
                 case ArchipelagoItemEffect.MaxPowderUpgrade:
                     _gameManager.SaveManager.SetString("upgradePowder", "1");
                     break;
@@ -582,6 +607,54 @@ namespace ProjectZ.InGame.Archipelago
                     _gameManager.SaveManager.SetString("upgradeBow", "1");
                     break;
             }
+        }
+
+        private void ApplyStickEventState()
+        {
+            // The hive sequence advances Tarin to state 5. Never move him back to the hive if
+            // that sequence (or a later story event) has already happened.
+            var tarinState = GetStringState("tarin_state");
+            if (tarinState > 4 || _gameManager.SaveManager.GetString("ow_honeycomb_fallen", "0") == "1")
+                return;
+
+            _gameManager.SaveManager.SetString("tarin", "5");
+            _gameManager.SaveManager.SetString("tarin_state", "4");
+        }
+
+        private void ApplyPineappleEventState()
+        {
+            // State 2 means Papahl has already eaten the pineapple. Only establish the missing
+            // pre-trade state so reconnects and old-save repairs cannot replay or undo the trade.
+            if (GetStringState("npc_lost_boy_state") >= 2)
+                return;
+
+            if (GetStringState("maria_state") < 2)
+            {
+                _gameManager.SaveManager.SetString("maria_state", "2");
+                _gameManager.SaveManager.SetString("maria", "6");
+            }
+
+            _gameManager.SaveManager.SetString("npc_lost_boy_state", "1");
+            _gameManager.SaveManager.SetString("ow_npc_bag", "1");
+            _gameManager.SaveManager.SetString("npc07", "1");
+            _gameManager.SaveManager.SetString("spawned_npc_boy_2", "1");
+        }
+
+        private void PromoteStringState(string key, int minimum)
+        {
+            if (GetStringState(key) < minimum)
+                _gameManager.SaveManager.SetString(key, minimum.ToString());
+        }
+
+        private int GetStringState(string key)
+        {
+            return int.TryParse(_gameManager.SaveManager.GetString(key, "0"), out var state) ? state : 0;
+        }
+
+        private bool HasOwnedItem(string itemName)
+        {
+            return _gameManager.Equipment.Any(item => item?.Name == itemName && item.Count > 0) ||
+                   _gameManager.CollectedItems.Any(item => item?.Name == itemName && item.Count > 0);
         }
 
         private ArchipelagoSession GetConnectedSession()

@@ -9,6 +9,10 @@ namespace ProjectZ.InGame.Archipelago
         BadHeartContainer,
         BowWow,
         Rooster,
+        TradeStick,
+        TradePineapple,
+        TradeScale,
+        TradeMagnifyingGlass,
         MaxPowderUpgrade,
         MaxBombsUpgrade,
         MaxArrowsUpgrade
@@ -93,16 +97,16 @@ namespace ProjectZ.InGame.Archipelago
                 ["Ribbon"] = new ArchipelagoItemMapping("trade1"),
                 ["Dog Food"] = new ArchipelagoItemMapping("trade2"),
                 ["Bananas"] = new ArchipelagoItemMapping("trade3"),
-                ["Stick"] = new ArchipelagoItemMapping("trade4"),
+                ["Stick"] = new ArchipelagoItemMapping("trade4", effect: ArchipelagoItemEffect.TradeStick),
                 ["Honeycomb"] = new ArchipelagoItemMapping("trade5"),
-                ["Pineapple"] = new ArchipelagoItemMapping("trade6"),
+                ["Pineapple"] = new ArchipelagoItemMapping("trade6", effect: ArchipelagoItemEffect.TradePineapple),
                 ["Hibiscus"] = new ArchipelagoItemMapping("trade7"),
                 ["Letter"] = new ArchipelagoItemMapping("trade8"),
                 ["Broom"] = new ArchipelagoItemMapping("trade9"),
                 ["Fishing Hook"] = new ArchipelagoItemMapping("trade10"),
                 ["Necklace"] = new ArchipelagoItemMapping("trade11"),
-                ["Scale"] = new ArchipelagoItemMapping("trade12"),
-                ["Magnifying Glass"] = new ArchipelagoItemMapping("trade13")
+                ["Scale"] = new ArchipelagoItemMapping("trade12", effect: ArchipelagoItemEffect.TradeScale),
+                ["Magnifying Glass"] = new ArchipelagoItemMapping("trade13", effect: ArchipelagoItemEffect.TradeMagnifyingGlass)
             };
 
         private static readonly Dictionary<string, string> DungeonBounds = new Dictionary<string, string>(StringComparer.Ordinal)

@@ -18,6 +18,18 @@ Assert(ArchipelagoItemMapper.TryMap("500 Rupees", 0, 0, 0, out var rupees) &&
 Assert(ArchipelagoItemMapper.TryMap("Rooster", 0, 0, 0, out var rooster) &&
        rooster.GameItemName == "rooster" && rooster.Effect == ArchipelagoItemEffect.Rooster,
        "Rooster mapping must apply its follower ownership state.");
+Assert(ArchipelagoItemMapper.TryMap("Stick", 0, 0, 0, out var stick) &&
+       stick.GameItemName == "trade4" && stick.Effect == ArchipelagoItemEffect.TradeStick,
+       "Stick mapping must spawn Tarin at the honeycomb tree.");
+Assert(ArchipelagoItemMapper.TryMap("Pineapple", 0, 0, 0, out var pineapple) &&
+       pineapple.GameItemName == "trade6" && pineapple.Effect == ArchipelagoItemEffect.TradePineapple,
+       "Pineapple mapping must spawn Papahl in Tal Tal Heights.");
+Assert(ArchipelagoItemMapper.TryMap("Scale", 0, 0, 0, out var scale) &&
+       scale.GameItemName == "trade12" && scale.Effect == ArchipelagoItemEffect.TradeScale,
+       "Scale mapping must complete the mermaid departure state.");
+Assert(ArchipelagoItemMapper.TryMap("Magnifying Glass", 0, 0, 0, out var lens) &&
+       lens.GameItemName == "trade13" && lens.Effect == ArchipelagoItemEffect.TradeMagnifyingGlass,
+       "Magnifying Glass mapping must complete the photographer state.");
 Assert(!ArchipelagoItemMapper.TryMap("An Item From Another Game", 0, 0, 0, out _),
        "Unknown items must not silently map to a local item.");
 Assert(ArchipelagoLocationKey.Script("marin:reward", 7) == "script:marin%3Areward:7",
