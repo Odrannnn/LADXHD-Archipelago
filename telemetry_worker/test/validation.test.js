@@ -22,8 +22,43 @@ function validEnvelope() {
   };
 }
 
+function crashEnvelope() {
+  const envelope = validEnvelope();
+  envelope.events[0] = {
+    id: "6ba7b812-9dad-41d1-80b4-00c04fd430c8",
+    occurred_at: "2026-08-23T11:59:00.000Z",
+    category: "diagnostics",
+    name: "crash",
+    attributes: {
+      exception_type: "System.NullReferenceException",
+      stack_hash: "a".repeat(64),
+      build_id: "b".repeat(32),
+      game_state: "menu",
+      fatal: true,
+      frames: [{
+        assembly: "ProjectZ.Core",
+        type: "ProjectZ.InGame.Archipelago.ArchipelagoManager",
+        method: "UpdateMarinSongAccess",
+        metadata_token: 100663297,
+        il_offset: 42,
+      }],
+    },
+  };
+  return envelope;
+}
+
 test("accepts an allowlisted event", () => {
   assert.equal(validateEnvelope(validEnvelope(), NOW).ok, true);
+});
+
+test("accepts bounded structured game frames", () => {
+  assert.equal(validateEnvelope(crashEnvelope(), NOW).ok, true);
+
+  const generated = crashEnvelope();
+  generated.events[0].attributes.frames[0].type = "ProjectZ.InGame.Game1+<LoadAsync>d__12";
+  generated.events[0].attributes.frames[0].method = "<LoadAsync>b__12_0";
+  generated.events[0].attributes.frames[0].il_offset = -1;
+  assert.equal(validateEnvelope(generated, NOW).ok, true);
 });
 
 test("rejects identifiers and fields that could carry private randomizer data", () => {
@@ -54,25 +89,36 @@ test("rejects unknown events and mismatched consent categories", () => {
 });
 
 test("rejects private text smuggled through constrained fields", () => {
-  const exception = validEnvelope();
-  exception.events[0] = {
-    id: "6ba7b812-9dad-41d1-80b4-00c04fd430c8",
-    occurred_at: "2026-08-23T11:59:00.000Z",
-    category: "diagnostics",
-    name: "crash",
-    attributes: {
-      exception_type: "System.Exception: server=example.org",
-      stack_hash: "a".repeat(64),
-      game_state: "unknown",
-      fatal: true,
-    },
-  };
+  const exception = crashEnvelope();
+  exception.events[0].attributes.exception_type = "System.Exception: server=example.org";
   assert.equal(validateEnvelope(exception, NOW).ok, false);
 
   const world = validEnvelope();
   world.events[0].name = "ap_connect_success";
   world.events[0].attributes = { attempt: 1, duration_ms: 10, world_version: "my-secret-seed" };
   assert.equal(validateEnvelope(world, NOW).ok, false);
+});
+
+test("rejects raw, foreign, malformed, and excessive stack frames", () => {
+  const cases = [
+    frame => { frame.assembly = "System.Private.CoreLib"; },
+    frame => { frame.type = "ProjectZ.InGame.Game C:\\Users\\name\\Game.cs"; },
+    frame => { frame.method = "Update(string password)"; },
+    frame => { frame.metadata_token = 0; },
+    frame => { frame.il_offset = 1.5; },
+    frame => { frame.file = "C:\\Users\\name\\Game.cs"; },
+  ];
+  for (const mutate of cases) {
+    const envelope = crashEnvelope();
+    mutate(envelope.events[0].attributes.frames[0]);
+    assert.equal(validateEnvelope(envelope, NOW).ok, false);
+  }
+
+  const excessive = crashEnvelope();
+  excessive.events[0].attributes.frames = Array.from(
+    { length: 9 },
+    () => structuredClone(excessive.events[0].attributes.frames[0]));
+  assert.equal(validateEnvelope(excessive, NOW).ok, false);
 });
 
 test("rejects stale, future, duplicate, and malformed events", () => {

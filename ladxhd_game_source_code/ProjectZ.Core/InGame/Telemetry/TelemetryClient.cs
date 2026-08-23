@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -56,7 +57,7 @@ namespace ProjectZ.InGame.Telemetry
     }
 
     /// <summary>
-    /// Opt-in telemetry transport with a bounded durable queue. Its public API accepts only
+    /// Consent-controlled telemetry transport with a bounded durable queue. Its public API accepts only
     /// typed, aggregate values so arbitrary logs and randomizer secrets cannot be uploaded.
     /// </summary>
     public sealed class TelemetryClient : IDisposable
@@ -64,6 +65,7 @@ namespace ProjectZ.InGame.Telemetry
         private const int MaxQueueEvents = 256;
         private const int MaxQueueBytes = 512 * 1024;
         private const int BatchSize = 20;
+        private const int MaxCrashFrames = 8;
         private static readonly TimeSpan InstallationRotation = TimeSpan.FromDays(30);
         private static readonly Regex VersionPattern = new("^[0-9A-Za-z][0-9A-Za-z.+_-]{0,31}$", RegexOptions.CultureInvariant);
         private static readonly Regex WorldVersionPattern = new("^[0-9]{1,4}(?:\\.[0-9A-Za-z_-]{1,16}){0,3}$", RegexOptions.CultureInvariant);
@@ -172,13 +174,18 @@ namespace ProjectZ.InGame.Telemetry
             if (string.IsNullOrEmpty(stackMaterial))
                 stackMaterial = typeName;
 
-            Record("diagnostics", "crash", new()
+            var attributes = new Dictionary<string, object>
             {
                 ["exception_type"] = typeName,
                 ["stack_hash"] = Sha256(stackMaterial),
+                ["build_id"] = typeof(TelemetryClient).Module.ModuleVersionId.ToString("N"),
                 ["game_state"] = ToWireName(state),
                 ["fatal"] = fatal,
-            });
+            };
+            var frames = GetSanitizedStackFrames(exception);
+            if (frames.Count > 0)
+                attributes["frames"] = frames;
+            Record("diagnostics", "crash", attributes);
         }
 
         public void RecordConnectAttempt(int attempt) =>
@@ -484,6 +491,62 @@ namespace ProjectZ.InGame.Telemetry
             value.Length <= 96 && value.All(character =>
                 char.IsLetterOrDigit(character) || character is '_' or '.' or '+' or '`');
 
+        private static List<TelemetryStackFrame> GetSanitizedStackFrames(Exception exception)
+        {
+            var sanitized = new List<TelemetryStackFrame>(MaxCrashFrames);
+            try
+            {
+                foreach (var frame in new StackTrace(exception, false).GetFrames() ?? [])
+                {
+                    var method = frame.GetMethod();
+                    var declaringType = method?.DeclaringType;
+                    var assemblyName = declaringType?.Assembly.GetName().Name;
+                    var typeName = declaringType?.FullName;
+                    var methodName = method?.Name;
+                    if (assemblyName is not ("ProjectZ.Core" or "ProjectZ.Android") ||
+                        string.IsNullOrEmpty(typeName) || !IsSafeFrameTypeName(typeName) ||
+                        string.IsNullOrEmpty(methodName) || !IsSafeFrameMethodName(methodName))
+                        continue;
+
+                    int metadataToken;
+                    try
+                    {
+                        metadataToken = method.MetadataToken;
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                    if (metadataToken <= 0)
+                        continue;
+
+                    sanitized.Add(new TelemetryStackFrame
+                    {
+                        Assembly = assemblyName,
+                        Type = typeName,
+                        Method = methodName,
+                        MetadataToken = metadataToken,
+                        IlOffset = Math.Max(frame.GetILOffset(), -1),
+                    });
+                    if (sanitized.Count == MaxCrashFrames)
+                        break;
+                }
+            }
+            catch
+            {
+                // A runtime that cannot inspect frames still sends the exception type and stack hash.
+            }
+            return sanitized;
+        }
+
+        private static bool IsSafeFrameTypeName(string value) =>
+            value.Length <= 160 && value.StartsWith("ProjectZ.", StringComparison.Ordinal) &&
+            value.All(character => char.IsLetterOrDigit(character) || character is '_' or '.' or '+' or '`' or '<' or '>');
+
+        private static bool IsSafeFrameMethodName(string value) =>
+            value.Length <= 96 && value.All(character =>
+                char.IsLetterOrDigit(character) || character is '_' or '.' or '+' or '`' or '<' or '>');
+
         private static void AddWorldVersion(Dictionary<string, object> attributes, string worldVersion)
         {
             if (!string.IsNullOrWhiteSpace(worldVersion) && WorldVersionPattern.IsMatch(worldVersion))
@@ -552,6 +615,24 @@ namespace ProjectZ.InGame.Telemetry
 
             [JsonPropertyName("attributes")]
             public Dictionary<string, object> Attributes { get; set; }
+        }
+
+        private sealed class TelemetryStackFrame
+        {
+            [JsonPropertyName("assembly")]
+            public string Assembly { get; set; }
+
+            [JsonPropertyName("type")]
+            public string Type { get; set; }
+
+            [JsonPropertyName("method")]
+            public string Method { get; set; }
+
+            [JsonPropertyName("metadata_token")]
+            public int MetadataToken { get; set; }
+
+            [JsonPropertyName("il_offset")]
+            public int IlOffset { get; set; }
         }
     }
 }

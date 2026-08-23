@@ -1,6 +1,6 @@
 # LADXHD Archipelago telemetry Worker
 
-This optional service accepts a small, fixed schema of anonymous diagnostic events from builds whose user explicitly enabled telemetry. It deliberately rejects server addresses, credentials, slot/player names, seed names, save data, arbitrary logs, exact item/location names, and file paths.
+This optional service accepts a small, fixed schema of anonymous diagnostic events from builds whose user enabled telemetry. It deliberately rejects server addresses, credentials, slot/player names, seed names, save data, arbitrary logs, exact item/location names, file paths, and raw stack traces. Crash events may carry at most eight structured frames, constrained to the game's own assemblies and identifiers plus numeric metadata tokens and IL offsets.
 
 ## Data handling
 

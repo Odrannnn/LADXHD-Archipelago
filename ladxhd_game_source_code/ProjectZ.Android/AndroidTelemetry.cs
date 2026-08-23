@@ -77,7 +77,7 @@ namespace ProjectZ.Android
 
             layout.AddView(new TextView(activity)
             {
-                Text = "Telemetry is optional and enabled by default in this early test build. Nothing is uploaded until you acknowledge this notice. It never sends Archipelago server addresses or passwords, player/slot names, seed names, save data, exact item/location names, file paths, or raw logs. Anonymous IDs rotate every 30 days and stored events are deleted after 60 days. Cloudflare still processes your IP while accepting a request.",
+                Text = "Telemetry is optional and enabled by default in this early test build. Nothing is uploaded until you acknowledge this notice. Crash reports may include sanitized game method/type identifiers and numeric code offsets, but never raw stack traces. It never sends Archipelago server addresses or passwords, player/slot names, seed names, save data, exact item/location names, file paths, or raw logs. Anonymous IDs rotate every 30 days and stored events are deleted after 60 days. Cloudflare still processes your IP while accepting a request.",
                 TextSize = 14,
             });
 

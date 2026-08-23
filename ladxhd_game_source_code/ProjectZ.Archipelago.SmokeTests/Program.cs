@@ -168,20 +168,31 @@ try
         FlushInterval = TimeSpan.FromHours(1),
     });
 
-    telemetry.RecordCrash(new InvalidOperationException("password=do-not-upload C:\\private\\save.dat"),
-        TelemetryGameState.Gameplay, fatal: true);
+    Exception diagnosticException;
+    try
+    {
+        _ = new TelemetryClient(null);
+        throw new InvalidOperationException("TelemetryClient unexpectedly accepted null options.");
+    }
+    catch (ArgumentNullException exception)
+    {
+        diagnosticException = exception;
+    }
+    telemetry.RecordCrash(diagnosticException, TelemetryGameState.Gameplay, fatal: true);
     telemetry.RecordConnectFailure(2, 3500, TelemetryConnectionError.Network);
     Assert(telemetry.PendingCount == 2 && telemetry.HasPendingCrash,
         "Telemetry events were not durably queued.");
 
     await telemetry.FlushAsync();
     Assert(handler.Body != null, "Telemetry flush did not send a request.");
-    Assert(!handler.Body.Contains("do-not-upload", StringComparison.Ordinal) &&
-           !handler.Body.Contains("private", StringComparison.OrdinalIgnoreCase) &&
-           !handler.Body.Contains("save.dat", StringComparison.OrdinalIgnoreCase),
-        "Crash telemetry leaked exception messages or paths.");
+    Assert(!handler.Body.Contains("options", StringComparison.OrdinalIgnoreCase) &&
+           !handler.Body.Contains("Program.cs", StringComparison.OrdinalIgnoreCase),
+        "Crash telemetry leaked exception messages, argument names, or paths.");
     Assert(handler.Body.Contains("stack_hash", StringComparison.Ordinal) &&
-           handler.Body.Contains("System.InvalidOperationException", StringComparison.Ordinal),
+           handler.Body.Contains("build_id", StringComparison.Ordinal) &&
+           handler.Body.Contains("frames", StringComparison.Ordinal) &&
+           handler.Body.Contains("ProjectZ.Core", StringComparison.Ordinal) &&
+           handler.Body.Contains("System.ArgumentNullException", StringComparison.Ordinal),
         "Sanitized crash diagnostics were not uploaded.");
     Assert(telemetry.PendingCount == 0, "Accepted telemetry was not removed from the queue.");
 

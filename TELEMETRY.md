@@ -10,7 +10,7 @@ https://ladxhd-archipelago-telemetry.leonardo-701.workers.dev/v1/events
 
 ## What can be sent
 
-Crash diagnostics contain only the exception type, a one-way SHA-256 hash of the stack trace, a coarse game state, and whether the crash was fatal. Exception messages and raw stack traces are not sent.
+Crash diagnostics contain the exception type, a one-way SHA-256 hash of the stack trace, an exact non-secret assembly build ID, a coarse game state, and whether the crash was fatal. When available, they also contain at most eight structured frames from the game's own `ProjectZ.Core` or `ProjectZ.Android` assemblies. Each frame is limited to the assembly, type and method identifiers, metadata token, and IL offset. This is enough to group and locate failures in a matching build without uploading the raw stack.
 
 Randomizer diagnostics contain categorical connection outcomes and aggregate counts such as connection duration, reconnects, completed checks, received items, and unsupported items. They may also contain the APWorld version and a small allowlist of supported boolean/choice options.
 
@@ -24,7 +24,7 @@ The client and server schemas do not accept:
 - player, slot, or seed names;
 - seed files, placements, save data, or room/spoiler files;
 - exact item names or location names;
-- file paths, arbitrary logs, exception messages, or raw stack traces;
+- file paths, arbitrary logs, exception messages, method arguments or local values, framework stack frames, or raw stack traces;
 - the original game ZIP or extracted game assets.
 
 The local `location-catalog.jsonl` developer aid is not part of telemetry and is never uploaded by this system.

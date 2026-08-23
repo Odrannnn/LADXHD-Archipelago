@@ -6,6 +6,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const VERSION = /^[0-9A-Za-z][0-9A-Za-z.+_-]{0,31}$/;
 const WORLD_VERSION = /^[0-9]{1,4}(?:\.[0-9A-Za-z_-]{1,16}){0,3}$/;
 const TYPE_NAME = /^[A-Za-z_][A-Za-z0-9_.+`]{0,95}$/;
+const FRAME_TYPE = /^ProjectZ\.[A-Za-z_][A-Za-z0-9_.+`<>]{0,158}$/;
+const FRAME_METHOD = /^[A-Za-z_.<>][A-Za-z0-9_.+`<>]{0,95}$/;
 const PLATFORM = /^(android|windows|linux|macos)$/;
 
 const EVENT_SCHEMAS = Object.freeze({
@@ -19,6 +21,8 @@ const EVENT_SCHEMAS = Object.freeze({
   crash: schema("diagnostics", {
     exception_type: regexValue(TYPE_NAME),
     stack_hash: hexValue(64),
+    build_id: hexValue(32),
+    frames: stackFramesValue,
     game_state: enumValue(["startup", "menu", "gameplay", "shutdown", "unknown"]),
     fatal: booleanValue,
   }),
@@ -84,6 +88,17 @@ function integerValue(min, max) {
 
 function booleanValue(value) {
   return typeof value === "boolean";
+}
+
+function stackFramesValue(value) {
+  return Array.isArray(value) && value.length >= 1 && value.length <= 8 && value.every(frame =>
+    isPlainObject(frame) &&
+    hasExactKeys(frame, ["assembly", "type", "method", "metadata_token", "il_offset"]) &&
+    (frame.assembly === "ProjectZ.Core" || frame.assembly === "ProjectZ.Android") &&
+    regexValue(FRAME_TYPE)(frame.type) &&
+    regexValue(FRAME_METHOD)(frame.method) &&
+    integerValue(1, 2147483647)(frame.metadata_token) &&
+    integerValue(-1, 2147483647)(frame.il_offset));
 }
 
 export function validateEnvelope(value, now = Date.now()) {
