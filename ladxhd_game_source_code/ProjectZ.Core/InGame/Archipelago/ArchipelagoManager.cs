@@ -269,13 +269,14 @@ namespace ProjectZ.InGame.Archipelago
             if (IsActive && _settings?.AutoConnect == true && ShouldAttemptReconnect())
                 Connect();
 
-            if (IsActive && !_gameManager.SaveManager.HistoryEnabled)
-                UpdateMarinSongAccess();
-
-            if (!IsActive || Game1.UiManager.CurrentScreen != Values.ScreenNameGame ||
-                _gameManager.MapManager.CurrentMap == null || MapManager.ObjLink == null ||
-                _gameManager.SaveManager.HistoryEnabled)
+            // Event overrides may inspect the active map, Link, and save state. During file
+            // selection and save loading those managers are not guaranteed to exist yet.
+            if (!IsActive || Game1.UiManager?.CurrentScreen != Values.ScreenNameGame ||
+                _gameManager?.MapManager?.CurrentMap == null || MapManager.ObjLink == null ||
+                _gameManager?.SaveManager?.HistoryEnabled != false)
                 return;
+
+            UpdateMarinSongAccess();
 
             while (_receivedItems.TryPeek(out var queued) && queued.Index < _nextReceivedIndex)
                 _receivedItems.TryDequeue(out _);
