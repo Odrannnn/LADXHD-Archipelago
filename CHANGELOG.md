@@ -1,5 +1,11 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.13**
+### Expanded randomizer inventory
+  * Expanded the equipment inventory from 12 to 16 positions so independently randomized items such as the Shovel and Boomerang can coexist without exhausting the vanilla trade-based capacity.
+  * Expanded the visible equipment grid in both four-button and six-button modes and added a dedicated Rooster ownership indicator using the Rooster's actual sprite.
+  * Prevented received equipment from being silently discarded when storage is full by safely using an empty action slot. Existing saves can now restore tracked equipment that older builds could not fit.
+
 ## **v2.0.12**
 ### Rooster save-loading crash fix
   * Prevented the inventory rooster from reading dungeon state before the save's map is initialized. This fixes the null-reference crash while loading affected saves without changing the existing rule that hides the rooster inside dungeons.
