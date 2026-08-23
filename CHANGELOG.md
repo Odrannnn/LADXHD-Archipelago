@@ -1,5 +1,11 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.9-ap1**
+### Randomizer event fixes and test diagnostics
+  * Fixed the Mad Batter reward softlocking Link when Archipelago replaces the vanilla capacity-upgrade dialog with a location check.
+  * Kept Marin's Mabe Village song check available whenever Link has the Ocarina, matching the Archipelago 0.6.7 access rule without permanently changing her vanilla story state.
+  * Enabled privacy-safe crash and randomizer telemetry by default for new installations of this early test build. The mandatory first-run notice is shown before any upload, existing choices are preserved, and either category can still be disabled at any time.
+
 ## **v2.0.8-ap1**
 ### Optional privacy-safe diagnostics
   * Added separate, disabled-by-default consent choices for crash diagnostics and randomizer connection statistics on Android.
