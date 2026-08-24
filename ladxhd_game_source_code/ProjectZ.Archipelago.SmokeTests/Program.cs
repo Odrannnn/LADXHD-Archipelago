@@ -226,6 +226,15 @@ Assert(ArchipelagoManager.GetNextTunic(GameManager.CloakGreen, true, true) == Ga
        ArchipelagoManager.GetNextTunic(GameManager.CloakBlue, true, false) == GameManager.CloakGreen &&
        ArchipelagoManager.GetNextTunic(GameManager.CloakRed, true, true) == GameManager.CloakGreen,
        "Telephone booths must cycle only through the green and owned randomized tunics.");
+Assert(ArchipelagoManager.ShouldUseGhostHouseShellPot(
+           true, "hauntedhouse.map", 128, 96) &&
+       !ArchipelagoManager.ShouldUseGhostHouseShellPot(
+           false, "hauntedhouse.map", 128, 96) &&
+       !ArchipelagoManager.ShouldUseGhostHouseShellPot(
+           true, "hauntedhouse.map", 112, 96) &&
+       !ArchipelagoManager.ShouldUseGhostHouseShellPot(
+           true, "overworld.map", 128, 96),
+       "The Ghost House barrel must contain its mapped shell on bound AP saves only.");
 Assert(ArchipelagoManager.ShouldRepairToadstoolReceipt(false, false) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(false, true) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(true, false),

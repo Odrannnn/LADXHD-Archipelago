@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Xna.Framework;
 using ProjectZ.Base;
+using ProjectZ.InGame.Archipelago;
 using ProjectZ.InGame.GameObjects.Base;
 using ProjectZ.InGame.GameObjects.Base.CObjects;
 using ProjectZ.InGame.GameObjects.Base.Components;
@@ -60,6 +61,16 @@ namespace ProjectZ.InGame.GameObjects.Things
 
         public ObjStone(Map.Map map, int posX, int posY, string spriteId, string spawnItem, string pickupKey, string dialogPath, bool isHeavy, bool potMessage) : base(map, spriteId)
         {
+            // LADXR treats the Ghost House barrel as an unconditional randomized check.
+            // The vanilla HD map instead ties its shell contents to the completed ghost quest.
+            if (ArchipelagoManager.ShouldUseGhostHouseShellPot(
+                    Game1.GameManager.ArchipelagoManager.IsBoundSave,
+                    map?.MapName, posX, posY))
+            {
+                spawnItem = "shell";
+                pickupKey = "shell_17";
+            }
+
             var sprite = Resources.GetSprite(spriteId);
 
             EntityPosition = new CPosition(posX + 8, posY + 16 - _offsetY, 0);

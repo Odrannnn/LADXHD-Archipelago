@@ -173,6 +173,14 @@ namespace ProjectZ.InGame.Archipelago
             return GameManager.CloakGreen;
         }
 
+        public static bool ShouldUseGhostHouseShellPot(
+            bool boundSave, string mapName, int positionX, int positionY)
+        {
+            return boundSave &&
+                   string.Equals(mapName, "hauntedhouse.map", StringComparison.Ordinal) &&
+                   positionX == 128 && positionY == 96;
+        }
+
         public bool TryCycleTunicAtTelephone(string dialogName)
         {
             if (!IsActive || !string.Equals(dialogName, "ulrira", StringComparison.Ordinal))
