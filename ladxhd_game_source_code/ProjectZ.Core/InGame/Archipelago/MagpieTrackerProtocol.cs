@@ -120,6 +120,7 @@ namespace ProjectZ.InGame.Archipelago
                 $"{WebTrackerOrigin}/?enable_autotracking=true" +
                 $"&setting_autotrackerAddress={address}" +
                 "&setting_autotrackSettings=true" +
+                "&setting_gps=true" +
                 "&flag_ap_logic=true");
         }
 
@@ -232,6 +233,19 @@ namespace ProjectZ.InGame.Archipelago
                 refresh = true,
                 diff,
                 checks = checks.Select(check => new { id = check.Key, @checked = check.Value })
+            });
+        }
+
+        public static string CreateLocationMessage(MagpieTrackerLocation location)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                type = "location",
+                refresh = true,
+                room = location.Room,
+                x = location.X,
+                y = location.Y,
+                drawFine = location.DrawFine
             });
         }
 

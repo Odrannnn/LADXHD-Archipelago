@@ -1,9 +1,3 @@
-Third-party notices
-===================
-
-Magpie room metadata
-https://github.com/kbranch/Magpie
-
 MIT License
 
 Copyright (c) 2023 kbranch

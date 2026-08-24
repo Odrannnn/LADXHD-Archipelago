@@ -25,6 +25,7 @@ ZIP.
 - A `Links Awakening DX HD` APWorld and `.apladxhd` seed-manifest workflow.
 - An Android seed importer that accepts shared files and connection details without ADB, plus an
   in-app setup screen that can choose seeds and edit installed room connections without a companion.
+- A persistent in-game Magpie overlay with item, check, slot-setting, and position autotracking.
 - A phone-native, transactional game-data builder: select the original v1.0.0 ZIP on first launch,
   then let the app verify, patch, stage, and activate the Android assets locally.
 - A separate Android identity, `com.zelda.ladxhd.archipelago`, so this build can coexist with the

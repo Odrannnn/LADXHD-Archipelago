@@ -683,7 +683,10 @@ namespace ProjectZ.InGame.Archipelago
                 Connect();
 
             if (IsActive && _magpieTracker.BoundPort > 0)
+            {
                 _magpieTracker.SetItemQuantity("RUPEE_COUNT", _gameManager.GetItem("ruby")?.Count ?? 0);
+                UpdateMagpieLocation();
+            }
 
             // Event overrides may inspect the active map, Link, and save state. During file
             // selection and save loading those managers are not guaranteed to exist yet.
@@ -720,6 +723,22 @@ namespace ProjectZ.InGame.Archipelago
             // Item replay is part of the AP protocol. Persist each applied index immediately so
             // consumables and traps cannot be granted twice after an unclean shutdown.
             SaveGameSaveLoad.SaveGame(_gameManager, false);
+        }
+
+        private void UpdateMagpieLocation()
+        {
+            var map = _gameManager?.MapManager?.CurrentMap;
+            var link = MapManager.ObjLink;
+            if (map == null || link == null)
+                return;
+
+            var isInterior = map.IsHouse || map.IsCave || map.Is2dMap || map.IsCastle ||
+                             map.IsEgg || map.IsFinalMap;
+            if (MagpieTrackerLocationMapper.TryCreate(
+                    map.IsOverworld, map.IsDungeon, isInterior,
+                    map.LocationName, map.MapName, map.MapOffsetX, map.MapOffsetY,
+                    link.PosX, link.PosY, out var location))
+                _magpieTracker.SetLocation(location);
         }
 
         public bool TryHandleLocationCheck(GameItemCollected item)

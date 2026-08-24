@@ -32,6 +32,7 @@ namespace ProjectZ.InGame.Archipelago
         private CancellationTokenSource _cancellation;
         private TcpListener _listener;
         private Dictionary<string, object> _slotData = new Dictionary<string, object>(StringComparer.Ordinal);
+        private MagpieTrackerLocation? _location;
         private int _nextClientId;
 
         public MagpieTrackerBridge(int port = MagpieTrackerProtocol.DefaultPort)
@@ -54,6 +55,7 @@ namespace ProjectZ.InGame.Archipelago
                     _items[id] = 0;
 
                 _checks.Clear();
+                _location = null;
                 if (seed != null)
                 {
                     foreach (var location in seed.Locations)
@@ -163,6 +165,18 @@ namespace ProjectZ.InGame.Archipelago
             if (changed)
                 Broadcast("checks", MagpieTrackerProtocol.CreateChecksMessage(
                     new[] { new KeyValuePair<string, bool>(id, isChecked) }, diff: true));
+        }
+
+        public void SetLocation(MagpieTrackerLocation location)
+        {
+            lock (_stateLock)
+            {
+                if (_location.HasValue && _location.Value.Equals(location))
+                    return;
+                _location = location;
+            }
+
+            Broadcast("gps", MagpieTrackerProtocol.CreateLocationMessage(location));
         }
 
         public void Stop()
@@ -317,6 +331,12 @@ namespace ProjectZ.InGame.Archipelago
                 await client.SendAsync(CreateFullItemsMessage(), cancellationToken).ConfigureAwait(false);
             if (client.Supports("checks"))
                 await client.SendAsync(CreateFullChecksMessage(), cancellationToken).ConfigureAwait(false);
+            if (client.Supports("gps"))
+            {
+                var location = CreateFullLocationMessage();
+                if (location != null)
+                    await client.SendAsync(location, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         private string CreateFullItemsMessage()
@@ -329,6 +349,14 @@ namespace ProjectZ.InGame.Archipelago
         {
             lock (_stateLock)
                 return MagpieTrackerProtocol.CreateChecksMessage(_checks.ToArray(), diff: false);
+        }
+
+        private string CreateFullLocationMessage()
+        {
+            lock (_stateLock)
+                return _location.HasValue
+                    ? MagpieTrackerProtocol.CreateLocationMessage(_location.Value)
+                    : null;
         }
 
         private string CreateSlotDataMessage()

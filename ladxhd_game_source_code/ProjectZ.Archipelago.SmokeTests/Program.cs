@@ -110,12 +110,35 @@ Assert(embeddedTrackerUri.Scheme == Uri.UriSchemeHttps &&
        embeddedTrackerUri.Query.Contains("enable_autotracking=true", StringComparison.Ordinal) &&
        embeddedTrackerUri.Query.Contains("setting_autotrackerAddress=127.0.0.1%3A17026", StringComparison.Ordinal) &&
        embeddedTrackerUri.Query.Contains("setting_autotrackSettings=true", StringComparison.Ordinal) &&
+       embeddedTrackerUri.Query.Contains("setting_gps=true", StringComparison.Ordinal) &&
        embeddedTrackerUri.Query.Contains("flag_ap_logic=true", StringComparison.Ordinal),
-       "Embedded Magpie URL must enable AP autotracking against the local bridge.");
+       "Embedded Magpie URL must enable AP and GPS autotracking against the local bridge.");
 Assert(MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(1920) == 1344 &&
        MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(1) == 1 &&
        MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(0) == 0,
        "Embedded Magpie must use a bounded right-side panel that leaves gameplay visible.");
+Assert(MagpieTrackerLocationMapper.TryCreate(
+           isOverworld: true, isDungeon: false, isInterior: false,
+           dungeonName: null, mapName: "overworld.map", mapOffsetX: 0, mapOffsetY: 0,
+           linkX: 5 * 160 + 3 * 16, linkY: 10 * 128 + 4 * 16,
+           out var overworldLocation) &&
+       overworldLocation.Room == "0xA5" && overworldLocation.X == 3 &&
+       overworldLocation.Y == 4 && overworldLocation.DrawFine,
+       "Magpie GPS must translate HD overworld fields and tiles to LADX room coordinates.");
+Assert(MagpieTrackerLocationMapper.TryCreate(
+           isOverworld: false, isDungeon: true, isInterior: false,
+           dungeonName: "one", mapName: "dungeon1.map", mapOffsetX: 0, mapOffsetY: 0,
+           linkX: 3 * 160 + 5 * 16, linkY: 5 * 128 + 6 * 16,
+           out var dungeonLocation) &&
+       dungeonLocation.Room == "0x117" && dungeonLocation.X == 5 &&
+       dungeonLocation.Y == 6 && dungeonLocation.DrawFine,
+       "Magpie GPS must map HD dungeon minimap coordinates to Magpie room IDs.");
+Assert(MagpieTrackerLocationMapper.TryCreate(
+           isOverworld: false, isDungeon: false, isInterior: true,
+           dungeonName: null, mapName: "house0.map", mapOffsetX: 0, mapOffsetY: 0,
+           linkX: 80, linkY: 64, out var interiorLocation) &&
+       interiorLocation.Room == "0x2A3" && !interiorLocation.DrawFine,
+       "Interior GPS without an exposed GBC room ID must follow the underworld map coarsely.");
 Assert(MagpieTrackerProtocol.ShouldCloseEmbeddedTracker(
            trackerVisible: true, isKeyDown: true, repeatCount: 0, CButtons.B) &&
        MagpieTrackerProtocol.ShouldCloseEmbeddedTracker(
@@ -166,6 +189,7 @@ magpieSeed.Validate();
 using (var magpieBridge = new MagpieTrackerBridge(0))
 {
     magpieBridge.Configure(enabled: false, allowLan: false, seed: magpieSeed);
+    magpieBridge.SetLocation(overworldLocation);
     Assert(magpieBridge.BoundPort == 0,
         "A disabled Magpie profile must not start the listener before the tracker is opened.");
     Assert(magpieBridge.Start(allowLan: false),
@@ -174,7 +198,7 @@ using (var magpieBridge = new MagpieTrackerBridge(0))
     using var magpieSocket = new ClientWebSocket();
     await magpieSocket.ConnectAsync(
         new Uri($"ws://127.0.0.1:{magpieBridge.BoundPort}/"), CancellationToken.None);
-    await SendWebSocketText(magpieSocket, "{\"type\":\"handshake\",\"features\":[\"items\",\"checks\"]}");
+    await SendWebSocketText(magpieSocket, "{\"type\":\"handshake\",\"features\":[\"items\",\"checks\",\"gps\"]}");
     using (var acknowledgement = System.Text.Json.JsonDocument.Parse(
                await ReceiveWebSocketText(magpieSocket)))
         Assert(acknowledgement.RootElement.GetProperty("type").GetString() == "handshAck",
@@ -200,6 +224,18 @@ using (var magpieBridge = new MagpieTrackerBridge(0))
     using (var fullChecks = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
         Assert(!fullChecks.RootElement.GetProperty("diff").GetBoolean(),
             "Magpie full check response was incorrectly marked as a diff.");
+    using (var fullLocation = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
+        Assert(fullLocation.RootElement.GetProperty("type").GetString() == "location" &&
+               fullLocation.RootElement.GetProperty("room").GetString() == "0xA5" &&
+               fullLocation.RootElement.GetProperty("drawFine").GetBoolean(),
+            "Magpie sendFull did not replay the current GPS position.");
+
+    magpieBridge.SetLocation(dungeonLocation);
+    using (var locationDiff = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
+        Assert(locationDiff.RootElement.GetProperty("room").GetString() == "0x117" &&
+               locationDiff.RootElement.GetProperty("x").GetDouble() == 5 &&
+               locationDiff.RootElement.GetProperty("y").GetDouble() == 6,
+            "Magpie bridge did not stream a changed GPS position.");
 
     magpieBridge.RecordReceivedItem(0, "Boomerang");
     using (var itemDiff = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
