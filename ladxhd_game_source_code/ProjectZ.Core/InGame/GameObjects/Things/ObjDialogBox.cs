@@ -39,7 +39,8 @@ namespace ProjectZ.InGame.GameObjects.Things
             // execute the dialog path
             if (_isActive && !_wasActive)
             {
-                Game1.GameManager.StartDialogPath(_dialogName);
+                if (!Game1.GameManager.ArchipelagoManager.TryCycleTunicAtTelephone(_dialogName))
+                    Game1.GameManager.StartDialogPath(_dialogName);
                 _wasActive = true;
             }
         }

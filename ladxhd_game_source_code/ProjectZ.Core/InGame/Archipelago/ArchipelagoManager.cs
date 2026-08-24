@@ -164,6 +164,38 @@ namespace ProjectZ.InGame.Archipelago
             return archipelagoActive && hasRedLocation && hasBlueLocation;
         }
 
+        public static int GetNextTunic(int currentTunic, bool ownsBlueTunic, bool ownsRedTunic)
+        {
+            if (currentTunic == GameManager.CloakGreen && ownsBlueTunic)
+                return GameManager.CloakBlue;
+            if (currentTunic != GameManager.CloakRed && ownsRedTunic)
+                return GameManager.CloakRed;
+            return GameManager.CloakGreen;
+        }
+
+        public bool TryCycleTunicAtTelephone(string dialogName)
+        {
+            if (!IsActive || !string.Equals(dialogName, "ulrira", StringComparison.Ordinal))
+                return false;
+
+            var ownsBlueTunic = _gameManager.GetItem("cloakBlue") != null;
+            var ownsRedTunic = _gameManager.GetItem("cloakRed") != null;
+            if (!ownsBlueTunic && !ownsRedTunic)
+                return false;
+
+            _gameManager.CloakType = GetNextTunic(
+                _gameManager.CloakType, ownsBlueTunic, ownsRedTunic);
+            SaveGameSaveLoad.SaveGame(_gameManager, false);
+
+            var tunicName = _gameManager.CloakType == GameManager.CloakBlue
+                ? "Blue Tunic"
+                : _gameManager.CloakType == GameManager.CloakRed
+                    ? "Red Tunic"
+                    : "Green Tunic";
+            AchievementOverlay.PushArchipelagoItem("Equipped", tunicName, "At", "Telephone booth");
+            return true;
+        }
+
         public bool TryHandleColorFairyRewards()
         {
             var hasRedLocation = _seed?.LocationsByGameKey.ContainsKey(ColorFairyRedLocationKey) == true;

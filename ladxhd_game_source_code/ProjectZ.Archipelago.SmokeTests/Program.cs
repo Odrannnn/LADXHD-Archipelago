@@ -220,6 +220,12 @@ Assert(ArchipelagoManager.ShouldUseColorFairyMultiReward(
        !ArchipelagoManager.ShouldUseColorFairyMultiReward(
            archipelagoActive: true, hasRedLocation: true, hasBlueLocation: false),
        "The Color Fairy must grant both mapped AP checks only on a complete bound seed.");
+Assert(ArchipelagoManager.GetNextTunic(GameManager.CloakGreen, true, true) == GameManager.CloakBlue &&
+       ArchipelagoManager.GetNextTunic(GameManager.CloakGreen, false, true) == GameManager.CloakRed &&
+       ArchipelagoManager.GetNextTunic(GameManager.CloakBlue, true, true) == GameManager.CloakRed &&
+       ArchipelagoManager.GetNextTunic(GameManager.CloakBlue, true, false) == GameManager.CloakGreen &&
+       ArchipelagoManager.GetNextTunic(GameManager.CloakRed, true, true) == GameManager.CloakGreen,
+       "Telephone booths must cycle only through the green and owned randomized tunics.");
 Assert(ArchipelagoManager.ShouldRepairToadstoolReceipt(false, false) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(false, true) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(true, false),
