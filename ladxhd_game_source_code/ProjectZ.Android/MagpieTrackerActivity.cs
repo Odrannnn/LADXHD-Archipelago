@@ -1,9 +1,7 @@
 using System;
 using Android.App;
 using Android.Content;
-using Android.Content.PM;
 using Android.Graphics;
-using Android.OS;
 using Android.Views;
 using Android.Webkit;
 using Android.Widget;
@@ -11,33 +9,102 @@ using ProjectZ.InGame.Archipelago;
 
 namespace ProjectZ.Android
 {
-    [Activity(
-        Name = "com.zelda.ladxhd.archipelago.MagpieTrackerActivity",
-        Label = "Magpie Tracker",
-        Theme = "@style/Theme.Game",
-        Exported = false,
-        ScreenOrientation = ScreenOrientation.FullSensor,
-        ConfigurationChanges =
-            ConfigChanges.Orientation |
-            ConfigChanges.ScreenSize |
-            ConfigChanges.KeyboardHidden |
-            ConfigChanges.UiMode)]
-    public sealed class MagpieTrackerActivity : Activity
+    internal sealed class AndroidMagpieTrackerService : IMagpieTrackerService
+    {
+        private readonly WeakReference<Activity> _activity;
+        private readonly WeakReference<FrameLayout> _gameRoot;
+        private MagpieTrackerOverlay _overlay;
+
+        public AndroidMagpieTrackerService(Activity activity, FrameLayout gameRoot)
+        {
+            _activity = new WeakReference<Activity>(activity);
+            _gameRoot = new WeakReference<FrameLayout>(gameRoot);
+        }
+
+        public bool IsAvailable => true;
+
+        public void Show()
+        {
+            if (!_activity.TryGetTarget(out var activity))
+                return;
+
+            activity.RunOnUiThread(() =>
+            {
+                if (!_gameRoot.TryGetTarget(out var gameRoot))
+                    return;
+
+                if (_overlay?.Parent != null)
+                {
+                    _overlay.BringToFront();
+                    return;
+                }
+
+                _overlay?.DestroyTracker();
+                _overlay = new MagpieTrackerOverlay(activity, HideOnUiThread);
+
+                var screenWidth = gameRoot.Width;
+                if (screenWidth <= 0)
+                {
+                    if (OperatingSystem.IsAndroidVersionAtLeast(30))
+                        screenWidth = activity.WindowManager?.CurrentWindowMetrics?.Bounds.Width() ?? 0;
+                    else
+                        screenWidth = activity.Resources?.DisplayMetrics?.WidthPixels ?? 0;
+                }
+
+                var overlayWidth = MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(screenWidth);
+                var layout = new FrameLayout.LayoutParams(
+                    overlayWidth > 0 ? overlayWidth : ViewGroup.LayoutParams.MatchParent,
+                    ViewGroup.LayoutParams.MatchParent)
+                {
+                    Gravity = GravityFlags.Right
+                };
+                gameRoot.AddView(_overlay, layout);
+                _overlay.BringToFront();
+            });
+        }
+
+        public void Hide()
+        {
+            if (_activity.TryGetTarget(out var activity))
+                activity.RunOnUiThread(HideOnUiThread);
+        }
+
+        public bool TryHandleBackPressed()
+        {
+            if (_overlay?.Parent == null)
+                return false;
+
+            if (_overlay.TryNavigateBack())
+                return true;
+
+            HideOnUiThread();
+            return true;
+        }
+
+        private void HideOnUiThread()
+        {
+            var overlay = _overlay;
+            _overlay = null;
+            if (overlay == null)
+                return;
+
+            if (overlay.Parent is ViewGroup parent)
+                parent.RemoveView(overlay);
+            overlay.DestroyTracker();
+        }
+    }
+
+    internal sealed class MagpieTrackerOverlay : LinearLayout
     {
         private WebView _webView;
 
-        protected override void OnCreate(Bundle savedInstanceState)
+        public MagpieTrackerOverlay(Context context, Action close) : base(context)
         {
-            base.OnCreate(savedInstanceState);
-            Window?.ClearFlags(WindowManagerFlags.LayoutNoLimits);
+            Orientation = Orientation.Vertical;
+            Elevation = Dp(12);
+            Background = new global::Android.Graphics.Drawables.ColorDrawable(Color.Rgb(20, 20, 20));
 
-            var root = new LinearLayout(this)
-            {
-                Orientation = Orientation.Vertical,
-                Background = new global::Android.Graphics.Drawables.ColorDrawable(Color.Rgb(20, 20, 20))
-            };
-
-            var toolbar = new LinearLayout(this)
+            var toolbar = new LinearLayout(context)
             {
                 Orientation = Orientation.Horizontal,
                 Background = new global::Android.Graphics.Drawables.ColorDrawable(Color.Rgb(35, 35, 35))
@@ -45,30 +112,29 @@ namespace ProjectZ.Android
             toolbar.SetGravity(GravityFlags.CenterVertical);
             toolbar.SetPadding(Dp(8), Dp(4), Dp(8), Dp(4));
 
-            var closeButton = new Button(this) { Text = "Back to game" };
-            closeButton.Click += (_, _) => Finish();
-            toolbar.AddView(closeButton, new LinearLayout.LayoutParams(
+            var closeButton = new Button(context) { Text = "Close tracker" };
+            closeButton.Click += (_, _) => close();
+            toolbar.AddView(closeButton, new LayoutParams(
                 ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
 
-            var title = new TextView(this)
+            var title = new TextView(context)
             {
-                Text = "Magpie Tracker",
-                TextSize = 18,
-                Gravity = GravityFlags.Center,
+                Text = "Magpie Tracker — game continues",
+                TextSize = 16,
+                Gravity = GravityFlags.Center
             };
             title.SetTextColor(Color.White);
-            toolbar.AddView(title, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.MatchParent, 1));
+            toolbar.AddView(title, new LayoutParams(0, ViewGroup.LayoutParams.MatchParent, 1));
 
-            var reloadButton = new Button(this) { Text = "Reload" };
+            var reloadButton = new Button(context) { Text = "Reload" };
             reloadButton.Click += (_, _) => _webView?.Reload();
-            toolbar.AddView(reloadButton, new LinearLayout.LayoutParams(
+            toolbar.AddView(reloadButton, new LayoutParams(
                 ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
 
-            root.AddView(toolbar, new LinearLayout.LayoutParams(
+            AddView(toolbar, new LayoutParams(
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
 
-            _webView = new WebView(this);
+            _webView = new WebView(context);
             WebView.SetWebContentsDebuggingEnabled(false);
             _webView.SetBackgroundColor(Color.Rgb(20, 20, 20));
             _webView.Settings.JavaScriptEnabled = true;
@@ -87,31 +153,26 @@ namespace ProjectZ.Android
 
             CookieManager.Instance?.SetAcceptThirdPartyCookies(_webView, false);
 
-            root.AddView(_webView, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent, 0, 1));
-            SetContentView(root);
-
+            AddView(_webView, new LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 1));
             _webView.LoadUrl(MagpieTrackerProtocol.CreateEmbeddedTrackerUri().AbsoluteUri);
         }
 
-        public override void OnBackPressed()
+        public bool TryNavigateBack()
         {
-            if (_webView?.CanGoBack() == true)
-                _webView.GoBack();
-            else
-                Finish();
+            if (_webView?.CanGoBack() != true)
+                return false;
+            _webView.GoBack();
+            return true;
         }
 
-        protected override void OnDestroy()
+        public void DestroyTracker()
         {
-            if (_webView != null)
-            {
-                _webView.StopLoading();
-                _webView.RemoveAllViews();
-                _webView.Destroy();
-                _webView = null;
-            }
-            base.OnDestroy();
+            if (_webView == null)
+                return;
+            _webView.StopLoading();
+            _webView.RemoveAllViews();
+            _webView.Destroy();
+            _webView = null;
         }
 
         private int Dp(int value) => (int)(value * Resources.DisplayMetrics.Density + 0.5f);
@@ -133,27 +194,6 @@ namespace ProjectZ.Android
                 return string.Equals(uri.Host, "magpietracker.us", StringComparison.OrdinalIgnoreCase) ||
                        string.Equals(uri.Host, "www.magpietracker.us", StringComparison.OrdinalIgnoreCase);
             }
-        }
-    }
-
-    internal sealed class AndroidMagpieTrackerService : IMagpieTrackerService
-    {
-        private readonly WeakReference<Activity> _activity;
-
-        public AndroidMagpieTrackerService(Activity activity)
-        {
-            _activity = new WeakReference<Activity>(activity);
-        }
-
-        public bool IsAvailable => true;
-
-        public void Show()
-        {
-            if (!_activity.TryGetTarget(out var activity))
-                return;
-
-            activity.RunOnUiThread(() =>
-                activity.StartActivity(new Intent(activity, typeof(MagpieTrackerActivity))));
         }
     }
 }

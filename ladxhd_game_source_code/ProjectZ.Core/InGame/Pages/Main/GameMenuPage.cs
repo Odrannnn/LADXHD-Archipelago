@@ -158,6 +158,9 @@ namespace ProjectZ.InGame.Pages
 
         public void OnClickMagpieTracker(InterfaceElement element)
         {
+            // Remove the pause menu before adding Android's in-activity tracker panel so the
+            // game loop and music continue behind it.
+            ClosePage();
             Game1.GameManager.ArchipelagoManager.ShowEmbeddedTracker();
         }
 

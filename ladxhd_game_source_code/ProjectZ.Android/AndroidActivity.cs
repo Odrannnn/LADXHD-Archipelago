@@ -5,6 +5,7 @@ using Android.Content.PM;
 using Android.Content.Res;
 using Android.OS;
 using Android.Views;
+using Android.Widget;
 using ProjectZ.InGame.Controls;
 using Microsoft.Xna.Framework;
 using MonoGame.Extended.Content.ContentReaders;
@@ -28,6 +29,7 @@ namespace ProjectZ.Android
         public const string ExtraLaunchSource = "com.zelda.ladxhd.archipelago.extra.LAUNCH_SOURCE";
 
         private AndroidPlatformInput _platformInput;
+        private AndroidMagpieTrackerService _magpieTrackerService;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -113,6 +115,7 @@ namespace ProjectZ.Android
                 loadSave: false,
                 loadSlot: 0
             );
+            var gameRoot = new FrameLayout(this);
             game.Content = new ExternalContentManager(game.Services, Path.Combine(installedAssetRoot, "Content"));
             game.Services.AddService(typeof(AssetManager), Assets);
             game.Services.AddService(typeof(IPlatformDisplayConfiguration), new PlatformDisplayConfiguration(surfaceWidth, surfaceHeight));
@@ -132,7 +135,8 @@ namespace ProjectZ.Android
             game.Services.AddService(typeof(IFileDialogService), new UnavailableFileDialogService());
             game.Services.AddService(typeof(IDiagnosticsSettingsService), new AndroidDiagnosticsSettingsService(this));
             game.Services.AddService(typeof(IArchipelagoSetupService), new AndroidArchipelagoSetupService(this));
-            game.Services.AddService(typeof(IMagpieTrackerService), new AndroidMagpieTrackerService(this));
+            _magpieTrackerService = new AndroidMagpieTrackerService(this, gameRoot);
+            game.Services.AddService(typeof(IMagpieTrackerService), _magpieTrackerService);
 
             var launchSource = Intent?.GetStringExtra(ExtraLaunchSource) ?? "direct";
             AndroidTelemetry.Initialize(this, root, launchSource);
@@ -142,7 +146,8 @@ namespace ProjectZ.Android
                 ViewGroup.LayoutParams.MatchParent,
                 ViewGroup.LayoutParams.MatchParent);
             view.LayoutParameters = matchParent;
-            SetContentView(view, matchParent);
+            gameRoot.AddView(view, matchParent);
+            SetContentView(gameRoot, matchParent);
 
             ApplyFullscreenFlags();
 
@@ -160,6 +165,7 @@ namespace ProjectZ.Android
 
         protected override void OnDestroy()
         {
+            _magpieTrackerService?.Hide();
             if (IsFinishing)
                 AndroidTelemetry.OnFinishing();
             AndroidTelemetry.Shutdown();
@@ -319,6 +325,9 @@ namespace ProjectZ.Android
 
         public override void OnBackPressed()
         {
+            if (_magpieTrackerService?.TryHandleBackPressed() == true)
+                return;
+
             _platformInput?.SetSelectPressed();
             _platformInput?.SetButton(CButtons.Select, true);
         }

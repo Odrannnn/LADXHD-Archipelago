@@ -111,6 +111,10 @@ Assert(embeddedTrackerUri.Scheme == Uri.UriSchemeHttps &&
        embeddedTrackerUri.Query.Contains("setting_autotrackSettings=true", StringComparison.Ordinal) &&
        embeddedTrackerUri.Query.Contains("flag_ap_logic=true", StringComparison.Ordinal),
        "Embedded Magpie URL must enable AP autotracking against the local bridge.");
+Assert(MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(1920) == 1344 &&
+       MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(1) == 1 &&
+       MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(0) == 0,
+       "Embedded Magpie must use a bounded right-side panel that leaves gameplay visible.");
 Assert(!new ProjectZ.UnavailableMagpieTrackerService().IsAvailable,
        "Non-Android platforms must not expose the embedded tracker pause command.");
 using (var magpieHandshake = System.Text.Json.JsonDocument.Parse(

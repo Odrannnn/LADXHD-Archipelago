@@ -122,6 +122,13 @@ namespace ProjectZ.InGame.Archipelago
                 "&flag_ap_logic=true");
         }
 
+        public static int CalculateEmbeddedOverlayWidth(int screenWidth)
+        {
+            if (screenWidth <= 0)
+                return 0;
+            return Math.Max(1, (int)((long)screenWidth * 7 / 10));
+        }
+
         public static string GetCheckId(ArchipelagoSeedLocation location)
         {
             if (location == null)
