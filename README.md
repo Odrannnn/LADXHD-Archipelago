@@ -23,7 +23,8 @@ ZIP.
 - A native Archipelago 0.6.7-compatible client with live item/location synchronization,
   reconnect handling, multi-seed profiles, received-item presentation, and per-save AP metadata.
 - A `Links Awakening DX HD` APWorld and `.apladxhd` seed-manifest workflow.
-- An Android seed importer that accepts shared files and connection details without ADB.
+- An Android seed importer that accepts shared files and connection details without ADB, plus an
+  in-app setup screen that can choose seeds and edit installed room connections without a companion.
 - A phone-native, transactional game-data builder: select the original v1.0.0 ZIP on first launch,
   then let the app verify, patch, stage, and activate the Android assets locally.
 - A separate Android identity, `com.zelda.ladxhd.archipelago`, so this build can coexist with the
@@ -34,8 +35,10 @@ ZIP.
 1. Download the APK and `ladxhd.apworld` from the latest GitHub release.
 2. Install the APK. On first launch, choose your untouched `Links Awakening DX HD v1.0.0.zip`.
 3. Wait for source and generated-data verification; the game opens automatically when complete.
-4. Install `ladxhd.apworld` into Archipelago 0.6.7, generate a room, then share/open the generated
-   `.apladxhd` file with **LADXHD Archipelago** to bind a save and connection.
+4. Install `ladxhd.apworld` into Archipelago 0.6.7 and generate a room. In LADXHD, open
+   **Settings → Archipelago**, choose the generated `.apladxhd`, enter the server address and port,
+   optional password, and target save. Sharing/opening the seed file from another app remains
+   supported but is no longer required.
 
 Updates install over the existing app. Code-only releases reuse the installed assets. When the
 asset format changes, the app reopens setup, reuses the previously granted ZIP when available,

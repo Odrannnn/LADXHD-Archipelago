@@ -60,6 +60,7 @@ namespace ProjectZ.Android
         DataMimeType = "text/plain")]
     public sealed class ArchipelagoImportActivity : Activity
     {
+        public const string ActionConfigure = "com.zelda.ladxhd.archipelago.action.CONFIGURE";
         public const string ExtraServer = "com.zelda.ladxhd.archipelago.extra.SERVER";
         public const string ExtraPassword = "com.zelda.ladxhd.archipelago.extra.PASSWORD";
         public const string ExtraSaveSlot = "com.zelda.ladxhd.archipelago.extra.SAVE_SLOT";
@@ -71,6 +72,7 @@ namespace ProjectZ.Android
         private const long MaximumSeedBytes = 16 * 1024 * 1024;
         private const int MaximumServerCharacters = 512;
         private const int MaximumPasswordCharacters = 1024;
+        private const int OpenSeedRequest = 7302;
 
         private string _temporarySeedPath;
         private ArchipelagoSeedManifest _seed;
@@ -80,12 +82,14 @@ namespace ProjectZ.Android
         private int? _intentSaveSlot;
         private bool _hasIntentServer;
         private bool _hasIntentPassword;
+        private bool _manualSetup;
+        private bool _editingInstalledProfile;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
             Window?.SetSoftInputMode(SoftInput.AdjustResize);
-            ImportFromIntent(Intent);
+            HandleIntent(Intent);
         }
 
         protected override void OnNewIntent(Intent intent)
@@ -93,7 +97,7 @@ namespace ProjectZ.Android
             base.OnNewIntent(intent);
             Intent = intent;
             DeleteTemporarySeed();
-            ImportFromIntent(intent);
+            HandleIntent(intent);
         }
 
         protected override void OnDestroy()
@@ -109,19 +113,8 @@ namespace ProjectZ.Android
                 var uri = GetSharedUri(intent) ??
                           throw new InvalidDataException("No randomizer file was supplied.");
                 ReadConnectionHints(intent);
-
-                _userDataRoot = Application.Context.GetExternalFilesDir(null)?.AbsolutePath ??
-                                throw new IOException("Android did not provide an app data directory.");
-                var archipelagoDirectory = ArchipelagoConnectionSettings.GetDirectory(_userDataRoot);
-                Directory.CreateDirectory(archipelagoDirectory);
-
-                _temporarySeedPath = Path.Combine(
-                    archipelagoDirectory,
-                    $"seed.import-{Guid.NewGuid():N}.apladxhd");
-                CopyUriToFile(uri, _temporarySeedPath);
-                _seed = ArchipelagoSeedManifest.Load(_temporarySeedPath);
-
-                ShowImportDialog();
+                InitializeUserDataRoot();
+                ImportFromUri(uri);
             }
             catch (Exception ex)
             {
@@ -130,8 +123,186 @@ namespace ProjectZ.Android
             }
         }
 
+        private void HandleIntent(Intent intent)
+        {
+            _manualSetup = string.Equals(intent?.Action, ActionConfigure, StringComparison.Ordinal);
+            if (_manualSetup)
+            {
+                try
+                {
+                    InitializeUserDataRoot();
+                    ClearConnectionHints();
+                    ShowManualSetupDialog();
+                }
+                catch (Exception ex)
+                {
+                    ShowError("Could not open Archipelago setup", ex.Message);
+                }
+                return;
+            }
+
+            ImportFromIntent(intent);
+        }
+
+        private void InitializeUserDataRoot()
+        {
+            _userDataRoot ??= Application.Context.GetExternalFilesDir(null)?.AbsolutePath ??
+                              throw new IOException("Android did not provide an app data directory.");
+            Directory.CreateDirectory(ArchipelagoConnectionSettings.GetDirectory(_userDataRoot));
+        }
+
+        private void ClearConnectionHints()
+        {
+            _intentServer = null;
+            _intentPassword = null;
+            _intentSaveSlot = null;
+            _hasIntentServer = false;
+            _hasIntentPassword = false;
+            _editingInstalledProfile = false;
+        }
+
+        private string CreateTemporarySeedPath()
+        {
+            DeleteTemporarySeed();
+            return Path.Combine(
+                ArchipelagoConnectionSettings.GetDirectory(_userDataRoot),
+                $"seed.import-{Guid.NewGuid():N}.apladxhd");
+        }
+
+        private void ImportFromUri(global::Android.Net.Uri uri)
+        {
+            _temporarySeedPath = CreateTemporarySeedPath();
+            CopyUriToFile(uri, _temporarySeedPath);
+            _seed = ArchipelagoSeedManifest.Load(_temporarySeedPath);
+            ShowImportDialog();
+        }
+
+        private void ShowManualSetupDialog()
+        {
+            var density = Resources?.DisplayMetrics?.Density ?? 1f;
+            var padding = (int)(24 * density);
+            var spacing = (int)(8 * density);
+            var layout = new LinearLayout(this) { Orientation = Orientation.Vertical };
+            layout.SetPadding(padding, spacing, padding, 0);
+
+            layout.AddView(new TextView(this)
+            {
+                Text = "Choose a generated .apladxhd file for a new randomizer, or open an installed save profile to change its server, port, or password. The player slot is verified from the seed file.",
+                TextSize = 14
+            });
+
+            var importButton = new Button(this) { Text = "Choose .apladxhd seed file" };
+            layout.AddView(importButton);
+
+            var installed = new LinearLayout(this) { Orientation = Orientation.Vertical };
+            installed.SetPadding(0, spacing, 0, 0);
+            AlertDialog dialog = null;
+            var installedProfiles = ArchipelagoProfileCatalog.LoadInstalled(_userDataRoot);
+            foreach (var profile in installedProfiles)
+            {
+                var selectedSlot = profile.SaveSlot;
+                var button = new Button(this)
+                {
+                    Text = $"Save {profile.SaveSlot + 1}: {profile.SlotName} — {profile.SeedName}"
+                };
+                button.Click += (_, _) =>
+                {
+                    dialog?.Dismiss();
+                    ConfigureExistingProfile(selectedSlot);
+                };
+                installed.AddView(button);
+            }
+
+            if (installedProfiles.Count > 0)
+            {
+                installed.AddView(new TextView(this)
+                {
+                    Text = "Installed profiles:",
+                    TextSize = 13
+                }, 0);
+                layout.AddView(installed);
+            }
+
+            dialog = new AlertDialog.Builder(this)
+                .SetTitle("Archipelago setup")
+                .SetView(layout)
+                .SetNegativeButton("Back", (_, _) => Finish())
+                .Create();
+            importButton.Click += (_, _) =>
+            {
+                dialog.Dismiss();
+                OpenSeedPicker();
+            };
+            dialog.Show();
+        }
+
+        private void OpenSeedPicker()
+        {
+            var picker = new Intent(Intent.ActionOpenDocument);
+            picker.AddCategory(Intent.CategoryOpenable);
+            picker.SetType("*/*");
+            picker.PutExtra(Intent.ExtraMimeTypes, new[]
+            {
+                "application/x-apladxhd",
+                "application/json",
+                "application/octet-stream",
+                "text/plain"
+            });
+            picker.AddFlags(ActivityFlags.GrantReadUriPermission);
+        #pragma warning disable CS0618
+            StartActivityForResult(picker, OpenSeedRequest);
+        #pragma warning restore CS0618
+        }
+
+        protected override void OnActivityResult(int requestCode, Result resultCode, Intent data)
+        {
+            base.OnActivityResult(requestCode, resultCode, data);
+            if (requestCode != OpenSeedRequest)
+                return;
+
+            if (resultCode != Result.Ok || data?.Data == null)
+            {
+                ShowManualSetupDialog();
+                return;
+            }
+
+            try
+            {
+                ClearConnectionHints();
+                ImportFromUri(data.Data);
+            }
+            catch (Exception ex)
+            {
+                DeleteTemporarySeed();
+                ShowError("Could not import randomizer", ex.Message);
+            }
+        }
+
+        private void ConfigureExistingProfile(int saveSlot)
+        {
+            try
+            {
+                ClearConnectionHints();
+                _intentSaveSlot = saveSlot;
+                _editingInstalledProfile = true;
+                var settings = LoadExistingSettings(saveSlot, includeLegacy: false) ??
+                               throw new InvalidDataException($"Save {saveSlot + 1} has no Archipelago profile.");
+                var installedSeedPath = settings.ResolveProfileSeedPath(_userDataRoot, saveSlot);
+                _temporarySeedPath = CreateTemporarySeedPath();
+                File.Copy(installedSeedPath, _temporarySeedPath, true);
+                _seed = ArchipelagoSeedManifest.Load(_temporarySeedPath);
+                ShowImportDialog();
+            }
+            catch (Exception ex)
+            {
+                DeleteTemporarySeed();
+                ShowError("Could not open installed profile", ex.Message);
+            }
+        }
+
         private void ReadConnectionHints(Intent intent)
         {
+            _editingInstalledProfile = false;
             var serverExtra = GetPresentExtra(intent, ExtraServer, LegacyExtraServer);
             var passwordExtra = GetPresentExtra(intent, ExtraPassword, LegacyExtraPassword);
             var saveSlotExtra = GetPresentExtra(intent, ExtraSaveSlot, LegacyExtraSaveSlot);
@@ -242,7 +413,9 @@ namespace ProjectZ.Android
 
             var saveSlotLabel = new TextView(this)
             {
-                Text = "New or empty in-game save slot:",
+                Text = _editingInstalledProfile
+                    ? "Installed in-game save slot:"
+                    : "New or empty in-game save slot:",
                 TextSize = 14
             };
             saveSlotLabel.SetPadding(0, spacing, 0, 0);
@@ -255,6 +428,7 @@ namespace ProjectZ.Android
                 new[] { "Save 1", "Save 2", "Save 3", "Save 4" });
             saveSlotAdapter.SetDropDownViewResource(global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
             saveSlot.Adapter = saveSlotAdapter;
+            saveSlot.Enabled = !_editingInstalledProfile;
 
             void PopulateConnectionFields(int selectedSaveSlot)
             {
@@ -285,10 +459,13 @@ namespace ProjectZ.Android
             layout.AddView(note);
 
             var dialog = new AlertDialog.Builder(this)
-                .SetTitle("Import Archipelago randomizer")
+                .SetTitle(_editingInstalledProfile
+                    ? "Update Archipelago connection"
+                    : "Import Archipelago randomizer")
                 .SetView(layout)
                 .SetNegativeButton("Cancel", (_, _) => Finish())
-                .SetPositiveButton("Import and launch", (EventHandler<DialogClickEventArgs>)null)
+                .SetPositiveButton(_editingInstalledProfile ? "Save and launch" : "Import and launch",
+                    (EventHandler<DialogClickEventArgs>)null)
                 .Create();
 
             dialog.SetOnShowListener(new DialogShownListener(() =>
@@ -299,6 +476,17 @@ namespace ProjectZ.Android
                     if (string.IsNullOrWhiteSpace(serverValue))
                     {
                         server.Error = "Enter the Archipelago server as host:port.";
+                        return;
+                    }
+                    if (serverValue.Length > MaximumServerCharacters ||
+                        serverValue.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+                    {
+                        server.Error = "Enter a valid server address and port.";
+                        return;
+                    }
+                    if ((password.Text?.Length ?? 0) > MaximumPasswordCharacters)
+                    {
+                        password.Error = "The password is unexpectedly long.";
                         return;
                     }
 
@@ -317,7 +505,9 @@ namespace ProjectZ.Android
                         dialog.Dismiss();
                         Toast.MakeText(
                             this,
-                            $"Imported {_seed.SlotName}. Create a new game in Save {saveSlot.SelectedItemPosition + 1}.",
+                            _editingInstalledProfile
+                                ? $"Updated {_seed.SlotName} in Save {saveSlot.SelectedItemPosition + 1}."
+                                : $"Imported {_seed.SlotName}. Create a new game in Save {saveSlot.SelectedItemPosition + 1}.",
                             ToastLength.Long)?.Show();
                         LaunchGame();
                     }
@@ -444,7 +634,7 @@ namespace ProjectZ.Android
         private void LaunchGame()
         {
             var launchIntent = new Intent(this, typeof(SplashActivity));
-            launchIntent.PutExtra(MainActivity.ExtraLaunchSource, "companion");
+            launchIntent.PutExtra(MainActivity.ExtraLaunchSource, _manualSetup ? "manual_setup" : "companion");
             launchIntent.SetFlags(ActivityFlags.NewTask | ActivityFlags.ClearTask);
             StartActivity(launchIntent);
             Finish();
@@ -483,6 +673,31 @@ namespace ProjectZ.Android
             {
                 _onShow();
             }
+        }
+    }
+
+    internal sealed class AndroidArchipelagoSetupService : IArchipelagoSetupService
+    {
+        private readonly WeakReference<Activity> _activity;
+
+        public AndroidArchipelagoSetupService(Activity activity)
+        {
+            _activity = new WeakReference<Activity>(activity);
+        }
+
+        public bool IsAvailable => true;
+
+        public void Show()
+        {
+            if (!_activity.TryGetTarget(out var activity))
+                return;
+
+            activity.RunOnUiThread(() =>
+            {
+                var intent = new Intent(activity, typeof(ArchipelagoImportActivity));
+                intent.SetAction(ArchipelagoImportActivity.ActionConfigure);
+                activity.StartActivity(intent);
+            });
         }
     }
 }

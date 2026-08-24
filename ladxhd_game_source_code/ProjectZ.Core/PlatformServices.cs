@@ -102,6 +102,12 @@ namespace ProjectZ
         void Show();
     }
 
+    public interface IArchipelagoSetupService
+    {
+        bool IsAvailable { get; }
+        void Show();
+    }
+
     public readonly struct PlatformTouch
     {
         public PlatformTouch(int id, Vector2 position, PlatformTouchState state)
@@ -284,6 +290,12 @@ namespace ProjectZ
     }
 
     public sealed class UnavailableDiagnosticsSettingsService : IDiagnosticsSettingsService
+    {
+        public bool IsAvailable => false;
+        public void Show() { }
+    }
+
+    public sealed class UnavailableArchipelagoSetupService : IArchipelagoSetupService
     {
         public bool IsAvailable => false;
         public void Show() { }

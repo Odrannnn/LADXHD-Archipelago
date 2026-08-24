@@ -16,8 +16,8 @@ namespace ProjectZ.InGame.Pages
         private readonly InterfaceListLayout _bottomBar;
         private readonly InterfaceLabel _versionLabel;
 
-        // Each settings entry: button text key, tooltip key, and the page it opens.
-        private readonly (string Text, string Tooltip, Type Page, bool Translate)[] _entries;
+        // Each settings entry: button text key, tooltip key, and either a page or platform action.
+        private readonly (string Text, string Tooltip, Type Page, bool Translate, Action Activate)[] _entries;
 
         // The horizontal row layouts that hold the buttons (2 per row).
         private readonly List<InterfaceListLayout> _rows = new List<InterfaceListLayout>();
@@ -35,23 +35,28 @@ namespace ProjectZ.InGame.Pages
         {
             EnableTooltips = true;
 
-            var entries = new List<(string Text, string Tooltip, Type Page, bool Translate)>
+            var entries = new List<(string Text, string Tooltip, Type Page, bool Translate, Action Activate)>
             {
-                ("settings_menu_game",     "tooltip_menu_game",     typeof(GameSettingsPage), true),
-                ("settings_menu_redux",    "tooltip_menu_redux",    typeof(ReduxSettingsPage), true),
-                ("settings_menu_video",    "tooltip_menu_video",    typeof(VideoSettingsPage), true),
-                ("settings_menu_audio",    "tooltip_menu_audio",    typeof(AudioSettingsPage), true),
-                ("settings_menu_graphics", "tooltip_menu_graphics", typeof(GraphicsSettingsPage), true),
-                ("settings_menu_camera",   "tooltip_menu_camera",   typeof(CameraSettingsPage), true),
-                ("settings_menu_controls", "tooltip_menu_controls", typeof(ControlSettingsPage), true),
-                ("settings_menu_mods",     "tooltip_menu_mods",     typeof(ModifierSettingsPage), true),
-                ("settings_menu_cheats",   "tooltip_menu_cheats",   typeof(CheatsSettingsPage), true),
-                ("settings_menu_presets",  "tooltip_menu_presets",  typeof(PresetOptionsPage), true),
-                ("settings_menu_achieve",  "tooltip_menu_achieve",  typeof(AchievementsPage), true),
+                ("settings_menu_game",     "tooltip_menu_game",     typeof(GameSettingsPage), true, null),
+                ("settings_menu_redux",    "tooltip_menu_redux",    typeof(ReduxSettingsPage), true, null),
+                ("settings_menu_video",    "tooltip_menu_video",    typeof(VideoSettingsPage), true, null),
+                ("settings_menu_audio",    "tooltip_menu_audio",    typeof(AudioSettingsPage), true, null),
+                ("settings_menu_graphics", "tooltip_menu_graphics", typeof(GraphicsSettingsPage), true, null),
+                ("settings_menu_camera",   "tooltip_menu_camera",   typeof(CameraSettingsPage), true, null),
+                ("settings_menu_controls", "tooltip_menu_controls", typeof(ControlSettingsPage), true, null),
+                ("settings_menu_mods",     "tooltip_menu_mods",     typeof(ModifierSettingsPage), true, null),
+                ("settings_menu_cheats",   "tooltip_menu_cheats",   typeof(CheatsSettingsPage), true, null),
+                ("settings_menu_presets",  "tooltip_menu_presets",  typeof(PresetOptionsPage), true, null),
+                ("settings_menu_achieve",  "tooltip_menu_achieve",  typeof(AchievementsPage), true, null),
             };
+            if (Game1.ArchipelagoSetupService.IsAvailable)
+                entries.Add(("Archipelago",
+                    "Import a randomizer or update an installed seed's server, port, and password.",
+                    null, false, Game1.ArchipelagoSetupService.Show));
             if (Game1.DiagnosticsSettingsService.IsAvailable)
                 entries.Add(("Diagnostics",
-                    "Choose whether anonymous crash and randomizer diagnostics are shared.", null, false));
+                    "Choose whether anonymous crash and randomizer diagnostics are shared.",
+                    null, false, Game1.DiagnosticsSettingsService.Show));
             _entries = entries.ToArray();
 
             // Settings Page Layout
@@ -97,7 +102,8 @@ namespace ProjectZ.InGame.Pages
             PageLayout = _settingsLayout;
         }
 
-        private void AddSettingsButton(InterfaceListLayout row, Point size, (string Text, string Tooltip, Type Page, bool Translate) entry)
+        private void AddSettingsButton(InterfaceListLayout row, Point size,
+            (string Text, string Tooltip, Type Page, bool Translate, Action Activate) entry)
         {
             // entry is a per-call parameter, so the closure captures the correct page.
             if (entry.Translate)
@@ -108,7 +114,7 @@ namespace ProjectZ.InGame.Pages
             }
 
             var button = new InterfaceButton(size, new Point(_columnGap / 2, 2), entry.Text,
-                element => { Game1.DiagnosticsSettingsService.Show(); });
+                element => { entry.Activate?.Invoke(); });
             button.InsideLabel.Translate = false;
             button.InsideLabel.OverrideText = entry.Text;
             row.AddElement(button);

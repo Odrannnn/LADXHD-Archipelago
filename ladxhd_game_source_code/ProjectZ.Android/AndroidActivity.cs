@@ -131,6 +131,7 @@ namespace ProjectZ.Android
             game.Services.AddService(typeof(IPlatformPresentation), new PlatformPresentation(240, true, true, 1));
             game.Services.AddService(typeof(IFileDialogService), new UnavailableFileDialogService());
             game.Services.AddService(typeof(IDiagnosticsSettingsService), new AndroidDiagnosticsSettingsService(this));
+            game.Services.AddService(typeof(IArchipelagoSetupService), new AndroidArchipelagoSetupService(this));
 
             var launchSource = Intent?.GetStringExtra(ExtraLaunchSource) ?? "direct";
             AndroidTelemetry.Initialize(this, root, launchSource);

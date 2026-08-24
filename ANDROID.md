@@ -40,6 +40,20 @@ You can also open the v1.0.0 ZIP with **LADXHD Archipelago** from a file manager
 manual rebuild. Do not uninstall the app for an update: Android normally deletes app-private
 data on uninstall.
 
+### Starting an Archipelago seed without the companion
+
+1. Generate the room with `ladxhd.apworld` and copy that player's `.apladxhd` file to the phone.
+2. On the LADXHD file-select screen, open **Settings → Archipelago**.
+3. Tap **Choose .apladxhd seed file** and select it with Android's document picker.
+4. Review the seed and player slot, enter the server as `host:port`, add the room password when
+   needed, and choose Save 1 through Save 4.
+5. Tap **Import and launch**, then create a new game in that save position for a new seed.
+
+The setup screen also lists installed profiles. Open one to change its server port or password
+without importing the seed again. The player slot comes from the `.apladxhd`; credentials alone
+are not enough because the native client needs that player's generated location mapping. Opening
+or sharing a `.apladxhd` from another app remains available as an alternative.
+
 ----
 
 ## Using the legacy desktop patcher

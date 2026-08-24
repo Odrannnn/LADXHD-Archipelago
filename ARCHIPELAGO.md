@@ -52,11 +52,19 @@ it again. No copyrighted game data is included in the published APK or repositor
 
 ### Android import (no ADB required)
 
-Copy the generated `.apladxhd` file to Downloads, then open it from Android's Files app or
-share it to **Import LADXHD Archipelago Seed**. The import screen validates the manifest, asks for
-the Archipelago server, optional password, and target save position, writes that position's
-profile into scoped app storage, and relaunches the game. Replaced imports are kept as
-`.previous` backups. Importing another position does not touch existing profiles.
+From the file-select screen, open **Settings → Archipelago**. Choose the generated `.apladxhd`
+file from Android's document picker, enter the Archipelago server and port, optional password,
+and target save position, then launch. The player slot is displayed from the seed manifest and
+is not silently overridden, because each player's manifest contains that slot's placements.
+
+The same screen lists every valid installed profile. Selecting one lets the user change its
+server address/port or password and relaunch without choosing the seed again. This makes room
+port changes and normal reconnect setup independent of the companion app.
+
+Opening the `.apladxhd` from Android's Files app or sharing it to **Import LADXHD Archipelago
+Seed** remains supported. Both entry points validate the manifest, write the selected profile
+into scoped app storage, and relaunch the game. Replaced imports are kept as `.previous` backups.
+Importing another position does not touch existing profiles.
 
 Re-importing the same seed into the same position updates its connection details without
 resetting that save's item-receive progress. This is also how to change a server port. Importing

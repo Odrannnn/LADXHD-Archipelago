@@ -43,6 +43,7 @@ namespace ProjectZ
         public static IPlatformPresentation PlatformPresentation { get; private set; } = new PlatformPresentation(256, false, false, 0);
         public static IFileDialogService FileDialogService { get; private set; } = new UnavailableFileDialogService();
         public static IDiagnosticsSettingsService DiagnosticsSettingsService { get; private set; } = new UnavailableDiagnosticsSettingsService();
+        public static IArchipelagoSetupService ArchipelagoSetupService { get; private set; } = new UnavailableArchipelagoSetupService();
 
         public static int WindowWidth;
         public static int WindowHeight;
@@ -205,6 +206,7 @@ namespace ProjectZ
             PlatformPresentation = (IPlatformPresentation)Services.GetService(typeof(IPlatformPresentation)) ?? PlatformPresentation;
             FileDialogService = (IFileDialogService)Services.GetService(typeof(IFileDialogService)) ?? FileDialogService;
             DiagnosticsSettingsService = (IDiagnosticsSettingsService)Services.GetService(typeof(IDiagnosticsSettingsService)) ?? DiagnosticsSettingsService;
+            ArchipelagoSetupService = (IArchipelagoSetupService)Services.GetService(typeof(IArchipelagoSetupService)) ?? ArchipelagoSetupService;
             GameManager = new GameManager();
             TextInputService.SetEnabled(false);
             Activated += (_, _) => TextInputService.OnGameActivated();

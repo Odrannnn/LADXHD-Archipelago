@@ -331,6 +331,28 @@ try
 
     File.WriteAllText(Path.Combine(save1Directory, "seed.apladxhd"), "seed one");
     File.WriteAllText(Path.Combine(save4Directory, "four.apladxhd"), "seed four");
+    Assert(ArchipelagoProfileCatalog.LoadInstalled(profileRoot).Count == 0,
+        "The manual setup catalog must hide profiles whose seed identity cannot be validated.");
+    File.WriteAllText(Path.Combine(save4Directory, "four.apladxhd"), """
+    {
+      "format_version": 1,
+      "game": "Links Awakening DX HD",
+      "seed_name": "Catalog Seed",
+      "slot_name": "LinkFour",
+      "world_version": "0.1.0",
+      "mapping_complete": true,
+      "unmapped_locations": [],
+      "locations": [],
+      "options": {}
+    }
+    """);
+    var installedProfiles = ArchipelagoProfileCatalog.LoadInstalled(profileRoot);
+    Assert(installedProfiles.Count == 1 &&
+           installedProfiles[0].SaveSlot == 3 &&
+           installedProfiles[0].SeedName == "Catalog Seed" &&
+           installedProfiles[0].SlotName == "LinkFour" &&
+           installedProfiles[0].Server == "seed-four.example:48281",
+        "The manual setup catalog did not expose the verified installed profile.");
     Assert(ArchipelagoConnectionSettings.DeleteProfile(profileRoot, 0),
         "Deleting Save 1's Archipelago profile failed.");
     Assert(!Directory.Exists(save1Directory),
