@@ -1,5 +1,10 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.21**
+### Magpie Tracker compatibility and live overlay
+  * Translated numeric Archipelago choice options into the names and booleans expected by Magpie, preventing its accessibility renderer from crashing with an empty logic list.
+  * Replaced the separate Android tracker activity with a right-side in-game overlay. Opening Magpie now closes the pause menu while gameplay and music continue behind the tracker.
+
 ## **v2.0.20**
 ### Embedded Magpie Tracker and randomizer behavior fixes
   * Added an Android pause-menu page for `magpietracker.us`, preconfigured to connect to LADXHD's local autotracking bridge, plus optional LAN autotracking for an external device.
