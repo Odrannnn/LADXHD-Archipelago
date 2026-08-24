@@ -6,6 +6,7 @@ using Android.Views;
 using Android.Webkit;
 using Android.Widget;
 using ProjectZ.InGame.Archipelago;
+using ProjectZ.InGame.Controls;
 
 namespace ProjectZ.Android
 {
@@ -22,6 +23,7 @@ namespace ProjectZ.Android
         }
 
         public bool IsAvailable => true;
+        public bool IsVisible => _overlay?.Parent != null && _overlay.Visibility == ViewStates.Visible;
 
         public void Show()
         {
@@ -33,33 +35,20 @@ namespace ProjectZ.Android
                 if (!_gameRoot.TryGetTarget(out var gameRoot))
                     return;
 
-                if (_overlay?.Parent != null)
+                if (_overlay != null)
                 {
+                    if (_overlay.Parent == null)
+                        AddOverlay(gameRoot, activity, _overlay);
+                    _overlay.Visibility = ViewStates.Visible;
                     _overlay.BringToFront();
+                    _overlay.RequestFocus();
                     return;
                 }
 
-                _overlay?.DestroyTracker();
                 _overlay = new MagpieTrackerOverlay(activity, HideOnUiThread);
-
-                var screenWidth = gameRoot.Width;
-                if (screenWidth <= 0)
-                {
-                    if (OperatingSystem.IsAndroidVersionAtLeast(30))
-                        screenWidth = activity.WindowManager?.CurrentWindowMetrics?.Bounds.Width() ?? 0;
-                    else
-                        screenWidth = activity.Resources?.DisplayMetrics?.WidthPixels ?? 0;
-                }
-
-                var overlayWidth = MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(screenWidth);
-                var layout = new FrameLayout.LayoutParams(
-                    overlayWidth > 0 ? overlayWidth : ViewGroup.LayoutParams.MatchParent,
-                    ViewGroup.LayoutParams.MatchParent)
-                {
-                    Gravity = GravityFlags.Right
-                };
-                gameRoot.AddView(_overlay, layout);
+                AddOverlay(gameRoot, activity, _overlay);
                 _overlay.BringToFront();
+                _overlay.RequestFocus();
             });
         }
 
@@ -71,7 +60,7 @@ namespace ProjectZ.Android
 
         public bool TryHandleBackPressed()
         {
-            if (_overlay?.Parent == null)
+            if (!IsVisible)
                 return false;
 
             if (_overlay.TryNavigateBack())
@@ -81,7 +70,55 @@ namespace ProjectZ.Android
             return true;
         }
 
+        public bool TryHandleControllerClose(CButtons? button, bool isKeyDown, int repeatCount)
+        {
+            if (!MagpieTrackerProtocol.ShouldCloseEmbeddedTracker(
+                    IsVisible, isKeyDown, repeatCount, button))
+                return false;
+
+            HideOnUiThread();
+            return true;
+        }
+
+        public void Destroy()
+        {
+            if (_activity.TryGetTarget(out var activity))
+                activity.RunOnUiThread(DestroyOnUiThread);
+        }
+
+        private static void AddOverlay(FrameLayout gameRoot, Activity activity, MagpieTrackerOverlay overlay)
+        {
+            var screenWidth = gameRoot.Width;
+            if (screenWidth <= 0)
+            {
+                if (OperatingSystem.IsAndroidVersionAtLeast(30))
+                    screenWidth = activity.WindowManager?.CurrentWindowMetrics?.Bounds.Width() ?? 0;
+                else
+                    screenWidth = activity.Resources?.DisplayMetrics?.WidthPixels ?? 0;
+            }
+
+            var overlayWidth = MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(screenWidth);
+            var layout = new FrameLayout.LayoutParams(
+                overlayWidth > 0 ? overlayWidth : ViewGroup.LayoutParams.MatchParent,
+                ViewGroup.LayoutParams.MatchParent)
+            {
+                Gravity = GravityFlags.Right
+            };
+            gameRoot.AddView(overlay, layout);
+        }
+
         private void HideOnUiThread()
+        {
+            var overlay = _overlay;
+            if (overlay?.Parent == null || overlay.Visibility != ViewStates.Visible)
+                return;
+
+            overlay.Visibility = ViewStates.Gone;
+            if (_gameRoot.TryGetTarget(out var gameRoot))
+                gameRoot.GetChildAt(0)?.RequestFocus();
+        }
+
+        private void DestroyOnUiThread()
         {
             var overlay = _overlay;
             _overlay = null;

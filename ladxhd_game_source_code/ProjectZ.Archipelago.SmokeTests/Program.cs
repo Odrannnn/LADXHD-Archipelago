@@ -1,5 +1,6 @@
 using ProjectZ.InGame.Archipelago;
 using ProjectZ.InGame.Assets;
+using ProjectZ.InGame.Controls;
 using ProjectZ.InGame.GameSystems;
 using ProjectZ.InGame.Overlay;
 using ProjectZ.InGame.Telemetry;
@@ -115,6 +116,17 @@ Assert(MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(1920) == 1344 &&
        MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(1) == 1 &&
        MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(0) == 0,
        "Embedded Magpie must use a bounded right-side panel that leaves gameplay visible.");
+Assert(MagpieTrackerProtocol.ShouldCloseEmbeddedTracker(
+           trackerVisible: true, isKeyDown: true, repeatCount: 0, CButtons.B) &&
+       MagpieTrackerProtocol.ShouldCloseEmbeddedTracker(
+           trackerVisible: true, isKeyDown: true, repeatCount: 0, CButtons.Select) &&
+       !MagpieTrackerProtocol.ShouldCloseEmbeddedTracker(
+           trackerVisible: true, isKeyDown: true, repeatCount: 0, CButtons.A) &&
+       !MagpieTrackerProtocol.ShouldCloseEmbeddedTracker(
+           trackerVisible: false, isKeyDown: true, repeatCount: 0, CButtons.B) &&
+       !MagpieTrackerProtocol.ShouldCloseEmbeddedTracker(
+           trackerVisible: true, isKeyDown: false, repeatCount: 0, CButtons.B),
+       "Controller B/Select must close only a visible embedded tracker on the initial key press.");
 Assert(!new ProjectZ.UnavailableMagpieTrackerService().IsAvailable,
        "Non-Android platforms must not expose the embedded tracker pause command.");
 using (var magpieHandshake = System.Text.Json.JsonDocument.Parse(

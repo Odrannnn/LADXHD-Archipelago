@@ -165,7 +165,7 @@ namespace ProjectZ.Android
 
         protected override void OnDestroy()
         {
-            _magpieTrackerService?.Hide();
+            _magpieTrackerService?.Destroy();
             if (IsFinishing)
                 AndroidTelemetry.OnFinishing();
             AndroidTelemetry.Shutdown();
@@ -272,6 +272,16 @@ namespace ProjectZ.Android
                 Keycode.ButtonThumbr => CButtons.RS,
                 _                    => null
             };
+
+            var trackerCloseButton = mapped;
+            if (e.KeyCode == Keycode.Back || e.KeyCode == Keycode.ButtonSelect ||
+                e.KeyCode == Keycode.ButtonMode || e.KeyCode == Keycode.Menu ||
+                e.KeyCode == Keycode.Escape)
+                trackerCloseButton = CButtons.Select;
+
+            if (_magpieTrackerService?.TryHandleControllerClose(
+                    trackerCloseButton, isDown, e.RepeatCount) == true)
+                return true;
 
             if (mapped.HasValue)
             {

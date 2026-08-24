@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using ProjectZ.InGame.Controls;
 
 namespace ProjectZ.InGame.Archipelago
 {
@@ -127,6 +128,13 @@ namespace ProjectZ.InGame.Archipelago
             if (screenWidth <= 0)
                 return 0;
             return Math.Max(1, (int)((long)screenWidth * 7 / 10));
+        }
+
+        public static bool ShouldCloseEmbeddedTracker(
+            bool trackerVisible, bool isKeyDown, int repeatCount, CButtons? button)
+        {
+            return trackerVisible && isKeyDown && repeatCount == 0 &&
+                   button is CButtons.B or CButtons.Select;
         }
 
         public static string GetCheckId(ArchipelagoSeedLocation location)
