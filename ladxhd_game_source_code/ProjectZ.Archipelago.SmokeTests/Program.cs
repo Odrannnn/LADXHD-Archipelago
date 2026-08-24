@@ -235,6 +235,17 @@ Assert(ArchipelagoManager.ShouldUseGhostHouseShellPot(
        !ArchipelagoManager.ShouldUseGhostHouseShellPot(
            true, "overworld.map", 128, 96),
        "The Ghost House barrel must contain its mapped shell on bound AP saves only.");
+Assert(ArchipelagoManager.ResolveArchipelagoShopItemState(
+           true, true, false, true, false, 2) == 0 &&
+       ArchipelagoManager.ResolveArchipelagoShopItemState(
+           true, true, true, true, false, 2) == 1 &&
+       ArchipelagoManager.ResolveArchipelagoShopItemState(
+           true, true, true, true, true, 0) == 2 &&
+       ArchipelagoManager.ResolveArchipelagoShopItemState(
+           false, true, true, true, false, 2) == 2 &&
+       ArchipelagoManager.ResolveArchipelagoShopItemState(
+           true, false, false, false, false, 1) == 1,
+       "The shop display must follow AP check completion instead of owned Bow or Shovel state.");
 Assert(ArchipelagoManager.ShouldRepairToadstoolReceipt(false, false) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(false, true) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(true, false),

@@ -49,6 +49,8 @@ namespace ProjectZ.InGame.Archipelago
         private const string WitchLocationKey = "script:witchTrade:22";
         private const string ColorFairyRedLocationKey = "script:color_fairy_red:1";
         private const string ColorFairyBlueLocationKey = "script:color_fairy_blue:1";
+        private const string ShopShovelLocationKey = "shop:200";
+        private const string ShopBowLocationKey = "shop:980";
         private const string SaveMarinSongOverride = "ap_marin_song_override";
         private const string SaveMarinSongState = "ap_marin_song_state";
         private const string SaveMarinSongDialog = "ap_marin_song_dialog";
@@ -179,6 +181,36 @@ namespace ProjectZ.InGame.Archipelago
             return boundSave &&
                    string.Equals(mapName, "hauntedhouse.map", StringComparison.Ordinal) &&
                    positionX == 128 && positionY == 96;
+        }
+
+        public static int ResolveArchipelagoShopItemState(
+            bool archipelagoActive,
+            bool hasShovelLocation, bool shovelLocationComplete,
+            bool hasBowLocation, bool bowLocationComplete,
+            int vanillaState)
+        {
+            if (!archipelagoActive)
+                return vanillaState;
+            if (hasShovelLocation && !shovelLocationComplete)
+                return 0;
+            if (hasBowLocation && !bowLocationComplete)
+                return 1;
+            return hasShovelLocation || hasBowLocation ? 2 : vanillaState;
+        }
+
+        public string ResolveShopItemSpawnerValue(string key, string vanillaValue)
+        {
+            if (!string.Equals(key, "shopItem0", StringComparison.Ordinal))
+                return vanillaValue;
+
+            var vanillaState = int.TryParse(vanillaValue, out var parsedState) ? parsedState : 0;
+            var hasShovelLocation = _seed?.LocationsByGameKey.ContainsKey(ShopShovelLocationKey) == true;
+            var hasBowLocation = _seed?.LocationsByGameKey.ContainsKey(ShopBowLocationKey) == true;
+            return ResolveArchipelagoShopItemState(
+                IsActive,
+                hasShovelLocation, hasShovelLocation && IsPersistentLocationCheckComplete(ShopShovelLocationKey),
+                hasBowLocation, hasBowLocation && IsPersistentLocationCheckComplete(ShopBowLocationKey),
+                vanillaState).ToString();
         }
 
         public bool TryCycleTunicAtTelephone(string dialogName)

@@ -122,6 +122,7 @@ namespace ProjectZ.InGame.GameObjects.Things
         private void KeyChanged()
         {
             var value = Game1.GameManager.SaveManager.GetString(_strKey, "0");
+            value = Game1.GameManager.ArchipelagoManager.ResolveShopItemSpawnerValue(_strKey, value);
             var conditionMatched = value == _strValue ||
                 ArchipelagoManager.ShouldOverrideRaccoonSpawnCondition(
                     Game1.GameManager.ArchipelagoManager.IsActive,
