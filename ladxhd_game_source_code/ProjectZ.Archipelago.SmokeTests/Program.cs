@@ -270,6 +270,13 @@ Assert(ArchipelagoManager.ResolveArchipelagoShopItemState(
        ArchipelagoManager.ResolveArchipelagoShopItemState(
            true, false, false, false, false, 1) == 1,
        "The shop display must follow AP check completion instead of owned Bow or Shovel state.");
+Assert(!ArchipelagoManager.IsShopPurchaseAtCapacity(
+           randomizedLocationPending: true, ownedCount: 1, maxCount: 1) &&
+       ArchipelagoManager.IsShopPurchaseAtCapacity(
+           randomizedLocationPending: false, ownedCount: 1, maxCount: 1) &&
+       !ArchipelagoManager.IsShopPurchaseAtCapacity(
+           randomizedLocationPending: false, ownedCount: 0, maxCount: 1),
+       "A pending randomized shop check must remain purchasable when the vanilla item is already owned.");
 Assert(ArchipelagoManager.ShouldRepairToadstoolReceipt(false, false) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(false, true) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(true, false),

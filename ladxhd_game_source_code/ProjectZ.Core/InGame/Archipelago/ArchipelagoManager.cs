@@ -198,6 +198,22 @@ namespace ProjectZ.InGame.Archipelago
             return hasShovelLocation || hasBowLocation ? 2 : vanillaState;
         }
 
+        public static bool IsShopPurchaseAtCapacity(
+            bool randomizedLocationPending, int ownedCount, int maxCount)
+        {
+            // A randomized shelf is a location check, not another copy of the vanilla item.
+            // The player must be able to pay for and collect that check even when the shelf's
+            // original Shovel or Bow is already at its inventory maximum.
+            return !randomizedLocationPending && ownedCount >= maxCount;
+        }
+
+        public bool IsLocationCheckPending(string sourceLocationKey)
+        {
+            return IsActive && !string.IsNullOrEmpty(sourceLocationKey) &&
+                   _seed.LocationsByGameKey.ContainsKey(sourceLocationKey) &&
+                   !IsLocationCheckComplete(sourceLocationKey);
+        }
+
         public string ResolveShopItemSpawnerValue(string key, string vanillaValue)
         {
             if (!string.Equals(key, "shopItem0", StringComparison.Ordinal))

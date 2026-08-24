@@ -903,6 +903,8 @@ namespace ProjectZ.InGame.Overlay
             var itemCountString = Game1.GameManager.SaveManager.GetString("itemShopCount");
             var itemCount = int.Parse(itemCountString);
             var sourceLocationKey = Archipelago.ArchipelagoLocationKey.Shop(itemPrice);
+            var randomizedLocationPending =
+                Game1.GameManager.ArchipelagoManager.IsLocationCheckPending(sourceLocationKey);
 
             if (Game1.GameManager.ArchipelagoManager.IsLocationCheckComplete(sourceLocationKey))
             {
@@ -942,7 +944,8 @@ namespace ProjectZ.InGame.Overlay
                 maxCount += 30;
 
             // does the player already own the item?
-            if (ownedCount >= maxCount)
+            if (Archipelago.ArchipelagoManager.IsShopPurchaseAtCapacity(
+                    randomizedLocationPending, ownedCount, maxCount))
             {
                 Game1.GameManager.SaveManager.SetString(_key, "2");
             }
