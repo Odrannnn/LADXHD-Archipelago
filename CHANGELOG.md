@@ -1,5 +1,13 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.20**
+### Embedded Magpie Tracker and randomizer behavior fixes
+  * Added an Android pause-menu page for `magpietracker.us`, preconfigured to connect to LADXHD's local autotracking bridge, plus optional LAN autotracking for an external device.
+  * Added inventory and location-check synchronization with full state replay after either the game or tracker reconnects, without exposing the Archipelago password.
+  * Made the Color Dungeon fairy grant both randomized checks and added telephone-booth switching between the green tunic and received blue or red tunics.
+  * Restored the Ghost House barrel check independently of the vanilla ghost quest.
+  * Made the 200- and 980-rupee shop displays follow their Archipelago check completion instead of Link's owned Shovel or Bow, preventing a pending randomized Bow-slot check from becoming arrows.
+
 ## **v2.0.19**
 ### In-app Archipelago seed setup
   * Added an Archipelago setup screen inside the Android app, accessible from the file-select Settings menu, so generated `.apladxhd` seeds can be imported without the companion app.
