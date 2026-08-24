@@ -47,6 +47,8 @@ namespace ProjectZ.InGame.Archipelago
         private const string BoomerangGuyLocationKey = "script:npc_hidden_boomerang:2";
         private const string TrendyGameLocationKey = "item:trade0Collected";
         private const string WitchLocationKey = "script:witchTrade:22";
+        private const string ColorFairyRedLocationKey = "script:color_fairy_red:1";
+        private const string ColorFairyBlueLocationKey = "script:color_fairy_blue:1";
         private const string SaveMarinSongOverride = "ap_marin_song_override";
         private const string SaveMarinSongState = "ap_marin_song_state";
         private const string SaveMarinSongDialog = "ap_marin_song_dialog";
@@ -154,6 +156,40 @@ namespace ProjectZ.InGame.Archipelago
             // script consumes the Toadstool when its location is checked; an unrelated Powder
             // receipt must not consume it first.
             return !boundSave;
+        }
+
+        public static bool ShouldUseColorFairyMultiReward(
+            bool archipelagoActive, bool hasRedLocation, bool hasBlueLocation)
+        {
+            return archipelagoActive && hasRedLocation && hasBlueLocation;
+        }
+
+        public bool TryHandleColorFairyRewards()
+        {
+            var hasRedLocation = _seed?.LocationsByGameKey.ContainsKey(ColorFairyRedLocationKey) == true;
+            var hasBlueLocation = _seed?.LocationsByGameKey.ContainsKey(ColorFairyBlueLocationKey) == true;
+            if (!ShouldUseColorFairyMultiReward(IsActive, hasRedLocation, hasBlueLocation))
+                return false;
+
+            var changed = false;
+            foreach (var sourceLocationKey in new[]
+                     {
+                         ColorFairyRedLocationKey,
+                         ColorFairyBlueLocationKey
+                     })
+            {
+                if (IsLocationCheckComplete(sourceLocationKey))
+                    continue;
+
+                changed |= TryHandleLocationCheck(new GameItemCollected("pieceOfPower")
+                {
+                    SourceLocationKey = sourceLocationKey
+                });
+            }
+
+            if (changed)
+                SaveGameSaveLoad.SaveGame(_gameManager, false);
+            return true;
         }
 
         public static bool ShouldRepairToadstoolReceipt(

@@ -248,6 +248,17 @@ namespace ProjectZ.InGame.GameObjects.NPCs
 
         private void OnCollision(GameObject gameObject)
         {
+            if (!_healMode && !_shownDialog &&
+                Game1.GameManager.ArchipelagoManager.TryHandleColorFairyRewards())
+            {
+                _shownDialog = true;
+
+                // LADXR skips the vanilla red/blue choice after granting both randomized checks.
+                // Enter the existing cloak fade-out state so Link leaves the dungeon normally.
+                Game1.GameManager.SaveManager.SetString("cloak_transition", "2");
+                return;
+            }
+
             if (!string.IsNullOrEmpty(_strDialogPath))
             {
                 // Track this fairy for the achievement if visible.

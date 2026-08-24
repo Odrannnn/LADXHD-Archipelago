@@ -213,6 +213,13 @@ Assert(ArchipelagoManager.ShouldUseBoomerangGiftBehavior(true) &&
 Assert(!ArchipelagoManager.ShouldReplaceToadstoolWithPowder(true) &&
        ArchipelagoManager.ShouldReplaceToadstoolWithPowder(false),
        "An independent AP Magic Powder receipt must preserve the Toadstool for the Witch check.");
+Assert(ArchipelagoManager.ShouldUseColorFairyMultiReward(
+           archipelagoActive: true, hasRedLocation: true, hasBlueLocation: true) &&
+       !ArchipelagoManager.ShouldUseColorFairyMultiReward(
+           archipelagoActive: false, hasRedLocation: true, hasBlueLocation: true) &&
+       !ArchipelagoManager.ShouldUseColorFairyMultiReward(
+           archipelagoActive: true, hasRedLocation: true, hasBlueLocation: false),
+       "The Color Fairy must grant both mapped AP checks only on a complete bound seed.");
 Assert(ArchipelagoManager.ShouldRepairToadstoolReceipt(false, false) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(false, true) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(true, false),
