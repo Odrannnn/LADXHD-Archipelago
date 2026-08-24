@@ -1338,8 +1338,10 @@ namespace ProjectZ.InGame.Things
             if (itemCollected.Name == "trade13")
                 HasMagnifyingLens = true;
 
-            // Magic powder replaces the toadstool, taking over its exact slot.
-            if (item.Name == "powder")
+            // Vanilla Magic Powder replaces the Toadstool. In Archipelago they are independent:
+            // the Witch trade itself is responsible for consuming the Toadstool.
+            if (item.Name == "powder" && ArchipelagoManager.ShouldReplaceToadstoolWithPowder(
+                    ArchipelagoManager.IsBoundSave))
             {
                 for (var i = 0; i < Equipment.Length; i++)
                 {

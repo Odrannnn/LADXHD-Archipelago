@@ -45,6 +45,7 @@ namespace ProjectZ.InGame.Archipelago
         private const string MarinSongLocationKey = "script:maria_song_repeat:1";
         private const string BoomerangGuyLocationKey = "script:npc_hidden_boomerang:2";
         private const string TrendyGameLocationKey = "item:trade0Collected";
+        private const string WitchLocationKey = "script:witchTrade:22";
         private const string SaveMarinSongOverride = "ap_marin_song_override";
         private const string SaveMarinSongState = "ap_marin_song_state";
         private const string SaveMarinSongDialog = "ap_marin_song_dialog";
@@ -129,6 +130,20 @@ namespace ProjectZ.InGame.Archipelago
         public static bool ShouldUseBoomerangGiftBehavior(bool boundSave)
         {
             return boundSave;
+        }
+
+        public static bool ShouldReplaceToadstoolWithPowder(bool boundSave)
+        {
+            // The APWorld treats Toadstool and Magic Powder as independent items. The Witch
+            // script consumes the Toadstool when its location is checked; an unrelated Powder
+            // receipt must not consume it first.
+            return !boundSave;
+        }
+
+        public static bool ShouldRepairToadstoolReceipt(
+            bool witchCheckComplete, bool ownsToadstool)
+        {
+            return !witchCheckComplete && !ownsToadstool;
         }
 
         public static bool ShouldRepairBoomerangReceipt(
@@ -1115,6 +1130,16 @@ namespace ProjectZ.InGame.Archipelago
                 if (boomerangNeedsRepair)
                     EnsureBoomerangReceivedState();
                 return boomerangNeedsRepair;
+            }
+
+            if (string.Equals(itemName, "Toadstool", StringComparison.Ordinal))
+            {
+                var toadstoolNeedsRepair = ShouldRepairToadstoolReceipt(
+                    IsPersistentLocationCheckComplete(WitchLocationKey),
+                    HasOwnedItem("toadstool"));
+                if (toadstoolNeedsRepair)
+                    _gameManager.CollectItem(new GameItemCollected("toadstool") { Count = 1 });
+                return toadstoolNeedsRepair;
             }
 
             if (TryGetAmmoUpgradeReplay(itemName, out var upgradeEffect, out var appliedKey))

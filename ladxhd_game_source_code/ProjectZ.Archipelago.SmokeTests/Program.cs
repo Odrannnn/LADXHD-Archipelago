@@ -90,6 +90,13 @@ Assert(ArchipelagoManager.HasSaveBinding("Seed", "Link") &&
 Assert(ArchipelagoManager.ShouldUseBoomerangGiftBehavior(true) &&
        !ArchipelagoManager.ShouldUseBoomerangGiftBehavior(false),
        "Boomerang Guy must use gift behavior only for an AP-bound save.");
+Assert(!ArchipelagoManager.ShouldReplaceToadstoolWithPowder(true) &&
+       ArchipelagoManager.ShouldReplaceToadstoolWithPowder(false),
+       "An independent AP Magic Powder receipt must preserve the Toadstool for the Witch check.");
+Assert(ArchipelagoManager.ShouldRepairToadstoolReceipt(false, false) &&
+       !ArchipelagoManager.ShouldRepairToadstoolReceipt(false, true) &&
+       !ArchipelagoManager.ShouldRepairToadstoolReceipt(true, false),
+       "A replayed Toadstool must be restored only while the Witch check is still pending.");
 Assert(ArchipelagoManager.ShouldRepairBoomerangReceipt("0", "0", false) &&
        ArchipelagoManager.ShouldRepairBoomerangReceipt("1", "0", true) &&
        ArchipelagoManager.ShouldRepairBoomerangReceipt("1", "1", false) &&
