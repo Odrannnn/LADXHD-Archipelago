@@ -411,6 +411,24 @@ namespace ProjectZ.Android
             password.TransformationMethod = PasswordTransformationMethod.Instance;
             layout.AddView(password);
 
+            var magpieTracker = new CheckBox(this)
+            {
+                Text = $"Enable Magpie autotracker (port {MagpieTrackerProtocol.DefaultPort})"
+            };
+            layout.AddView(magpieTracker);
+
+            var magpieAllowLan = new CheckBox(this)
+            {
+                Text = "Allow Magpie connections from the local network"
+            };
+            magpieTracker.CheckedChange += (_, _) =>
+            {
+                magpieAllowLan.Enabled = magpieTracker.Checked;
+                if (!magpieTracker.Checked)
+                    magpieAllowLan.Checked = false;
+            };
+            layout.AddView(magpieAllowLan);
+
             var saveSlotLabel = new TextView(this)
             {
                 Text = _editingInstalledProfile
@@ -440,6 +458,10 @@ namespace ProjectZ.Android
                 password.Text = useIntentHints && _hasIntentPassword
                     ? _intentPassword
                     : selectedSettings?.Password ?? string.Empty;
+                magpieTracker.Checked = selectedSettings?.MagpieTrackerEnabled == true;
+                magpieAllowLan.Enabled = magpieTracker.Checked;
+                magpieAllowLan.Checked = magpieTracker.Checked &&
+                                          selectedSettings?.MagpieTrackerAllowLan == true;
             }
 
             saveSlot.ItemSelected += (_, args) => PopulateConnectionFields(args.Position);
@@ -452,7 +474,8 @@ namespace ProjectZ.Android
                 Text = (_hasIntentServer || _hasIntentPassword || _intentSaveSlot.HasValue
                     ? "Connection details were supplied by the sharing app. Review them before importing. "
                     : string.Empty) +
-                    "Only the selected save profile is replaced, with a backup. Create a new save there for a new seed; other save profiles are unaffected.",
+                    "Only the selected save profile is replaced, with a backup. Create a new save there for a new seed; other save profiles are unaffected. " +
+                    "Allow Magpie LAN access only on a trusted local network.",
                 TextSize = 12
             };
             note.SetPadding(0, spacing, 0, 0);
@@ -500,7 +523,9 @@ namespace ProjectZ.Android
                             Password = password.Text ?? string.Empty,
                             SeedFile = ArchipelagoConnectionSettings.DefaultSeedFileName,
                             SaveSlot = saveSlot.SelectedItemPosition,
-                            AutoConnect = true
+                            AutoConnect = true,
+                            MagpieTrackerEnabled = magpieTracker.Checked,
+                            MagpieTrackerAllowLan = magpieTracker.Checked && magpieAllowLan.Checked
                         });
                         dialog.Dismiss();
                         Toast.MakeText(

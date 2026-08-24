@@ -62,6 +62,7 @@ namespace ProjectZ.InGame.Archipelago
         private readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
         private readonly HashSet<string> _cataloguedLocationKeys = new HashSet<string>(StringComparer.Ordinal);
         private readonly HashSet<int> _replayedProgressiveIndexes = new HashSet<int>();
+        private readonly MagpieTrackerBridge _magpieTracker = new MagpieTrackerBridge();
 
         private ArchipelagoConnectionSettings _settings;
         private ArchipelagoSeedManifest _seed;
@@ -326,6 +327,7 @@ namespace ProjectZ.InGame.Archipelago
         {
             ReportTelemetrySummary();
             RestoreMarinSongState();
+            _magpieTracker.Stop();
             IsActive = false;
             _nextReceivedIndex = 0;
             ResetReplayedProgressiveCounts();
@@ -493,6 +495,9 @@ namespace ProjectZ.InGame.Archipelago
             _nextReceivedIndex = Math.Max(0, _gameManager.SaveManager.GetInt(SaveReceivedIndex, 0));
             SetStatus($"Bound: {_seed.SeedName} / {_seed.SlotName}");
             RecordRandomizerManifest();
+            _magpieTracker.Configure(
+                _settings.MagpieTrackerEnabled, _settings.MagpieTrackerAllowLan, _seed);
+            SynchronizeMagpieChecksFromSave();
             _gameManager.MapManager?.CurrentMap?.Objects?.TriggerKeyChange();
             if (_settings.AutoConnect)
                 Connect();
@@ -538,6 +543,9 @@ namespace ProjectZ.InGame.Archipelago
 
             if (IsActive && _settings?.AutoConnect == true && ShouldAttemptReconnect())
                 Connect();
+
+            if (IsActive && _settings?.MagpieTrackerEnabled == true)
+                _magpieTracker.SetItemQuantity("RUPEE_COUNT", _gameManager.GetItem("ruby")?.Count ?? 0);
 
             // Event overrides may inspect the active map, Link, and save state. During file
             // selection and save loading those managers are not guaranteed to exist yet.
@@ -587,6 +595,7 @@ namespace ProjectZ.InGame.Archipelago
             }
 
             _gameManager.SaveManager.SetString(ArchipelagoLocationKey.PersistentCheck(location.LocationId), "1");
+            _magpieTracker.RecordCheck(location);
             Interlocked.Increment(ref _telemetryChecksReported);
 
             if (string.Equals(item.SourceLocationKey, TarinGiftLocationKey, StringComparison.Ordinal))
@@ -833,7 +842,17 @@ namespace ProjectZ.InGame.Archipelago
                 {
                     var item = helper.DequeueItem();
                     if (item != null && generation == Volatile.Read(ref _connectionGeneration) && IsActive)
+                    {
+                        _magpieTracker.RecordReceivedItem(helper.Index - 1, item.ItemName);
                         _receivedItems.Enqueue(QueuedNetworkItem.From(helper.Index - 1, item));
+                    }
+                };
+                newSession.Locations.CheckedLocationsUpdated += locations =>
+                {
+                    if (generation != Volatile.Read(ref _connectionGeneration) || !IsActive)
+                        return;
+                    foreach (var locationId in locations)
+                        RecordMagpieServerCheck(seed, locationId);
                 };
 
                 var login = newSession.TryConnectAndLogin(GameName, settings.Slot, ItemsHandlingFlags.AllItems,
@@ -870,6 +889,9 @@ namespace ProjectZ.InGame.Archipelago
                 }
 
                 TelemetryManager.Client?.RecordConnectSuccess(attempt, durationMs, seed.WorldVersion);
+
+                foreach (var locationId in newSession.Locations.AllLocationsChecked)
+                    RecordMagpieServerCheck(seed, locationId);
 
                 _mainThreadActions.Enqueue(() =>
                 {
@@ -936,6 +958,29 @@ namespace ProjectZ.InGame.Archipelago
             {
                 HandleCurrentSessionFailure(session, $"Check recovery queued for reconnect: {ex.Message}");
             }
+        }
+
+        private void SynchronizeMagpieChecksFromSave()
+        {
+            if (_seed == null)
+                return;
+
+            foreach (var location in _seed.Locations)
+            {
+                var persistentlyChecked = _gameManager.SaveManager.GetString(
+                    ArchipelagoLocationKey.PersistentCheck(location.LocationId)) == "1";
+                var sourceObjectChecked = TryGetSaveKey(location.GameKey, out var saveKey) &&
+                                          _gameManager.SaveManager.GetString(saveKey) == "1";
+                if (persistentlyChecked || sourceObjectChecked)
+                    _magpieTracker.RecordCheck(location);
+            }
+        }
+
+        private void RecordMagpieServerCheck(ArchipelagoSeedManifest seed, long locationId)
+        {
+            var location = seed?.Locations?.FirstOrDefault(candidate => candidate.LocationId == locationId);
+            if (location != null)
+                _magpieTracker.RecordCheck(location);
         }
 
         private bool TryApplyReceivedItem(QueuedNetworkItem queued)
@@ -1534,6 +1579,7 @@ namespace ProjectZ.InGame.Archipelago
 
         public void OnApplicationStopping()
         {
+            _magpieTracker.Stop();
             ReportTelemetrySummary();
         }
 

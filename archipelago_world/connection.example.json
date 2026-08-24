@@ -5,5 +5,7 @@
   "password": "",
   "seed_file": "seed.apladxhd",
   "save_slot": 0,
-  "auto_connect": true
+  "auto_connect": true,
+  "magpie_tracker_enabled": false,
+  "magpie_tracker_allow_lan": false
 }

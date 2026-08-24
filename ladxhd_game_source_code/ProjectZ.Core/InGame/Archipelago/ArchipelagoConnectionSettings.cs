@@ -34,6 +34,12 @@ namespace ProjectZ.InGame.Archipelago
         [JsonPropertyName("auto_connect")]
         public bool AutoConnect { get; set; } = true;
 
+        [JsonPropertyName("magpie_tracker_enabled")]
+        public bool MagpieTrackerEnabled { get; set; }
+
+        [JsonPropertyName("magpie_tracker_allow_lan")]
+        public bool MagpieTrackerAllowLan { get; set; }
+
         public static string GetDirectory(string userDataRoot) => Path.Combine(userDataRoot, DirectoryName);
 
         public static string GetPath(string userDataRoot) => Path.Combine(GetDirectory(userDataRoot), FileName);

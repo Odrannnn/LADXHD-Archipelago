@@ -9,11 +9,35 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.WebSockets;
 using System.Reflection;
+using System.Text;
 
 static void Assert(bool condition, string message)
 {
     if (!condition)
         throw new InvalidOperationException(message);
+}
+
+static async Task SendWebSocketText(ClientWebSocket socket, string text)
+{
+    var bytes = Encoding.UTF8.GetBytes(text);
+    await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true,
+        CancellationToken.None);
+}
+
+static async Task<string> ReceiveWebSocketText(ClientWebSocket socket)
+{
+    var buffer = new byte[4096];
+    using var stream = new MemoryStream();
+    while (true)
+    {
+        var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+        Assert(result.MessageType == WebSocketMessageType.Text,
+            "Magpie bridge returned a non-text WebSocket message.");
+        stream.Write(buffer, 0, result.Count);
+        if (result.EndOfMessage)
+            return Encoding.UTF8.GetString(stream.ToArray());
+    }
 }
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
@@ -57,6 +81,88 @@ Assert(ArchipelagoLocationKey.Event("rooster:cave") == "event:rooster%3Acave",
        "Event location keys must be deterministic and escape separators.");
 Assert(ArchipelagoLocationKey.PersistentCheck(1001) == "ap_location_1001",
        "Persistent check key mapping failed.");
+Assert(MagpieTrackerProtocol.GetCheckId(new ArchipelagoSeedLocation
+       {
+           LocationId = 10000673,
+           LocationName = "Shop 200 Item (Mabe Village)"
+       }) == "0x2A1-0" &&
+       MagpieTrackerProtocol.GetCheckId(new ArchipelagoSeedLocation
+       {
+           LocationId = 10001259,
+           LocationName = "Spiked Beetle Owl (Tail Cave)"
+       }) == "0x103-Owl" &&
+       MagpieTrackerProtocol.GetCheckId(new ArchipelagoSeedLocation
+       {
+           LocationId = 10001672,
+           LocationName = "Trendy Game (Mabe Village)"
+       }) == "0x2A0-Trade",
+       "Magpie check IDs must reverse AP's numeric encoding and preserve LADXR suffixes.");
+Assert(MagpieTrackerProtocol.TryGetItemContribution("Progressive Sword", out var magpieSword) &&
+       magpieSword.Id == "SWORD" && magpieSword.Quantity == 1 && magpieSword.Maximum == 2 &&
+       MagpieTrackerProtocol.TryGetItemContribution("Small Key (Color Dungeon)", out var magpieKey) &&
+       magpieKey.Id == "KEY9" && magpieKey.Maximum == int.MaxValue &&
+       !MagpieTrackerProtocol.TryGetItemContribution("Zol Attack", out _),
+       "Magpie inventory mapping must count progressive and dungeon items without tracking traps.");
+using (var magpieHandshake = System.Text.Json.JsonDocument.Parse(
+           MagpieTrackerProtocol.CreateHandshakeAcknowledgement()))
+{
+    Assert(magpieHandshake.RootElement.GetProperty("type").GetString() == "handshAck" &&
+           magpieHandshake.RootElement.GetProperty("version").GetString() == "1.32",
+           "Magpie handshake acknowledgement must use the third-party API protocol.");
+}
+var magpieLocation = new ArchipelagoSeedLocation
+{
+    LocationId = 10000673,
+    LocationName = "Shop 200 Item (Mabe Village)",
+    ItemName = "Boomerang"
+};
+var magpieSeed = new ArchipelagoSeedManifest
+{
+    FormatVersion = ArchipelagoSeedManifest.CurrentFormatVersion,
+    Game = ArchipelagoManager.GameName,
+    SeedName = "Magpie Smoke Seed",
+    SlotName = "Link",
+    WorldVersion = "0.1.0",
+    MappingComplete = true,
+    Locations = new List<ArchipelagoSeedLocation> { magpieLocation }
+};
+magpieSeed.Validate();
+using (var magpieBridge = new MagpieTrackerBridge(0))
+{
+    magpieBridge.Configure(enabled: true, allowLan: false, seed: magpieSeed);
+    Assert(magpieBridge.BoundPort > 0, "Magpie bridge did not bind its loopback listener.");
+    using var magpieSocket = new ClientWebSocket();
+    await magpieSocket.ConnectAsync(
+        new Uri($"ws://127.0.0.1:{magpieBridge.BoundPort}/"), CancellationToken.None);
+    await SendWebSocketText(magpieSocket, "{\"type\":\"handshake\",\"features\":[\"items\",\"checks\"]}");
+    using (var acknowledgement = System.Text.Json.JsonDocument.Parse(
+               await ReceiveWebSocketText(magpieSocket)))
+        Assert(acknowledgement.RootElement.GetProperty("type").GetString() == "handshAck",
+            "Magpie bridge did not acknowledge a live WebSocket handshake.");
+    using (var slotData = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
+        Assert(slotData.RootElement.GetProperty("slot_data").GetProperty("seed_name").GetString() ==
+               "Magpie Smoke Seed", "Magpie bridge did not send sanitized seed slot data.");
+
+    await SendWebSocketText(magpieSocket, "{\"type\":\"sendFull\"}");
+    using (var fullItems = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
+        Assert(!fullItems.RootElement.GetProperty("diff").GetBoolean(),
+            "Magpie full inventory response was incorrectly marked as a diff.");
+    using (var fullChecks = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
+        Assert(!fullChecks.RootElement.GetProperty("diff").GetBoolean(),
+            "Magpie full check response was incorrectly marked as a diff.");
+
+    magpieBridge.RecordReceivedItem(0, "Boomerang");
+    using (var itemDiff = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
+        Assert(itemDiff.RootElement.GetProperty("items")[0].GetProperty("id").GetString() == "BOOMERANG" &&
+               itemDiff.RootElement.GetProperty("items")[0].GetProperty("qty").GetInt32() == 1,
+            "Magpie bridge did not stream an AP item receipt as a differential update.");
+
+    magpieBridge.RecordCheck(magpieLocation);
+    using (var checkDiff = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
+        Assert(checkDiff.RootElement.GetProperty("checks")[0].GetProperty("id").GetString() == "0x2A1-0" &&
+               checkDiff.RootElement.GetProperty("checks")[0].GetProperty("checked").GetBoolean(),
+            "Magpie bridge did not stream a completed location as a differential update.");
+}
 Assert(ArchipelagoManager.ClientVersion == new Version(0, 6, 7),
        "The client handshake must advertise Archipelago 0.6.7 compatibility.");
 Assert(ArchipelagoManager.GetReconnectDelaySeconds(0) == 0 &&
@@ -312,7 +418,9 @@ try
       "server": "seed-four.example:48281",
       "slot": "LinkFour",
       "seed_file": "four.apladxhd",
-      "save_slot": 3
+      "save_slot": 3,
+      "magpie_tracker_enabled": true,
+      "magpie_tracker_allow_lan": true
     }
     """);
 
@@ -322,6 +430,9 @@ try
         "Save 1 profile did not load independently.");
     Assert(save4.Server == "seed-four.example:48281" && save4.SaveSlot == 3,
         "Save 4 profile did not load independently.");
+    Assert(!save1.MagpieTrackerEnabled && !save1.MagpieTrackerAllowLan &&
+           save4.MagpieTrackerEnabled && save4.MagpieTrackerAllowLan,
+        "Magpie settings must remain profile-specific and default to disabled.");
     Assert(save1.ResolveProfileSeedPath(profileRoot, 0) ==
            Path.GetFullPath(Path.Combine(save1Directory, "seed.apladxhd")),
         "Save 1 relative seed path did not resolve inside its profile.");
