@@ -7,5 +7,9 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ProjectZ.Core\ProjectZ.Core.csproj" />
+    <!-- Core keeps its desktop MonoGame runtime private so Android can provide its own.
+         Smoke tests load Core types through reflection and therefore need the desktop
+         runtime in their own dependency manifest. -->
+    <PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" />
   </ItemGroup>
 </Project>
