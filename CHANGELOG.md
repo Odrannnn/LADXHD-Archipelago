@@ -1,5 +1,11 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.18**
+### Randomizer event and inventory fixes
+  * Prevented owl conversations from persisting the inventory-disabled save flag, so interrupted Yarna Desert owl events can no longer leave the inventory unavailable until the save is reloaded.
+  * Kept the Toadstool and Magic Powder independent in Archipelago. Receiving Powder no longer consumes the Toadstool before the Witch check, and compatible affected saves restore a missing Toadstool from item history while that check remains pending.
+  * Ended Marin's beach escort after its dialog finishes in Archipelago, advancing to the normal post-Walrus state because the randomizer removes the Walrus. Compatible saves where Marin is already stuck following Link are repaired automatically.
+
 ## **v2.0.17**
 ### Connection and randomized item recovery fixes
   * Reworked Archipelago socket shutdown so dropped sessions cancel their receive and send workers, dispose the old WebSocket before reconnecting, and use capped exponential backoff instead of accumulating abandoned sessions until a game restart.
