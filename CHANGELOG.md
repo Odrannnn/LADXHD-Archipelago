@@ -1,5 +1,11 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.19**
+### In-app Archipelago seed setup
+  * Added an Archipelago setup screen inside the Android app, accessible from the file-select Settings menu, so generated `.apladxhd` seeds can be imported without the companion app.
+  * Added direct entry of the server address and port, optional password, and target in-game save position while preserving seed-file verification of the player slot and location mapping.
+  * Added an installed-profile chooser for updating a seed's server, port, or password without reselecting its manifest or risking another save position.
+
 ## **v2.0.18**
 ### Randomizer event and inventory fixes
   * Prevented owl conversations from persisting the inventory-disabled save flag, so interrupted Yarna Desert owl events can no longer leave the inventory unavailable until the save is reloaded.
