@@ -171,6 +171,11 @@ namespace ProjectZ.InGame.GameObjects.NPCs
 
         private void UpdateSpriteShadow()
         {
+            // Keep the owl's inventory lock transient so an interrupted sequence cannot persist
+            // the disabled state in the save file.
+            if (ShouldDisableInventory(_aiComponent.CurrentStateId))
+                Game1.GameManager.InGameOverlay.DisableInventoryToggle = true;
+
             if (_spriteShadow == null)
                 _spriteShadow = new ObjSpriteShadow(Map, _owlPosition.Position.X-8, _owlPosition.Position.Y-14, Values.LayerPlayer, "sprshadowm");
 
@@ -181,6 +186,8 @@ namespace ProjectZ.InGame.GameObjects.NPCs
                 _spriteShadow.EntityPosition.Set(new CPosition(_owlPosition.Position.X-8, _owlPosition.Position.Y-14, 0));
             }
         }
+
+        internal static bool ShouldDisableInventory(string state) => state == "enter" || state == "talk";
 
         private void UpdateSit()
         {
@@ -263,7 +270,6 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             if (!noFreeze)
             {
                 Link.FreezeAnimations(true);
-                Link.DisableInventory(true);
             }
             // Always freeze Link.
             Link.FreezePlayer();
@@ -387,7 +393,6 @@ namespace ProjectZ.InGame.GameObjects.NPCs
 
             // Unfreeze the game as the owl disappears.
             MapManager.ObjLink.FreezeAnimations(false);
-            MapManager.ObjLink.DisableInventory(false);
 
             // Play the fade out sound effect.
             Game1.AudioManager.PlaySoundEffect("D360-38-26");
@@ -452,7 +457,6 @@ namespace ProjectZ.InGame.GameObjects.NPCs
 
             // Unfreeze the game as the owl starts leaving.
             MapManager.ObjLink.FreezeAnimations(false);
-            MapManager.ObjLink.DisableInventory(false);
         }
 
         private void UpdateLeave()

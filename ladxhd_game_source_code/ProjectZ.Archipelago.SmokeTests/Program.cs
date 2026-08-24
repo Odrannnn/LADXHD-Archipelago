@@ -8,6 +8,7 @@ using Archipelago.MultiClient.Net.Helpers;
 using System.Net;
 using System.Net.Http.Json;
 using System.Net.WebSockets;
+using System.Reflection;
 
 static void Assert(bool condition, string message)
 {
@@ -125,6 +126,15 @@ Assert(ArchipelagoManager.ShouldRepairGhostFollowerState("1", "0", false) &&
        ArchipelagoManager.ShouldRepairGhostFollowerState("0", "0", true) &&
        !ArchipelagoManager.ShouldRepairGhostFollowerState("0", "0", false),
        "Older AP saves must discard a ghost follower spawned before the randomizer fix.");
+var owlType = typeof(GameManager).Assembly.GetType("ProjectZ.InGame.GameObjects.NPCs.ObjOwl");
+var owlInventoryPolicy = owlType?.GetMethod(
+    "ShouldDisableInventory", BindingFlags.Static | BindingFlags.NonPublic);
+Assert(owlInventoryPolicy != null &&
+       (bool)owlInventoryPolicy.Invoke(null, new object[] { "enter" }) &&
+       (bool)owlInventoryPolicy.Invoke(null, new object[] { "talk" }) &&
+       !(bool)owlInventoryPolicy.Invoke(null, new object[] { "leave" }) &&
+       !(bool)owlInventoryPolicy.Invoke(null, new object[] { "wait" }),
+       "Owl encounters must use a transient inventory lock only while entering and talking.");
 Assert(ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "npc09", "bowWow") &&
        ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "npc09", "has_bowWow") &&
        ArchipelagoManager.ShouldIgnoreBowWowForDialog(true, "castle_monkey", "has_bowWow") &&
