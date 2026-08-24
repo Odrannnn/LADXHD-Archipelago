@@ -49,6 +49,11 @@ data on uninstall.
    needed, and choose Save 1 through Save 4.
 5. Tap **Import and launch**, then create a new game in that save position for a new seed.
 
+While that Archipelago save is active, open the pause menu and choose **Magpie Tracker** to use
+the web tracker inside the app. LADXHD automatically starts its local autotracker bridge and opens
+the page with Archipelago logic selected. The page itself requires an internet connection; game
+state is supplied to it locally and the room password is not shared.
+
 The setup screen also lists installed profiles. Open one to change its server port or password
 without importing the seed again. The player slot comes from the `.apladxhd`; credentials alone
 are not enough because the native client needs that player's generated location mapping. Opening

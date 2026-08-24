@@ -67,11 +67,17 @@ namespace ProjectZ.InGame.Archipelago
                 _slotData = CreateSlotData(seed);
             }
 
-            if (!enabled || seed == null)
-                return;
+            if (enabled && seed != null)
+                Start(allowLan);
+        }
 
+        public bool Start(bool allowLan)
+        {
             lock (_lifecycleLock)
             {
+                if (_listener != null)
+                    return true;
+
                 _cancellation = new CancellationTokenSource();
                 _listener = new TcpListener(allowLan ? IPAddress.Any : IPAddress.Loopback, _port);
                 try
@@ -79,6 +85,7 @@ namespace ProjectZ.InGame.Archipelago
                     _listener.Start();
                     BoundPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
                     _ = Task.Run(() => AcceptClientsAsync(_listener, _cancellation.Token));
+                    return true;
                 }
                 catch
                 {
@@ -87,6 +94,7 @@ namespace ProjectZ.InGame.Archipelago
                     BoundPort = 0;
                     _cancellation.Dispose();
                     _cancellation = null;
+                    return false;
                 }
             }
         }

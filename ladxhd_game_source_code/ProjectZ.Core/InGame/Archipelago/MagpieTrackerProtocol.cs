@@ -24,6 +24,7 @@ namespace ProjectZ.InGame.Archipelago
         public const int DefaultPort = 17026;
         public const string Version = "1.32";
         public const string ClientName = "ladxhd-archipelago";
+        public const string WebTrackerOrigin = "https://magpietracker.us";
         private const long ArchipelagoBaseId = 10000000;
 
         private static readonly string[] DungeonNames =
@@ -110,6 +111,16 @@ namespace ProjectZ.InGame.Archipelago
             };
 
         public static IReadOnlyList<string> ItemIds { get; } = BuildItemIds();
+
+        public static Uri CreateEmbeddedTrackerUri()
+        {
+            var address = Uri.EscapeDataString($"127.0.0.1:{DefaultPort}");
+            return new Uri(
+                $"{WebTrackerOrigin}/?enable_autotracking=true" +
+                $"&setting_autotrackerAddress={address}" +
+                "&setting_autotrackSettings=true" +
+                "&flag_ap_logic=true");
+        }
 
         public static string GetCheckId(ArchipelagoSeedLocation location)
         {

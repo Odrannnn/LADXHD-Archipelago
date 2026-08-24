@@ -98,12 +98,26 @@ namespace ProjectZ.InGame.Archipelago
         public bool IsBoundSave => IsActive || HasSaveBinding(
             _gameManager.SaveManager.GetString(SaveSeedName),
             _gameManager.SaveManager.GetString(SaveSlotName));
+        public bool CanShowEmbeddedTracker => IsActive && Game1.MagpieTrackerService.IsAvailable;
         public string Status => _status;
         public ArchipelagoSeedManifest Seed => _seed;
 
         public static bool HasSaveBinding(string seedName, string slotName)
         {
             return !string.IsNullOrWhiteSpace(seedName) && !string.IsNullOrWhiteSpace(slotName);
+        }
+
+        public void ShowEmbeddedTracker()
+        {
+            if (!CanShowEmbeddedTracker)
+                return;
+
+            if (!_magpieTracker.Start(_settings?.MagpieTrackerAllowLan == true))
+                SetStatus($"Magpie tracker unavailable: port {MagpieTrackerProtocol.DefaultPort} is already in use");
+
+            SynchronizeMagpieChecksFromSave();
+            _magpieTracker.SetItemQuantity("RUPEE_COUNT", _gameManager.GetItem("ruby")?.Count ?? 0);
+            Game1.MagpieTrackerService.Show();
         }
 
         public static int GetReconnectDelaySeconds(int consecutiveFailures)
@@ -544,7 +558,7 @@ namespace ProjectZ.InGame.Archipelago
             if (IsActive && _settings?.AutoConnect == true && ShouldAttemptReconnect())
                 Connect();
 
-            if (IsActive && _settings?.MagpieTrackerEnabled == true)
+            if (IsActive && _magpieTracker.BoundPort > 0)
                 _magpieTracker.SetItemQuantity("RUPEE_COUNT", _gameManager.GetItem("ruby")?.Count ?? 0);
 
             // Event overrides may inspect the active map, Link, and save state. During file

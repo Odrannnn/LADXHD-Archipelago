@@ -132,6 +132,7 @@ namespace ProjectZ.Android
             game.Services.AddService(typeof(IFileDialogService), new UnavailableFileDialogService());
             game.Services.AddService(typeof(IDiagnosticsSettingsService), new AndroidDiagnosticsSettingsService(this));
             game.Services.AddService(typeof(IArchipelagoSetupService), new AndroidArchipelagoSetupService(this));
+            game.Services.AddService(typeof(IMagpieTrackerService), new AndroidMagpieTrackerService(this));
 
             var launchSource = Intent?.GetStringExtra(ExtraLaunchSource) ?? "direct";
             AndroidTelemetry.Initialize(this, root, launchSource);

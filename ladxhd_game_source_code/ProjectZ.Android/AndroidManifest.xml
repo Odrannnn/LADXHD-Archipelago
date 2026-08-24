@@ -20,6 +20,7 @@
       android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
       android:allowBackup="false"
       android:fullBackupContent="false"
+      android:usesCleartextTraffic="true"
       android:extractNativeLibs="true">
   </application>
 

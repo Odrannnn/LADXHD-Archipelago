@@ -108,6 +108,12 @@ namespace ProjectZ
         void Show();
     }
 
+    public interface IMagpieTrackerService
+    {
+        bool IsAvailable { get; }
+        void Show();
+    }
+
     public readonly struct PlatformTouch
     {
         public PlatformTouch(int id, Vector2 position, PlatformTouchState state)
@@ -296,6 +302,12 @@ namespace ProjectZ
     }
 
     public sealed class UnavailableArchipelagoSetupService : IArchipelagoSetupService
+    {
+        public bool IsAvailable => false;
+        public void Show() { }
+    }
+
+    public sealed class UnavailableMagpieTrackerService : IMagpieTrackerService
     {
         public bool IsAvailable => false;
         public void Show() { }

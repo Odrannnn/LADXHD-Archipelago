@@ -103,6 +103,16 @@ Assert(MagpieTrackerProtocol.TryGetItemContribution("Progressive Sword", out var
        magpieKey.Id == "KEY9" && magpieKey.Maximum == int.MaxValue &&
        !MagpieTrackerProtocol.TryGetItemContribution("Zol Attack", out _),
        "Magpie inventory mapping must count progressive and dungeon items without tracking traps.");
+var embeddedTrackerUri = MagpieTrackerProtocol.CreateEmbeddedTrackerUri();
+Assert(embeddedTrackerUri.Scheme == Uri.UriSchemeHttps &&
+       embeddedTrackerUri.Host == "magpietracker.us" &&
+       embeddedTrackerUri.Query.Contains("enable_autotracking=true", StringComparison.Ordinal) &&
+       embeddedTrackerUri.Query.Contains("setting_autotrackerAddress=127.0.0.1%3A17026", StringComparison.Ordinal) &&
+       embeddedTrackerUri.Query.Contains("setting_autotrackSettings=true", StringComparison.Ordinal) &&
+       embeddedTrackerUri.Query.Contains("flag_ap_logic=true", StringComparison.Ordinal),
+       "Embedded Magpie URL must enable AP autotracking against the local bridge.");
+Assert(!new ProjectZ.UnavailableMagpieTrackerService().IsAvailable,
+       "Non-Android platforms must not expose the embedded tracker pause command.");
 using (var magpieHandshake = System.Text.Json.JsonDocument.Parse(
            MagpieTrackerProtocol.CreateHandshakeAcknowledgement()))
 {
@@ -129,7 +139,11 @@ var magpieSeed = new ArchipelagoSeedManifest
 magpieSeed.Validate();
 using (var magpieBridge = new MagpieTrackerBridge(0))
 {
-    magpieBridge.Configure(enabled: true, allowLan: false, seed: magpieSeed);
+    magpieBridge.Configure(enabled: false, allowLan: false, seed: magpieSeed);
+    Assert(magpieBridge.BoundPort == 0,
+        "A disabled Magpie profile must not start the listener before the tracker is opened.");
+    Assert(magpieBridge.Start(allowLan: false),
+        "Opening the embedded tracker must be able to start its local bridge on demand.");
     Assert(magpieBridge.BoundPort > 0, "Magpie bridge did not bind its loopback listener.");
     using var magpieSocket = new ClientWebSocket();
     await magpieSocket.ConnectAsync(

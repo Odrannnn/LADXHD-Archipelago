@@ -44,6 +44,7 @@ namespace ProjectZ
         public static IFileDialogService FileDialogService { get; private set; } = new UnavailableFileDialogService();
         public static IDiagnosticsSettingsService DiagnosticsSettingsService { get; private set; } = new UnavailableDiagnosticsSettingsService();
         public static IArchipelagoSetupService ArchipelagoSetupService { get; private set; } = new UnavailableArchipelagoSetupService();
+        public static IMagpieTrackerService MagpieTrackerService { get; private set; } = new UnavailableMagpieTrackerService();
 
         public static int WindowWidth;
         public static int WindowHeight;
@@ -207,6 +208,7 @@ namespace ProjectZ
             FileDialogService = (IFileDialogService)Services.GetService(typeof(IFileDialogService)) ?? FileDialogService;
             DiagnosticsSettingsService = (IDiagnosticsSettingsService)Services.GetService(typeof(IDiagnosticsSettingsService)) ?? DiagnosticsSettingsService;
             ArchipelagoSetupService = (IArchipelagoSetupService)Services.GetService(typeof(IArchipelagoSetupService)) ?? ArchipelagoSetupService;
+            MagpieTrackerService = (IMagpieTrackerService)Services.GetService(typeof(IMagpieTrackerService)) ?? MagpieTrackerService;
             GameManager = new GameManager();
             TextInputService.SetEnabled(false);
             Activated += (_, _) => TextInputService.OnGameActivated();

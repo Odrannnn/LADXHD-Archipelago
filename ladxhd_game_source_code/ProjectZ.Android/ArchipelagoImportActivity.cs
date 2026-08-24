@@ -413,7 +413,7 @@ namespace ProjectZ.Android
 
             var magpieTracker = new CheckBox(this)
             {
-                Text = $"Enable Magpie autotracker (port {MagpieTrackerProtocol.DefaultPort})"
+                Text = $"Keep Magpie autotracker bridge enabled (port {MagpieTrackerProtocol.DefaultPort})"
             };
             layout.AddView(magpieTracker);
 

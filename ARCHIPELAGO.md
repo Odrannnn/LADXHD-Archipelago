@@ -10,7 +10,7 @@ This branch contains the first native Archipelago integration slice for LADXHD. 
 - Per-save seed/slot binding, received-item index persistence, and immediate saves after received items.
 - Background network callbacks with all game-state mutation moved to the MonoGame update thread.
 - Automatic reconnect, replay de-duplication, offline check recovery, and goal reporting.
-- A Magpie Tracker WebSocket bridge for inventory and check autotracking.
+- An Android pause-menu Magpie Tracker page plus a WebSocket bridge for inventory and check autotracking.
 - Central AP-to-LADXHD item translation, including progressive equipment and dungeon-bounded items.
 - Randomized interception for keyed chests, persistent loose items, scripted rewards,
   shops, trade-sequence rewards, and event-backed checks.
@@ -40,10 +40,22 @@ Android already declares `android.permission.INTERNET`; the network client lives
 
 ### Magpie Tracker autotracking
 
-Enable **Magpie autotracker** while importing or editing a profile to start the third-party
-tracker API on port `17026` whenever that bound save is active. The bridge implements Magpie's
-item and check features, including full resynchronization after either side reconnects. It also
-sends the seed's non-secret slot options; the Archipelago password is never exposed.
+On Android, pause an active Archipelago save and choose **Magpie Tracker** to open the official
+tracker page inside LADXHD. The page is preconfigured for Archipelago logic and connects to the
+game's WebSocket bridge through `127.0.0.1:17026`; no address setup is required. Opening the
+page starts the bridge on demand even when the profile option below is disabled. The bridge
+implements Magpie's item and check features, including full resynchronization after either side
+reconnects. It also sends the seed's non-secret slot options; the Archipelago password is never
+exposed. Closing the page returns to the paused game.
+
+The embedded page requires internet access to load `magpietracker.us` and is third-party web
+content, so the tracker host receives normal web-request metadata. Autotracker messages remain on
+the device through `127.0.0.1`, and navigation away from the tracker host is blocked. Android
+WebView storage keeps normal Magpie settings between visits.
+
+Enable **Keep Magpie autotracker bridge enabled** while importing or editing a profile when an
+external tracker should connect before the embedded page has been opened. This keeps the same
+port `17026` listener running whenever that bound save is active.
 
 The listener accepts only connections from the same device by default. Enable **Allow Magpie
 connections from the local network** when Magpie runs on a computer and LADXHD runs on Android,
@@ -75,7 +87,7 @@ it again. No copyrighted game data is included in the published APK or repositor
 
 From the file-select screen, open **Settings → Archipelago**. Choose the generated `.apladxhd`
 file from Android's document picker, enter the Archipelago server and port, optional password,
-target save position, and optional Magpie settings, then launch. The player slot is displayed from
+target save position, and optional external Magpie settings, then launch. The player slot is displayed from
 the seed manifest and is not silently overridden, because each player's manifest contains that
 slot's placements.
 

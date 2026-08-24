@@ -11,6 +11,8 @@ namespace ProjectZ.InGame.Pages
     class GameMenuPage : InterfacePage
     {
         private readonly InterfaceButton _warpToStartButton;
+        private readonly InterfaceButton _magpieTrackerButton;
+        private readonly InterfaceListLayout _contentLayout;
         private readonly InterfaceListLayout _footerLayout;
         private readonly int _footerHeight;
 
@@ -23,9 +25,9 @@ namespace ProjectZ.InGame.Pages
                 { TextColor = InterfaceElement.MainTextColor });
 
             // Size = new Point(width, (int)(height * Values.MenuContentSize))
-            var contentLayout = new InterfaceListLayout { AutoSize = true, Selectable = true };
-            contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_back_to_game", e => ClosePage()) { Margin = new Point(0, 2) });
-            contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_save_continue", OnClickSaveContinue) { Margin = new Point(0, 2) });
+            _contentLayout = new InterfaceListLayout { AutoSize = true, Selectable = true };
+            _contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_back_to_game", e => ClosePage()) { Margin = new Point(0, 2) });
+            _contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_save_continue", OnClickSaveContinue) { Margin = new Point(0, 2) });
             _warpToStartButton = new InterfaceButton(new Point(150, 25), Point.Zero, "", OnClickWarpToStart)
             {
                 Margin = new Point(0, 2),
@@ -34,12 +36,21 @@ namespace ProjectZ.InGame.Pages
                 Selectable = false
             };
             _warpToStartButton.InsideLabel.OverrideText = "Warp to Start";
-            contentLayout.AddElement(_warpToStartButton);
-            contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_settings", OnClickSettings) { Margin = new Point(0, 2) });
-            contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_exit_to_the_menu", OnClickBackToMenu) { Margin = new Point(0, 2) });
-            contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_exit_the_game", OnClickExitGame) { Margin = new Point(0, 2) });
+            _contentLayout.AddElement(_warpToStartButton);
+            _magpieTrackerButton = new InterfaceButton(new Point(150, 25), Point.Zero, "", OnClickMagpieTracker)
+            {
+                Margin = new Point(0, 2),
+                Visible = false,
+                Hidden = true,
+                Selectable = false
+            };
+            _magpieTrackerButton.InsideLabel.OverrideText = "Magpie Tracker";
+            _contentLayout.AddElement(_magpieTrackerButton);
+            _contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_settings", OnClickSettings) { Margin = new Point(0, 2) });
+            _contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_exit_to_the_menu", OnClickBackToMenu) { Margin = new Point(0, 2) });
+            _contentLayout.AddElement(new InterfaceButton(new Point(150, 25), Point.Zero, "game_menu_exit_the_game", OnClickExitGame) { Margin = new Point(0, 2) });
 
-            mainLayout.AddElement(contentLayout);
+            mainLayout.AddElement(_contentLayout);
             _footerHeight = (int)(height * Values.MenuFooterSize);
             _footerLayout = new InterfaceListLayout { Size = new Point(width, _footerHeight) };
             mainLayout.AddElement(_footerLayout);
@@ -58,6 +69,23 @@ namespace ProjectZ.InGame.Pages
             _warpToStartButton.Visible = showWarpToStart;
             _warpToStartButton.Hidden = !showWarpToStart;
             _warpToStartButton.Selectable = showWarpToStart;
+
+            var showMagpieTracker = Game1.GameManager.ArchipelagoManager.CanShowEmbeddedTracker;
+            _magpieTrackerButton.Visible = showMagpieTracker;
+            _magpieTrackerButton.Hidden = !showMagpieTracker;
+            _magpieTrackerButton.Selectable = showMagpieTracker;
+
+            // The Android pause menu has one more AP command than the other compact menus.
+            // Tighten only this button list while the embedded tracker is available.
+            foreach (var child in _contentLayout.Elements)
+            {
+                if (child is not InterfaceButton button)
+                    continue;
+                button.Size = new Point(button.Size.X, showMagpieTracker ? 22 : 25);
+                button.Margin = new Point(button.Margin.X, showMagpieTracker ? 1 : 2);
+                button.ChangeUp = true;
+            }
+            _contentLayout.ChangeUp = true;
 
             // Six full-size menu buttons plus the normal decorative footer exceed the compact
             // Android menu height. Collapse only that empty footer while the AP command is shown.
@@ -126,6 +154,11 @@ namespace ProjectZ.InGame.Pages
             Game1.InProgress = false;
             MapManager.CameraOffset = Vector2.Zero;
             Game1.ScreenManager.ChangeScreen(Values.ScreenNameMenu);
+        }
+
+        public void OnClickMagpieTracker(InterfaceElement element)
+        {
+            Game1.GameManager.ArchipelagoManager.ShowEmbeddedTracker();
         }
 
         public void OnClickBackToMenu(InterfaceElement element)
