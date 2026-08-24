@@ -392,8 +392,95 @@ namespace ProjectZ.InGame.Archipelago
             slotData["seed_name"] = seed.SeedName;
             slotData["world_version"] = seed.WorldVersion;
             foreach (var option in seed.Options ?? new Dictionary<string, JsonElement>())
-                slotData[option.Key] = option.Value.Clone();
+                slotData[option.Key] = NormalizeSlotDataOption(option.Key, option.Value);
             return slotData;
+        }
+
+        private static object NormalizeSlotDataOption(string optionName, JsonElement option)
+        {
+            if (option.ValueKind == JsonValueKind.True)
+                return true;
+            if (option.ValueKind == JsonValueKind.False)
+                return false;
+            if (option.ValueKind != JsonValueKind.Number || !option.TryGetInt32(out var numericValue))
+                return option.Clone();
+
+            // Archipelago manifests serialize Choice values numerically. Magpie's slot_data
+            // parser expects the public AP option names and otherwise copies the number into
+            // LADXR's string settings. A numeric logic value leaves Magpie with zero logic
+            // levels and crashes its accessibility renderer at logics[0].
+            if (optionName == "tradequest" || optionName == "rooster" ||
+                optionName == "experimental_dungeon_shuffle")
+                return numericValue != 0;
+
+            string choiceName = null;
+            switch (optionName)
+            {
+                case "logic":
+                    choiceName = numericValue switch
+                    {
+                        1 => "normal",
+                        2 => "hard",
+                        3 => "glitched",
+                        4 => "hell",
+                        _ => null
+                    };
+                    break;
+                case "goal":
+                    choiceName = numericValue switch
+                    {
+                        1 => "instruments",
+                        2 => "seashells",
+                        3 => "open",
+                        _ => null
+                    };
+                    break;
+                case "experimental_entrance_shuffle":
+                    choiceName = numericValue switch
+                    {
+                        0 => "none",
+                        1 => "simple",
+                        _ => null
+                    };
+                    break;
+                case "hard_mode":
+                    choiceName = numericValue switch
+                    {
+                        0 => "none",
+                        1 => "oracle",
+                        2 => "hero",
+                        3 => "ohko",
+                        _ => null
+                    };
+                    break;
+                case "overworld":
+                    choiceName = numericValue switch
+                    {
+                        0 => "normal",
+                        1 => "open_mabe",
+                        _ => null
+                    };
+                    break;
+                case "shuffle_nightmare_keys":
+                case "shuffle_small_keys":
+                case "shuffle_maps":
+                case "shuffle_compasses":
+                case "shuffle_stone_beaks":
+                case "shuffle_instruments":
+                    choiceName = numericValue switch
+                    {
+                        0 => "original_dungeon",
+                        1 => "own_dungeons",
+                        2 => "own_world",
+                        3 => "any_world",
+                        4 => "different_world",
+                        100 when optionName == "shuffle_instruments" => "vanilla",
+                        _ => null
+                    };
+                    break;
+            }
+
+            return choiceName ?? (object)option.Clone();
         }
 
         private static async Task<bool> CompleteWebSocketHandshakeAsync(

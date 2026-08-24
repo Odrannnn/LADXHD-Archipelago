@@ -134,6 +134,16 @@ var magpieSeed = new ArchipelagoSeedManifest
     SlotName = "Link",
     WorldVersion = "0.1.0",
     MappingComplete = true,
+    Options = new Dictionary<string, System.Text.Json.JsonElement>
+    {
+        ["logic"] = System.Text.Json.JsonSerializer.SerializeToElement(1),
+        ["goal"] = System.Text.Json.JsonSerializer.SerializeToElement(1),
+        ["instrument_count"] = System.Text.Json.JsonSerializer.SerializeToElement(8),
+        ["shuffle_nightmare_keys"] = System.Text.Json.JsonSerializer.SerializeToElement(0),
+        ["shuffle_instruments"] = System.Text.Json.JsonSerializer.SerializeToElement(100),
+        ["rooster"] = System.Text.Json.JsonSerializer.SerializeToElement(1),
+        ["experimental_dungeon_shuffle"] = System.Text.Json.JsonSerializer.SerializeToElement(0)
+    },
     Locations = new List<ArchipelagoSeedLocation> { magpieLocation }
 };
 magpieSeed.Validate();
@@ -154,8 +164,18 @@ using (var magpieBridge = new MagpieTrackerBridge(0))
         Assert(acknowledgement.RootElement.GetProperty("type").GetString() == "handshAck",
             "Magpie bridge did not acknowledge a live WebSocket handshake.");
     using (var slotData = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
-        Assert(slotData.RootElement.GetProperty("slot_data").GetProperty("seed_name").GetString() ==
-               "Magpie Smoke Seed", "Magpie bridge did not send sanitized seed slot data.");
+    {
+        var options = slotData.RootElement.GetProperty("slot_data");
+        Assert(options.GetProperty("seed_name").GetString() == "Magpie Smoke Seed" &&
+               options.GetProperty("logic").GetString() == "normal" &&
+               options.GetProperty("goal").GetString() == "instruments" &&
+               options.GetProperty("instrument_count").GetInt32() == 8 &&
+               options.GetProperty("shuffle_nightmare_keys").GetString() == "original_dungeon" &&
+               options.GetProperty("shuffle_instruments").GetString() == "vanilla" &&
+               options.GetProperty("rooster").GetBoolean() &&
+               !options.GetProperty("experimental_dungeon_shuffle").GetBoolean(),
+            "Magpie bridge must translate numeric AP options into Magpie-compatible slot data.");
+    }
 
     await SendWebSocketText(magpieSocket, "{\"type\":\"sendFull\"}");
     using (var fullItems = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
