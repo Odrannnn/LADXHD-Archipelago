@@ -261,6 +261,17 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             }
         }
 
+        public void DismissArchipelagoFollower()
+        {
+            if (_currentState != States.FollowPlayer)
+                return;
+
+            _body.VelocityTarget = Vector2.Zero;
+            _followVelocity = Vector2.Zero;
+            _currentState = States.Idle;
+            base.IsActive = IsVisible = false;
+        }
+
         private void Activate()
         {
             // Get Marin's current internal state.

@@ -14,6 +14,7 @@ using Archipelago.MultiClient.Net.Enums;
 using Archipelago.MultiClient.Net.Models;
 using Microsoft.Xna.Framework;
 using ProjectZ.InGame.GameObjects.Enemies;
+using ProjectZ.InGame.GameObjects.NPCs;
 using ProjectZ.InGame.Map;
 using ProjectZ.InGame.Overlay;
 using ProjectZ.InGame.SaveLoad;
@@ -144,6 +145,13 @@ namespace ProjectZ.InGame.Archipelago
             bool witchCheckComplete, bool ownsToadstool)
         {
             return !witchCheckComplete && !ownsToadstool;
+        }
+
+        public static bool ShouldDismissMarinFollower(
+            bool boundSave, bool historyEnabled, string marinState)
+        {
+            return boundSave && !historyEnabled &&
+                   string.Equals(marinState, "3", StringComparison.Ordinal);
         }
 
         public static bool ShouldRepairBoomerangReceipt(
@@ -538,6 +546,9 @@ namespace ProjectZ.InGame.Archipelago
                 _gameManager?.SaveManager?.HistoryEnabled != false)
                 return;
 
+            if (RepairMarinFollowerState())
+                SaveGameSaveLoad.SaveGame(_gameManager, false);
+
             UpdateMarinSongAccess();
 
             var repairedReplayState = false;
@@ -630,6 +641,29 @@ namespace ProjectZ.InGame.Archipelago
                 ApplyMarinSongState();
             else
                 RestoreMarinSongState();
+        }
+
+        private bool RepairMarinFollowerState()
+        {
+            var saveManager = _gameManager.SaveManager;
+            if (!ShouldDismissMarinFollower(
+                    IsBoundSave, saveManager.HistoryEnabled,
+                    saveManager.GetString("maria_state", "0")))
+                return false;
+
+            // The APWorld moves the Walrus and does not require Marin to clear the desert.
+            // If the vanilla beach sequence was started, advance directly to the normal
+            // post-Walrus state once its dialog history closes so Marin cannot follow forever.
+            saveManager.SetString("maria_state", "4");
+            saveManager.SetString("has_marin", "0");
+            saveManager.SetString("maria_dungeon", "0");
+            _gameManager.RemoveItem("marin", 99);
+
+            foreach (var gameObject in _gameManager.MapManager.CurrentMap.Objects
+                         .GetObjectsOfType(typeof(ObjMarin)))
+                ((ObjMarin)gameObject).DismissArchipelagoFollower();
+
+            return true;
         }
 
         private void ApplyMarinSongState()

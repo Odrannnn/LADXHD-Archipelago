@@ -97,6 +97,11 @@ Assert(ArchipelagoManager.ShouldRepairToadstoolReceipt(false, false) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(false, true) &&
        !ArchipelagoManager.ShouldRepairToadstoolReceipt(true, false),
        "A replayed Toadstool must be restored only while the Witch check is still pending.");
+Assert(ArchipelagoManager.ShouldDismissMarinFollower(true, false, "3") &&
+       !ArchipelagoManager.ShouldDismissMarinFollower(false, false, "3") &&
+       !ArchipelagoManager.ShouldDismissMarinFollower(true, true, "3") &&
+       !ArchipelagoManager.ShouldDismissMarinFollower(true, false, "8"),
+       "The removed-Walrus repair must dismiss only the completed AP beach escort.");
 Assert(ArchipelagoManager.ShouldRepairBoomerangReceipt("0", "0", false) &&
        ArchipelagoManager.ShouldRepairBoomerangReceipt("1", "0", true) &&
        ArchipelagoManager.ShouldRepairBoomerangReceipt("1", "1", false) &&
