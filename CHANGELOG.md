@@ -1,5 +1,11 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.22**
+### Persistent Magpie tracking and randomized shop purchases
+  * Kept pending randomized shop checks purchasable when Link already owns the shelf's vanilla Shovel or Bow.
+  * Kept the embedded Magpie WebView loaded and connected while hidden, and added controller B/Select support for closing the tracker overlay.
+  * Added Magpie GPS updates with precise overworld and dungeon positions, coarse underworld following for houses and caves, and full position replay after tracker reconnects.
+
 ## **v2.0.21**
 ### Magpie Tracker compatibility and live overlay
   * Translated numeric Archipelago choice options into the names and booleans expected by Magpie, preventing its accessibility renderer from crashing with an empty logic list.
