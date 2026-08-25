@@ -54,6 +54,10 @@ instead of being silently discarded. The bridge also identifies itself as an Arc
 client and labels its state messages as Archipelago-originated, allowing both the embedded page
 and an external LAN tracker to select AP logic automatically.
 
+If the phone cannot resolve Magpie's primary domain, the embedded tracker automatically retries
+the same settings URL through Magpie's independent `www.magpietracker.us` endpoint. This fallback
+does not change the local bridge address or the active Archipelago connection.
+
 GPS is fine-grained on the overworld and dungeon maps; houses and caves follow the underworld tab
 without claiming an unavailable original room coordinate. The Archipelago password is never
 exposed. Use the panel's close button, Android Back, or controller B/Select to return to the

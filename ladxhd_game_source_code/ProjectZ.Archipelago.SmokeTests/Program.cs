@@ -133,6 +133,19 @@ Assert(embeddedTrackerUri.Scheme == Uri.UriSchemeHttps &&
        embeddedTrackerUri.Query.Contains("setting_gps=true", StringComparison.Ordinal) &&
        embeddedTrackerUri.Query.Contains("flag_ap_logic=true", StringComparison.Ordinal),
        "Embedded Magpie URL must enable AP and GPS autotracking against the local bridge.");
+Assert(MagpieTrackerProtocol.TryCreateEmbeddedTrackerDnsFallback(
+           embeddedTrackerUri.AbsoluteUri, out var embeddedTrackerFallback) &&
+       embeddedTrackerFallback.Scheme == Uri.UriSchemeHttps &&
+       embeddedTrackerFallback.Host == "www.magpietracker.us" &&
+       embeddedTrackerFallback.AbsolutePath == embeddedTrackerUri.AbsolutePath &&
+       embeddedTrackerFallback.Query == embeddedTrackerUri.Query &&
+       !MagpieTrackerProtocol.TryCreateEmbeddedTrackerDnsFallback(
+           embeddedTrackerFallback.AbsoluteUri, out _) &&
+       !MagpieTrackerProtocol.TryCreateEmbeddedTrackerDnsFallback(
+           "http://magpietracker.us/?enable_autotracking=true", out _) &&
+       !MagpieTrackerProtocol.TryCreateEmbeddedTrackerDnsFallback(
+           "https://example.com/?enable_autotracking=true", out _),
+       "Embedded Magpie DNS fallback must preserve settings and only replace the failed primary HTTPS host.");
 Assert(MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(1920) == 1344 &&
        MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(1) == 1 &&
        MagpieTrackerProtocol.CalculateEmbeddedOverlayWidth(0) == 0,

@@ -27,6 +27,7 @@ namespace ProjectZ.InGame.Archipelago
         public const string Version = "1.32";
         public const string ClientName = "archipelago-ladx-client";
         public const string WebTrackerOrigin = "https://magpietracker.us";
+        public const string WebTrackerFallbackOrigin = "https://www.magpietracker.us";
         private const long ArchipelagoBaseId = 10000000;
 
         private static readonly string[] DungeonNames =
@@ -152,6 +153,25 @@ namespace ProjectZ.InGame.Archipelago
                 "&setting_autotrackSettings=true" +
                 "&setting_gps=true" +
                 "&flag_ap_logic=true");
+        }
+
+        public static bool TryCreateEmbeddedTrackerDnsFallback(string failedUrl, out Uri fallbackUri)
+        {
+            fallbackUri = null;
+            if (!Uri.TryCreate(failedUrl, UriKind.Absolute, out var failedUri) ||
+                !string.Equals(failedUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(failedUri.Host, new Uri(WebTrackerOrigin).Host, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var fallbackOrigin = new Uri(WebTrackerFallbackOrigin);
+            var builder = new UriBuilder(failedUri)
+            {
+                Scheme = fallbackOrigin.Scheme,
+                Host = fallbackOrigin.Host,
+                Port = fallbackOrigin.IsDefaultPort ? -1 : fallbackOrigin.Port
+            };
+            fallbackUri = builder.Uri;
+            return true;
         }
 
         public static int CalculateEmbeddedOverlayWidth(int screenWidth)

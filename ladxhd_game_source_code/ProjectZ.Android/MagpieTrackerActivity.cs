@@ -216,11 +216,27 @@ namespace ProjectZ.Android
 
         private sealed class MagpieWebViewClient : WebViewClient
         {
+            private bool _dnsFallbackAttempted;
+
             public override bool ShouldOverrideUrlLoading(WebView view, string url) =>
                 !IsAllowedTrackerUrl(url);
 
             public override bool ShouldOverrideUrlLoading(WebView view, IWebResourceRequest request) =>
                 !IsAllowedTrackerUrl(request?.Url?.ToString());
+
+            public override void OnReceivedError(
+                WebView view, IWebResourceRequest request, WebResourceError error)
+            {
+                base.OnReceivedError(view, request, error);
+                if (_dnsFallbackAttempted || view == null || request?.IsForMainFrame != true ||
+                    error?.ErrorCode != ClientError.HostLookup ||
+                    !MagpieTrackerProtocol.TryCreateEmbeddedTrackerDnsFallback(
+                        request.Url?.ToString(), out var fallbackUri))
+                    return;
+
+                _dnsFallbackAttempted = true;
+                view.LoadUrl(fallbackUri.AbsoluteUri);
+            }
 
             private static bool IsAllowedTrackerUrl(string value)
             {
