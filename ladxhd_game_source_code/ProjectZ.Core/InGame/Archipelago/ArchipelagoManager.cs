@@ -411,6 +411,29 @@ namespace ProjectZ.InGame.Archipelago
                 : string.Equals(hasLevelTwoSword, "1", StringComparison.Ordinal);
         }
 
+        public static bool ShouldRecoverSeashellMansionPresents(
+            bool boundSave, bool unmissables, int saveFileVersion)
+        {
+            return saveFileVersion >= 1 && (boundSave || unmissables);
+        }
+
+        public static bool ShouldSpawnSeashellMansionPresent(
+            bool recoverMissedPresents, int shellCount, int collectedPresentCount)
+        {
+            return recoverMissedPresents
+                ? shellCount >= 5 && collectedPresentCount == 0 ||
+                  shellCount >= 10 && collectedPresentCount < 2
+                : shellCount == 5 || shellCount == 10;
+        }
+
+        public static bool ShouldKeepSeashellMansionActive(
+            bool mansionComplete, bool recoverMissedPresents,
+            int shellCount, int collectedPresentCount)
+        {
+            return !mansionComplete || ShouldSpawnSeashellMansionPresent(
+                recoverMissedPresents, shellCount, collectedPresentCount);
+        }
+
         public static bool ShouldSetLevelTwoSwordFlag(int swordLevel, string currentFlag)
         {
             return swordLevel >= 2 && !string.Equals(currentFlag, "1", StringComparison.Ordinal);

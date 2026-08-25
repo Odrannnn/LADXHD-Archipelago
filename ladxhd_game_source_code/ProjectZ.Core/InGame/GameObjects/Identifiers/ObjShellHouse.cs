@@ -24,6 +24,7 @@ namespace ProjectZ.InGame.GameObjects.Identifiers
         private int _PresentCount;
         private int _targetHeight;
         private int _SaveFileVersion;
+        private bool _recoverMissedPresents;
         private bool _fillBar;
 
         private float _soundCounter;
@@ -41,19 +42,6 @@ namespace ProjectZ.InGame.GameObjects.Identifiers
             EntityPosition = new CPosition(posX, posY + 16, 0);
             EntitySize = new Rectangle(0, -16, 16, 16);
 
-            // In AP the mansion's reward is randomized, so completion follows the source
-            // location rather than whether a level-two sword happened to be received elsewhere.
-            if (Archipelago.ArchipelagoManager.IsSeashellMansionComplete(
-                    Game1.GameManager.ArchipelagoManager.IsBoundSave,
-                    Game1.GameManager.SaveManager.GetString("hasSword2", "0"),
-                    Game1.GameManager.SaveManager.GetString("sword2", "0")))
-            {
-                IsDead = true;
-                return;
-            }
-            _barSprite = Resources.GetSprite("shell_bar");
-            _barAnimator = AnimatorSaveLoad.LoadAnimator("Objects/shell_mansion_bar");
-
             var shellPresentString = Game1.GameManager.SaveManager.GetString("shell_presents");
             var savedVersionString = Game1.GameManager.SaveManager.GetString("save_version");
 
@@ -62,15 +50,39 @@ namespace ProjectZ.InGame.GameObjects.Identifiers
 
             _PresentCount = PresentsAsInt;
             _SaveFileVersion = SaveFileAsInt;
+            _recoverMissedPresents = Archipelago.ArchipelagoManager.ShouldRecoverSeashellMansionPresents(
+                Game1.GameManager.ArchipelagoManager.IsBoundSave,
+                GameSettings.Unmissables,
+                _SaveFileVersion);
 
             var objShells = Game1.GameManager.GetItem("shell");
+            _shellCount = MathHelper.Min(objShells?.Count ?? 0, 20);
+
+            // In AP the mansion's randomized source location owns completion. Keep the
+            // object alive long enough to repair any earlier missed 5/10-shell presents.
+            var mansionComplete = Archipelago.ArchipelagoManager.IsSeashellMansionComplete(
+                Game1.GameManager.ArchipelagoManager.IsBoundSave,
+                Game1.GameManager.SaveManager.GetString("hasSword2", "0"),
+                Game1.GameManager.SaveManager.GetString("sword2", "0"));
+            if (!Archipelago.ArchipelagoManager.ShouldKeepSeashellMansionActive(
+                    mansionComplete,
+                    _recoverMissedPresents,
+                    _shellCount,
+                    _PresentCount))
+            {
+                IsDead = true;
+                return;
+            }
+
+            _barSprite = Resources.GetSprite("shell_bar");
+            _barAnimator = AnimatorSaveLoad.LoadAnimator("Objects/shell_mansion_bar");
+
             if (objShells != null)
             {
                 // Prevent the bar from overflowing when hitting 20 shells.
-                _shellCount = MathHelper.Min(objShells.Count, 20);
                 _targetHeight = 16;
 
-                if (GameSettings.Unmissables && _SaveFileVersion >= 1)
+                if (_recoverMissedPresents)
                 {
                     if (_PresentCount == 0)
                         _targetHeight += (int)(MathHelper.Min(_shellCount, 5) / 5f * 32);
@@ -145,17 +157,16 @@ namespace ProjectZ.InGame.GameObjects.Identifiers
 
                     _particle = true;
 
-                    if (_shellCount >= 20 && (!GameSettings.Unmissables || _SaveFileVersion < 1 || _PresentCount >= 2))
+                    if (_shellCount >= 20 && (!_recoverMissedPresents || _PresentCount >= 2))
                         _barAnimator.Play("idle");
 
                     bool PlaySound = _shellCount == 5 || 
                                      _shellCount == 10 || 
                                      _shellCount >= 20;
 
-                    if (GameSettings.Unmissables && _SaveFileVersion >= 1)
-                         PlaySound = _shellCount >= 5 && _PresentCount == 0 || 
-                                     _shellCount >= 10 && _PresentCount < 2 || 
-                                     _shellCount >= 20;
+                    if (_recoverMissedPresents)
+                         PlaySound = Archipelago.ArchipelagoManager.ShouldSpawnSeashellMansionPresent(
+                                         _recoverMissedPresents, _shellCount, _PresentCount) || _shellCount >= 20;
 
                     if (PlaySound)
                         Game1.AudioManager.PlaySoundEffect("D360-02-02");
@@ -186,12 +197,8 @@ namespace ProjectZ.InGame.GameObjects.Identifiers
                 {
                     _particle = false;
 
-                    bool SpawnShell = _shellCount == 5 || 
-                                      _shellCount == 10;
-
-                    if (GameSettings.Unmissables && _SaveFileVersion >= 1)
-                         SpawnShell = _shellCount >= 5 && _PresentCount == 0 || 
-                                      _shellCount >= 10 && _PresentCount < 2;
+                    bool SpawnShell = Archipelago.ArchipelagoManager.ShouldSpawnSeashellMansionPresent(
+                        _recoverMissedPresents, _shellCount, _PresentCount);
 
                     // If a shell is spawned then show an explosion effect.
                     if (SpawnShell)

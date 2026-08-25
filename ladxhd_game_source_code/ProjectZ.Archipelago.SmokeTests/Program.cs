@@ -511,6 +511,30 @@ Assert(ArchipelagoManager.IsSeashellMansionComplete(true, "0", "1") &&
        !ArchipelagoManager.IsSeashellMansionComplete(true, "1", "0") &&
        ArchipelagoManager.IsSeashellMansionComplete(false, "1", "0"),
        "The AP Seashell Mansion sequence must follow its checked source location.");
+var recoverApSeashellPresents = ArchipelagoManager.ShouldRecoverSeashellMansionPresents(
+    boundSave: true, unmissables: false, saveFileVersion: 6);
+Assert(recoverApSeashellPresents &&
+       ArchipelagoManager.ShouldRecoverSeashellMansionPresents(
+           boundSave: false, unmissables: true, saveFileVersion: 6) &&
+       !ArchipelagoManager.ShouldRecoverSeashellMansionPresents(
+           boundSave: false, unmissables: false, saveFileVersion: 6) &&
+       !ArchipelagoManager.ShouldRecoverSeashellMansionPresents(
+           boundSave: true, unmissables: false, saveFileVersion: 0) &&
+       ArchipelagoManager.ShouldSpawnSeashellMansionPresent(
+           recoverApSeashellPresents, shellCount: 10, collectedPresentCount: 0) &&
+       ArchipelagoManager.ShouldSpawnSeashellMansionPresent(
+           recoverApSeashellPresents, shellCount: 11, collectedPresentCount: 1) &&
+       !ArchipelagoManager.ShouldSpawnSeashellMansionPresent(
+           recoverApSeashellPresents, shellCount: 12, collectedPresentCount: 2) &&
+       !ArchipelagoManager.ShouldSpawnSeashellMansionPresent(
+           recoverMissedPresents: false, shellCount: 11, collectedPresentCount: 1) &&
+       ArchipelagoManager.ShouldKeepSeashellMansionActive(
+           mansionComplete: true, recoverMissedPresents: recoverApSeashellPresents, shellCount: 20, collectedPresentCount: 1) &&
+       !ArchipelagoManager.ShouldKeepSeashellMansionActive(
+           mansionComplete: true, recoverMissedPresents: recoverApSeashellPresents, shellCount: 20, collectedPresentCount: 2) &&
+       ArchipelagoManager.ShouldKeepSeashellMansionActive(
+           mansionComplete: false, recoverMissedPresents: recoverApSeashellPresents, shellCount: 20, collectedPresentCount: 2),
+       "AP saves must deliver both missed Seashell Mansion presents in threshold order.");
 Assert(ArchipelagoManager.ShouldSetLevelTwoSwordFlag(2, "0") &&
        !ArchipelagoManager.ShouldSetLevelTwoSwordFlag(1, "0") &&
        !ArchipelagoManager.ShouldSetLevelTwoSwordFlag(2, "1"),
