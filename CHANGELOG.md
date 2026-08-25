@@ -1,5 +1,11 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.27**
+### Pause-aware Magpie and direct start warp
+  * Kept the pause screen active beneath the embedded Magpie tracker, keeping gameplay and music paused and returning to the pause menu when the tracker closes.
+  * Changed Warp to Start to transition directly into Marin and Tarin's house without passing through the title screen or file select.
+  * Preserved the active Archipelago session, save binding, installed game assets, room profiles, and generated seeds during both operations.
+
 ## **v2.0.26**
 ### Magpie seed-settings compatibility
   * Converted Archipelago's numeric default graphics-mod option into the string value expected by Magpie, preventing its generic processing error when an otherwise valid seed loads.
