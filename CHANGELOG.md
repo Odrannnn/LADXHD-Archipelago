@@ -1,5 +1,10 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.26**
+### Magpie seed-settings compatibility
+  * Converted Archipelago's numeric default graphics-mod option into the string value expected by Magpie, preventing its generic processing error when an otherwise valid seed loads.
+  * Kept existing saves, generated assets, room profiles, and .apladxhd seeds compatible with the update.
+
 ## **v2.0.25**
 ### Recover missed Seashell Mansion presents
   * Made Archipelago saves preserve both the 5-shell and 10-shell mansion presents when Link first enters after crossing both thresholds.
