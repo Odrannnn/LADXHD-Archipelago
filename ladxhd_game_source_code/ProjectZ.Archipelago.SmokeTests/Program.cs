@@ -176,8 +176,9 @@ using (var magpieHandshake = System.Text.Json.JsonDocument.Parse(
            MagpieTrackerProtocol.CreateHandshakeAcknowledgement()))
 {
     Assert(magpieHandshake.RootElement.GetProperty("type").GetString() == "handshAck" &&
-           magpieHandshake.RootElement.GetProperty("version").GetString() == "1.32",
-           "Magpie handshake acknowledgement must use the third-party API protocol.");
+           magpieHandshake.RootElement.GetProperty("version").GetString() == "1.32" &&
+           magpieHandshake.RootElement.GetProperty("name").GetString() == "archipelago-ladx-client",
+           "Magpie handshake acknowledgement must identify the bridge as an AP client.");
 }
 var magpieLocation = new ArchipelagoSeedLocation
 {
@@ -230,7 +231,9 @@ using (var magpieBridge = new MagpieTrackerBridge(0))
     using (var slotData = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
     {
         var options = slotData.RootElement.GetProperty("slot_data");
-        Assert(options.GetProperty("seed_name").GetString() == "Magpie Smoke Seed" &&
+        Assert(slotData.RootElement.GetProperty("source").GetString() == "archipelago" &&
+               options.GetProperty("seed_name").GetString() == "Magpie Smoke Seed" &&
+               options.GetProperty("client_version").GetString() == "0.6.7" &&
                options.GetProperty("logic").GetString() == "normal" &&
                options.GetProperty("goal").GetString() == "instruments" &&
                options.GetProperty("instrument_count").GetInt32() == 8 &&
@@ -247,15 +250,18 @@ using (var magpieBridge = new MagpieTrackerBridge(0))
         var quantities = fullItems.RootElement.GetProperty("items").EnumerateArray()
             .ToDictionary(item => item.GetProperty("id").GetString(), item => item.GetProperty("qty").GetInt32());
         Assert(!fullItems.RootElement.GetProperty("diff").GetBoolean() &&
+               fullItems.RootElement.GetProperty("source").GetString() == "archipelago" &&
                quantities["SWORD"] == 1 && quantities["HOOKSHOT"] == 1 &&
                quantities["RUPEES_20"] == 1 && quantities["FUTURE_AP_ITEM"] == 1,
             "Magpie full inventory must include AP items received before the tracker starts.");
     }
     using (var fullChecks = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
-        Assert(!fullChecks.RootElement.GetProperty("diff").GetBoolean(),
+        Assert(!fullChecks.RootElement.GetProperty("diff").GetBoolean() &&
+               fullChecks.RootElement.GetProperty("source").GetString() == "archipelago",
             "Magpie full check response was incorrectly marked as a diff.");
     using (var fullLocation = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
         Assert(fullLocation.RootElement.GetProperty("type").GetString() == "location" &&
+               fullLocation.RootElement.GetProperty("source").GetString() == "archipelago" &&
                fullLocation.RootElement.GetProperty("room").GetString() == "0xA5" &&
                fullLocation.RootElement.GetProperty("drawFine").GetBoolean(),
             "Magpie sendFull did not replay the current GPS position.");

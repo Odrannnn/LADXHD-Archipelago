@@ -25,7 +25,7 @@ namespace ProjectZ.InGame.Archipelago
     {
         public const int DefaultPort = 17026;
         public const string Version = "1.32";
-        public const string ClientName = "ladxhd-archipelago";
+        public const string ClientName = "archipelago-ladx-client";
         public const string WebTrackerOrigin = "https://magpietracker.us";
         private const long ArchipelagoBaseId = 10000000;
 
@@ -258,6 +258,7 @@ namespace ProjectZ.InGame.Archipelago
             return JsonSerializer.Serialize(new
             {
                 type = "item",
+                source = "archipelago",
                 refresh = true,
                 diff,
                 items = items.Select(item => new { id = item.Key, qty = item.Value })
@@ -269,6 +270,7 @@ namespace ProjectZ.InGame.Archipelago
             return JsonSerializer.Serialize(new
             {
                 type = "check",
+                source = "archipelago",
                 refresh = true,
                 diff,
                 checks = checks.Select(check => new { id = check.Key, @checked = check.Value })
@@ -280,6 +282,7 @@ namespace ProjectZ.InGame.Archipelago
             return JsonSerializer.Serialize(new
             {
                 type = "location",
+                source = "archipelago",
                 refresh = true,
                 room = location.Room,
                 x = location.X,

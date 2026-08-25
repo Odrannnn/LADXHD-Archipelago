@@ -373,7 +373,12 @@ namespace ProjectZ.InGame.Archipelago
         private string CreateSlotDataMessage()
         {
             lock (_stateLock)
-                return JsonSerializer.Serialize(new { type = "slot_data", slot_data = _slotData });
+                return JsonSerializer.Serialize(new
+                {
+                    type = "slot_data",
+                    source = "archipelago",
+                    slot_data = _slotData
+                });
         }
 
         private void Broadcast(string feature, string payload)
@@ -431,6 +436,7 @@ namespace ProjectZ.InGame.Archipelago
 
             slotData["seed_name"] = seed.SeedName;
             slotData["world_version"] = seed.WorldVersion;
+            slotData["client_version"] = ArchipelagoManager.ClientVersion.ToString();
             foreach (var option in seed.Options ?? new Dictionary<string, JsonElement>())
                 slotData[option.Key] = NormalizeSlotDataOption(option.Key, option.Value);
             return slotData;
