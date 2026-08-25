@@ -212,6 +212,7 @@ var magpieSeed = new ArchipelagoSeedManifest
         ["logic"] = System.Text.Json.JsonSerializer.SerializeToElement(1),
         ["goal"] = System.Text.Json.JsonSerializer.SerializeToElement(1),
         ["instrument_count"] = System.Text.Json.JsonSerializer.SerializeToElement(8),
+        ["gfxmod"] = System.Text.Json.JsonSerializer.SerializeToElement(0),
         ["shuffle_nightmare_keys"] = System.Text.Json.JsonSerializer.SerializeToElement(0),
         ["shuffle_instruments"] = System.Text.Json.JsonSerializer.SerializeToElement(100),
         ["rooster"] = System.Text.Json.JsonSerializer.SerializeToElement(1),
@@ -250,6 +251,7 @@ using (var magpieBridge = new MagpieTrackerBridge(0))
                options.GetProperty("logic").GetString() == "normal" &&
                options.GetProperty("goal").GetString() == "instruments" &&
                options.GetProperty("instrument_count").GetInt32() == 8 &&
+               options.GetProperty("gfxmod").GetString() == string.Empty &&
                options.GetProperty("shuffle_nightmare_keys").GetString() == "original_dungeon" &&
                options.GetProperty("shuffle_instruments").GetString() == "vanilla" &&
                options.GetProperty("rooster").GetBoolean() &&

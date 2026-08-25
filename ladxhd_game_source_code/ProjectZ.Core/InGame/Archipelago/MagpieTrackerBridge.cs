@@ -444,6 +444,13 @@ namespace ProjectZ.InGame.Archipelago
 
         private static object NormalizeSlotDataOption(string optionName, JsonElement option)
         {
+            // Archipelago serializes the default gfxmod option as numeric zero, while Magpie
+            // unconditionally treats a present gfxmod value as a filename string.
+            if (optionName == "gfxmod")
+                return option.ValueKind == JsonValueKind.String
+                    ? option.GetString() ?? string.Empty
+                    : string.Empty;
+
             if (option.ValueKind == JsonValueKind.True)
                 return true;
             if (option.ValueKind == JsonValueKind.False)
