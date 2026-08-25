@@ -293,6 +293,18 @@ namespace ProjectZ.InGame.Archipelago
                    string.Equals(marinState, "3", StringComparison.Ordinal);
         }
 
+        public static bool ShouldTreatMarinSongAsUnlearned(
+            bool boundSave, string dialogKey, string itemName,
+            bool locationMapped, bool locationComplete)
+        {
+            // Receiving Ballad from another AP location must not complete Marin's independent
+            // teaching check. Hide only that item from her ownership branch while her mapped
+            // location is pending; every other dialog continues to see the received song.
+            return boundSave && locationMapped && !locationComplete &&
+                   string.Equals(dialogKey, "maria", StringComparison.Ordinal) &&
+                   string.Equals(itemName, "ocarina_maria", StringComparison.Ordinal);
+        }
+
         public static bool ShouldRepairBoomerangReceipt(
             string receivedMarker, string storeMarker, bool ownsBoomerang)
         {
@@ -408,6 +420,31 @@ namespace ProjectZ.InGame.Archipelago
             return !string.Equals(receivedMarker, "1", StringComparison.Ordinal) ||
                    !string.Equals(followerFlag, "1", StringComparison.Ordinal) ||
                    !itemOwned;
+        }
+
+        public static bool ShouldCompleteRoosterLocationWithoutResurrection(
+            bool archipelagoActive, bool locationMapped,
+            bool locationComplete, bool ownsRooster)
+        {
+            return archipelagoActive && locationMapped && !locationComplete && ownsRooster;
+        }
+
+        public bool ShouldTreatMarinSongAsUnlearned(string dialogKey, string itemName)
+        {
+            var locationMapped = _seed?.LocationsByGameKey.ContainsKey(MarinSongLocationKey) == true;
+            return ShouldTreatMarinSongAsUnlearned(
+                IsBoundSave, dialogKey, itemName, locationMapped,
+                locationMapped && IsPersistentLocationCheckComplete(MarinSongLocationKey));
+        }
+
+        public bool ShouldCompleteRoosterLocationWithoutResurrection()
+        {
+            var sourceLocationKey = ArchipelagoLocationKey.Event("rooster");
+            var locationMapped = _seed?.LocationsByGameKey.ContainsKey(sourceLocationKey) == true;
+            return ShouldCompleteRoosterLocationWithoutResurrection(
+                IsActive, locationMapped,
+                locationMapped && IsPersistentLocationCheckComplete(sourceLocationKey),
+                HasOwnedItem("rooster"));
         }
 
         public static bool ShouldOverrideRaccoonSpawnCondition(

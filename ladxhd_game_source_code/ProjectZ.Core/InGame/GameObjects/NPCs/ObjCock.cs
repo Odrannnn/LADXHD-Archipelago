@@ -170,8 +170,18 @@ namespace ProjectZ.InGame.GameObjects.NPCs
 
         private void OnSongPlayed(int songIndex)
         {
-            if (songIndex == 2 && _aiComponent.CurrentStateId == "skeleton")
-                _aiComponent.ChangeState("particle");
+            if (songIndex != 2 || _aiComponent.CurrentStateId != "skeleton")
+                return;
+
+            // If AP already delivered the Rooster, running the vanilla resurrection creates a
+            // second ownership sequence beside the existing follower. The grave is still an
+            // independent location, so complete its check and retire only the cave skeleton.
+            if (Game1.GameManager.ArchipelagoManager
+                    .ShouldCompleteRoosterLocationWithoutResurrection() &&
+                TryCompleteArchipelagoLocation())
+                return;
+
+            _aiComponent.ChangeState("particle");
         }
 
         private void Update()
@@ -262,22 +272,8 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             // The resurrection itself is an AP location. When it is randomized, finish the
             // world event without creating a usable local rooster; receiving the Rooster item
             // through the server will recreate the follower through the normal inventory path.
-            var sourceLocationKey = ArchipelagoLocationKey.Event("rooster");
-            Game1.GameManager.ArchipelagoManager.ResolveLocationItemName(sourceLocationKey, "rooster",
-                Map?.MapName, (int)EntityPosition.X, (int)EntityPosition.Y);
-            var locationItem = new GameItemCollected("rooster")
-            {
-                Count = 1,
-                SourceLocationKey = sourceLocationKey
-            };
-            if (Game1.GameManager.ArchipelagoManager.TryHandleLocationCheck(locationItem))
-            {
-                AchievementManager.Earn(83);
-                Game1.GameManager.SaveManager.SetString(_saveKey, "1");
-                _freezePlayer = false;
-                Map.Objects.DeleteObjects.Add(this);
+            if (TryCompleteArchipelagoLocation())
                 return;
-            }
 
             // Play the spawn animation, change the AI state, and spawn a sprite shadow.
             _animator.Play("spawn");
@@ -297,6 +293,27 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             MapManager.ObjLink.PickUpItem(itemRooster, false);
             Game1.AudioManager.PlaySoundEffect("D368-16-10");
             Game1.GameManager.SaveManager.SetString(_saveKey, "1");
+        }
+
+        private bool TryCompleteArchipelagoLocation()
+        {
+            var sourceLocationKey = ArchipelagoLocationKey.Event("rooster");
+            Game1.GameManager.ArchipelagoManager.ResolveLocationItemName(sourceLocationKey, "rooster",
+                Map?.MapName, (int)EntityPosition.X, (int)EntityPosition.Y);
+            var locationItem = new GameItemCollected("rooster")
+            {
+                Count = 1,
+                SourceLocationKey = sourceLocationKey
+            };
+            if (!Game1.GameManager.ArchipelagoManager.TryHandleLocationCheck(locationItem))
+                return false;
+
+            AchievementManager.Earn(83);
+            if (!string.IsNullOrEmpty(_saveKey))
+                Game1.GameManager.SaveManager.SetString(_saveKey, "1");
+            _freezePlayer = false;
+            Map.Objects.DeleteObjects.Add(this);
+            return true;
         }
 
         private void StartFollowing()

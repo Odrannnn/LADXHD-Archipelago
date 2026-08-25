@@ -334,6 +334,19 @@ Assert(ArchipelagoManager.ShouldDismissMarinFollower(true, false, "3") &&
        !ArchipelagoManager.ShouldDismissMarinFollower(true, true, "3") &&
        !ArchipelagoManager.ShouldDismissMarinFollower(true, false, "8"),
        "The removed-Walrus repair must dismiss only the completed AP beach escort.");
+Assert(ArchipelagoManager.ShouldTreatMarinSongAsUnlearned(
+           true, "maria", "ocarina_maria", true, false) &&
+       !ArchipelagoManager.ShouldTreatMarinSongAsUnlearned(
+           false, "maria", "ocarina_maria", true, false) &&
+       !ArchipelagoManager.ShouldTreatMarinSongAsUnlearned(
+           true, "maria", "ocarina_maria", true, true) &&
+       !ArchipelagoManager.ShouldTreatMarinSongAsUnlearned(
+           true, "maria", "ocarina_maria", false, false) &&
+       !ArchipelagoManager.ShouldTreatMarinSongAsUnlearned(
+           true, "maria_song_repeat", "ocarina_maria", true, false) &&
+       !ArchipelagoManager.ShouldTreatMarinSongAsUnlearned(
+           true, "maria", "ocarina_manbo", true, false),
+       "A received Ballad must not bypass Marin's independent pending AP teaching check.");
 Assert(ArchipelagoManager.ShouldRepairBoomerangReceipt("0", "0", false) &&
        ArchipelagoManager.ShouldRepairBoomerangReceipt("1", "0", true) &&
        ArchipelagoManager.ShouldRepairBoomerangReceipt("1", "1", false) &&
@@ -423,6 +436,17 @@ Assert(ArchipelagoManager.ShouldRepairRoosterReceipt("0", "0", false) &&
        ArchipelagoManager.ShouldRepairRoosterReceipt("1", "1", false) &&
        !ArchipelagoManager.ShouldRepairRoosterReceipt("1", "1", true),
        "Replayed AP history must restore a rooster lost by an older save.");
+Assert(ArchipelagoManager.ShouldCompleteRoosterLocationWithoutResurrection(
+           true, true, false, true) &&
+       !ArchipelagoManager.ShouldCompleteRoosterLocationWithoutResurrection(
+           false, true, false, true) &&
+       !ArchipelagoManager.ShouldCompleteRoosterLocationWithoutResurrection(
+           true, false, false, true) &&
+       !ArchipelagoManager.ShouldCompleteRoosterLocationWithoutResurrection(
+           true, true, true, true) &&
+       !ArchipelagoManager.ShouldCompleteRoosterLocationWithoutResurrection(
+           true, true, false, false),
+       "An already-owned AP rooster must complete the grave check without a duplicate revival.");
 Assert(GameManager.EquipmentSlots == 16,
        "The expanded inventory must retain every independently randomized equipment item.");
 Assert(CheatSystem.IsIndependentGiveAllItem("boomerang") &&

@@ -612,6 +612,10 @@ namespace ProjectZ.InGame.Overlay
                                  _itemName) ||
                              item != null && item.Count >= _count;
 
+            if (Game1.GameManager.ArchipelagoManager.ShouldTreatMarinSongAsUnlearned(
+                    Game1.GameManager.CurrentDialogKey, _itemName))
+                checkState = false;
+
             Game1.GameManager.SaveManager.SetString(_resultKey, checkState ? "1" : "0");
             return true;
         }
