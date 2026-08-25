@@ -5,6 +5,7 @@
   * Added a stable archipelago.gg room-page field to Android's in-app seed setup and installed-profile editor, including an optional intent extra for companion applications.
   * Automatically wakes a sleeping hosted room, reads its current server port from Archipelago's room-status API, and atomically saves a changed port to the active save profile before connecting.
   * Preserved cached-endpoint fallback, capped reconnect backoff, offline check replay, direct/self-hosted server behavior, and isolation between multiple seed profiles.
+  * Automatically retries the embedded Magpie tracker through `www.magpietracker.us` when Android cannot resolve its primary domain, preserving all autotracker settings.
 
 ## **v2.0.23**
 ### Complete Magpie integration and randomized event fixes
