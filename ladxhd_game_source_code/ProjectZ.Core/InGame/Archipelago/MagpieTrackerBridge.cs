@@ -124,6 +124,16 @@ namespace ProjectZ.InGame.Archipelago
                 Broadcast("items", MagpieTrackerProtocol.CreateItemsMessage(changes, diff: true));
         }
 
+        public void SynchronizeReceivedItems(IEnumerable<string> itemNames)
+        {
+            if (itemNames == null)
+                return;
+
+            var index = 0;
+            foreach (var itemName in itemNames)
+                RecordReceivedItem(index++, itemName);
+        }
+
         public void SetItemQuantity(string id, int quantity)
         {
             var changed = false;

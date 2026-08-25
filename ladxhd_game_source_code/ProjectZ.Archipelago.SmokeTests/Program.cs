@@ -189,6 +189,7 @@ magpieSeed.Validate();
 using (var magpieBridge = new MagpieTrackerBridge(0))
 {
     magpieBridge.Configure(enabled: false, allowLan: false, seed: magpieSeed);
+    magpieBridge.SynchronizeReceivedItems(new[] { "Progressive Sword", "Hookshot" });
     magpieBridge.SetLocation(overworldLocation);
     Assert(magpieBridge.BoundPort == 0,
         "A disabled Magpie profile must not start the listener before the tracker is opened.");
@@ -219,8 +220,13 @@ using (var magpieBridge = new MagpieTrackerBridge(0))
 
     await SendWebSocketText(magpieSocket, "{\"type\":\"sendFull\"}");
     using (var fullItems = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
-        Assert(!fullItems.RootElement.GetProperty("diff").GetBoolean(),
-            "Magpie full inventory response was incorrectly marked as a diff.");
+    {
+        var quantities = fullItems.RootElement.GetProperty("items").EnumerateArray()
+            .ToDictionary(item => item.GetProperty("id").GetString(), item => item.GetProperty("qty").GetInt32());
+        Assert(!fullItems.RootElement.GetProperty("diff").GetBoolean() &&
+               quantities["SWORD"] == 1 && quantities["HOOKSHOT"] == 1,
+            "Magpie full inventory must include AP items received before the tracker starts.");
+    }
     using (var fullChecks = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
         Assert(!fullChecks.RootElement.GetProperty("diff").GetBoolean(),
             "Magpie full check response was incorrectly marked as a diff.");
@@ -237,7 +243,7 @@ using (var magpieBridge = new MagpieTrackerBridge(0))
                locationDiff.RootElement.GetProperty("y").GetDouble() == 6,
             "Magpie bridge did not stream a changed GPS position.");
 
-    magpieBridge.RecordReceivedItem(0, "Boomerang");
+    magpieBridge.RecordReceivedItem(2, "Boomerang");
     using (var itemDiff = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
         Assert(itemDiff.RootElement.GetProperty("items")[0].GetProperty("id").GetString() == "BOOMERANG" &&
                itemDiff.RootElement.GetProperty("items")[0].GetProperty("qty").GetInt32() == 1,

@@ -119,6 +119,7 @@ namespace ProjectZ.InGame.Archipelago
             if (!_magpieTracker.Start(_settings?.MagpieTrackerAllowLan == true))
                 SetStatus($"Magpie tracker unavailable: port {MagpieTrackerProtocol.DefaultPort} is already in use");
 
+            SynchronizeMagpieReceivedItems(GetConnectedSession());
             SynchronizeMagpieChecksFromSave();
             _magpieTracker.SetItemQuantity("RUPEE_COUNT", _gameManager.GetItem("ruby")?.Count ?? 0);
             Game1.MagpieTrackerService.Show();
@@ -1084,6 +1085,7 @@ namespace ProjectZ.InGame.Archipelago
 
                 TelemetryManager.Client?.RecordConnectSuccess(attempt, durationMs, seed.WorldVersion);
 
+                SynchronizeMagpieReceivedItems(newSession);
                 foreach (var locationId in newSession.Locations.AllLocationsChecked)
                     RecordMagpieServerCheck(seed, locationId);
 
@@ -1168,6 +1170,18 @@ namespace ProjectZ.InGame.Archipelago
                 if (persistentlyChecked || sourceObjectChecked)
                     _magpieTracker.RecordCheck(location);
             }
+        }
+
+        private void SynchronizeMagpieReceivedItems(ArchipelagoSession session)
+        {
+            if (session == null)
+                return;
+
+            // ItemReceived is normally raised once per received item, but the session's complete
+            // history is authoritative. Replaying it here repairs any callback missed before the
+            // tracker bridge started and makes opening Magpie a deterministic full resync.
+            _magpieTracker.SynchronizeReceivedItems(
+                session.Items.AllItemsReceived.Select(item => item.ItemName));
         }
 
         private void RecordMagpieServerCheck(ArchipelagoSeedManifest seed, long locationId)
