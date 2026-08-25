@@ -1,5 +1,11 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.24**
+### Hosted room wake-up and automatic port recovery
+  * Added a stable archipelago.gg room-page field to Android's in-app seed setup and installed-profile editor, including an optional intent extra for companion applications.
+  * Automatically wakes a sleeping hosted room, reads its current server port from Archipelago's room-status API, and atomically saves a changed port to the active save profile before connecting.
+  * Preserved cached-endpoint fallback, capped reconnect backoff, offline check replay, direct/self-hosted server behavior, and isolation between multiple seed profiles.
+
 ## **v2.0.23**
 ### Complete Magpie integration and randomized event fixes
   * Replayed the complete Archipelago item history whenever Magpie opens or reconnects, added full item-quantity coverage including progressive, duplicate, filler, trap, health, ammunition, medicine, and dungeon items, and retained stable fallback identifiers for future items.
