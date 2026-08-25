@@ -53,6 +53,16 @@ namespace ProjectZ.InGame.Archipelago
             "Mermaid Statue (Martha's Bay)"
         };
 
+        private static readonly Dictionary<long, string> ExactCheckIds =
+            new Dictionary<long, string>
+            {
+                [10010786] = "0x2A22",
+                [10005010] = "0x1392",
+                [10004626] = "0x1212",
+                [10009186] = "0x23E2",
+                [10009042] = "0x2352"
+            };
+
         private static readonly Dictionary<string, MagpieItemContribution> DirectItems =
             new Dictionary<string, MagpieItemContribution>(StringComparer.Ordinal)
             {
@@ -162,6 +172,9 @@ namespace ProjectZ.InGame.Archipelago
         {
             if (location == null)
                 return null;
+
+            if (ExactCheckIds.TryGetValue(location.LocationId, out var exactId))
+                return exactId;
 
             var encoded = location.LocationId - ArchipelagoBaseId;
             if (encoded < 0)

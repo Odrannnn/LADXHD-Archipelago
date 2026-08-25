@@ -98,6 +98,21 @@ Assert(MagpieTrackerProtocol.GetCheckId(new ArchipelagoSeedLocation
            LocationName = "Trendy Game (Mabe Village)"
        }) == "0x2A0-Trade",
        "Magpie check IDs must reverse AP's numeric encoding and preserve LADXR suffixes.");
+var specialMagpieChecks = new Dictionary<long, string>
+{
+    [10010786] = "0x2A22",
+    [10005010] = "0x1392",
+    [10004626] = "0x1212",
+    [10009186] = "0x23E2",
+    [10009042] = "0x2352"
+};
+Assert(specialMagpieChecks.All(check =>
+        MagpieTrackerProtocol.GetCheckId(new ArchipelagoSeedLocation
+        {
+            LocationId = check.Key,
+            LocationName = "Special Magpie Check"
+        }) == check.Value),
+    "Magpie special check IDs must match its authoritative AP mapping.");
 Assert(MagpieTrackerProtocol.TryGetItemContribution("Progressive Sword", out var magpieSword) &&
        magpieSword.Id == "SWORD" && magpieSword.Quantity == 1 && magpieSword.Maximum == 2 &&
        MagpieTrackerProtocol.TryGetItemContribution("Small Key (Color Dungeon)", out var magpieKey) &&
