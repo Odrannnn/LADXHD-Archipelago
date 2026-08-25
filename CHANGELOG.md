@@ -1,5 +1,11 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.25**
+### Recover missed Seashell Mansion presents
+  * Made Archipelago saves preserve both the 5-shell and 10-shell mansion presents when Link first enters after crossing both thresholds.
+  * Repaired affected existing saves, including those that reached 11 or more shells or already completed the randomized 20-shell mansion check.
+  * Kept non-Archipelago behavior controlled by the existing Nothing is Missable setting.
+
 ## **v2.0.24**
 ### Hosted room wake-up and automatic port recovery
   * Added a stable archipelago.gg room-page field to Android's in-app seed setup and installed-profile editor, including an optional intent extra for companion applications.
