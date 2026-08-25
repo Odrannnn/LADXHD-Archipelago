@@ -18,6 +18,7 @@ dist/ap-test/
 dist/*.apk
 dist/*.idsig
 .local/
+/AGENTS.override.md
 .wrangler/
 **/node_modules/
 **/.dev.vars
