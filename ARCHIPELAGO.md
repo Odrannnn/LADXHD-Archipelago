@@ -110,13 +110,18 @@ it again. No copyrighted game data is included in the published APK or repositor
 
 From the file-select screen, open **Settings → Archipelago**. Choose the generated `.apladxhd`
 file from Android's document picker, enter the Archipelago server and port, optional password,
-target save position, and optional external Magpie settings, then launch. The player slot is displayed from
+target save position, and optional external Magpie settings, then launch. For a room hosted on
+archipelago.gg, also paste its stable `https://archipelago.gg/room/...` page URL. The player slot is displayed from
 the seed manifest and is not silently overridden, because each player's manifest contains that
 slot's placements.
 
 The same screen lists every valid installed profile. Selecting one lets the user change its
-server address/port or password and relaunch without choosing the seed again. This makes room
-port changes and normal reconnect setup independent of the companion app.
+server address/port, room page URL, or password and relaunch without choosing the seed again.
+When a room page is saved, each connection attempt first visits it to wake a sleeping room, reads
+the current port from Archipelago's room-status API, updates that save profile atomically when the
+port changed, and then connects. Normal exponential reconnect and offline check recovery continue
+while the room wakes. Direct and self-hosted endpoints continue to reconnect without web-room
+discovery.
 
 Opening the `.apladxhd` from Android's Files app or sharing it to **Import LADXHD Archipelago
 Seed** remains supported. Both entry points validate the manifest, write the selected profile
@@ -124,7 +129,8 @@ into scoped app storage, and relaunch the game. Replaced imports are kept as `.p
 Importing another position does not touch existing profiles.
 
 Re-importing the same seed into the same position updates its connection details without
-resetting that save's item-receive progress. This is also how to change a server port. Importing
+resetting that save's item-receive progress. A saved room page normally makes manual port changes
+unnecessary. Importing
 a different seed over a position requires creating a new in-game save there; otherwise the saved
 seed binding deliberately reports a mismatch instead of mixing two seeds.
 
@@ -144,6 +150,7 @@ component: com.zelda.ladxhd.archipelago/.ArchipelagoImportActivity
 type: application/x-apladxhd
 android.intent.extra.STREAM: content URI for the .apladxhd
 com.zelda.ladxhd.archipelago.extra.SERVER: host:port string
+com.zelda.ladxhd.archipelago.extra.ROOM_URL: optional https://archipelago.gg/room/... URL
 com.zelda.ladxhd.archipelago.extra.PASSWORD: optional string (an explicit empty string clears it)
 com.zelda.ladxhd.archipelago.extra.SAVE_SLOT: optional zero-based integer, 0 through 3
 ```

@@ -294,6 +294,41 @@ Assert(ArchipelagoManager.GetReconnectDelaySeconds(0) == 0 &&
        ArchipelagoManager.GetReconnectDelaySeconds(5) == 60 &&
        ArchipelagoManager.GetReconnectDelaySeconds(20) == 60,
        "Reconnect delays must back off from five seconds and remain capped at one minute.");
+
+const string testRoomId = "AAAAAAAAAAAAAAAAAAAAAA";
+var normalizedRoomUrl = ArchipelagoHostedRoomResolver.NormalizeRoomUrl(
+    $"https://archipelago.gg/room/{testRoomId}/?copied=1");
+Assert(normalizedRoomUrl == $"https://archipelago.gg/room/{testRoomId}",
+    "Hosted room URLs must normalize to the stable official room page.");
+var rejectedUntrustedRoomUrl = false;
+try
+{
+    ArchipelagoHostedRoomResolver.NormalizeRoomUrl($"https://example.com/room/{testRoomId}");
+}
+catch (InvalidDataException)
+{
+    rejectedUntrustedRoomUrl = true;
+}
+Assert(rejectedUntrustedRoomUrl,
+    "Hosted room recovery must not issue wake requests to arbitrary imported hosts.");
+Assert(ArchipelagoHostedRoomResolver.ParseLastPort("{\"last_port\": 49152}") == 49152,
+    "Hosted room status parsing did not preserve the assigned port.");
+
+var roomHandler = new RoomResolverHandler(testRoomId, 0, 49321);
+using (var roomHttpClient = new HttpClient(roomHandler))
+{
+    var roomResolver = new ArchipelagoHostedRoomResolver(
+        roomHttpClient, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromSeconds(1), 3);
+    var resolvedRoomServer = await roomResolver.ResolveServerAsync(normalizedRoomUrl);
+    Assert(resolvedRoomServer == "archipelago.gg:49321" &&
+           roomHandler.RequestedUris.SequenceEqual(new[]
+           {
+               $"https://archipelago.gg/room/{testRoomId}",
+               $"https://archipelago.gg/api/room_status/{testRoomId}",
+               $"https://archipelago.gg/api/room_status/{testRoomId}"
+           }),
+        "Hosted room recovery must wake the stable room page and poll until a port is assigned.");
+}
 Assert(ArchipelagoManager.ClassifySocketFailure(new WebSocketException()) ==
            TelemetryDisconnectReason.Network &&
        ArchipelagoManager.ClassifySocketFailure(new System.Text.Json.JsonException()) ==
@@ -605,6 +640,7 @@ try
       "slot": "LinkFour",
       "seed_file": "four.apladxhd",
       "save_slot": 3,
+      "room_url": "https://archipelago.gg/room/AAAAAAAAAAAAAAAAAAAAAA",
       "magpie_tracker_enabled": true,
       "magpie_tracker_allow_lan": true
     }
@@ -614,7 +650,8 @@ try
     var save4 = ArchipelagoConnectionSettings.LoadProfile(profileRoot, 3);
     Assert(save1.Server == "seed-one.example:38281" && save1.SaveSlot == 0,
         "Save 1 profile did not load independently.");
-    Assert(save4.Server == "seed-four.example:48281" && save4.SaveSlot == 3,
+    Assert(save4.Server == "seed-four.example:48281" && save4.SaveSlot == 3 &&
+           save4.RoomUrl == "https://archipelago.gg/room/AAAAAAAAAAAAAAAAAAAAAA",
         "Save 4 profile did not load independently.");
     Assert(!save1.MagpieTrackerEnabled && !save1.MagpieTrackerAllowLan &&
            save4.MagpieTrackerEnabled && save4.MagpieTrackerAllowLan,
@@ -625,6 +662,12 @@ try
     Assert(save4.ResolveProfileSeedPath(profileRoot, 3) ==
            Path.GetFullPath(Path.Combine(save4Directory, "four.apladxhd")),
         "Save 4 relative seed path did not resolve inside its profile.");
+    save4.Server = "archipelago.gg:49321";
+    save4.SaveCurrentProfile(profileRoot);
+    var reloadedSave4 = ArchipelagoConnectionSettings.LoadProfile(profileRoot, 3);
+    Assert(reloadedSave4.Server == "archipelago.gg:49321" &&
+           reloadedSave4.RoomUrl == save4.RoomUrl && reloadedSave4.Slot == save4.Slot,
+        "Persisting a changed hosted-room port must retain the rest of that save profile.");
 
     File.WriteAllText(Path.Combine(save1Directory, "seed.apladxhd"), "seed one");
     File.WriteAllText(Path.Combine(save4Directory, "four.apladxhd"), "seed four");
@@ -648,7 +691,7 @@ try
            installedProfiles[0].SaveSlot == 3 &&
            installedProfiles[0].SeedName == "Catalog Seed" &&
            installedProfiles[0].SlotName == "LinkFour" &&
-           installedProfiles[0].Server == "seed-four.example:48281",
+           installedProfiles[0].Server == "archipelago.gg:49321",
         "The manual setup catalog did not expose the verified installed profile.");
     Assert(ArchipelagoConnectionSettings.DeleteProfile(profileRoot, 0),
         "Deleting Save 1's Archipelago profile failed.");
@@ -783,6 +826,40 @@ sealed class CapturingHandler : HttpMessageHandler
         {
             Content = JsonContent.Create(new { accepted = 2 }),
         };
+    }
+}
+
+sealed class RoomResolverHandler : HttpMessageHandler
+{
+    private readonly string _roomId;
+    private readonly Queue<int> _ports;
+
+    public RoomResolverHandler(string roomId, params int[] ports)
+    {
+        _roomId = roomId;
+        _ports = new Queue<int>(ports);
+    }
+
+    public List<string> RequestedUris { get; } = new();
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        RequestedUris.Add(request.RequestUri.AbsoluteUri);
+        if (request.Method != HttpMethod.Get)
+            throw new InvalidOperationException("Hosted room recovery must use GET.");
+
+        if (request.RequestUri == new Uri($"https://archipelago.gg/room/{_roomId}"))
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        if (request.RequestUri != new Uri($"https://archipelago.gg/api/room_status/{_roomId}"))
+            throw new InvalidOperationException("Hosted room recovery used an unexpected endpoint.");
+        if (_ports.Count == 0)
+            throw new InvalidOperationException("Hosted room recovery polled too many times.");
+
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new { last_port = _ports.Dequeue() })
+        });
     }
 }
 

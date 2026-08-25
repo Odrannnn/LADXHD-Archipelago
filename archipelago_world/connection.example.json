@@ -1,6 +1,7 @@
 {
   "enabled": true,
   "server": "localhost:38281",
+  "room_url": null,
   "slot": "Player1",
   "password": "",
   "seed_file": "seed.apladxhd",

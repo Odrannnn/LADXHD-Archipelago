@@ -37,7 +37,9 @@ ZIP.
 2. Install the APK. On first launch, choose your untouched `Links Awakening DX HD v1.0.0.zip`.
 3. Wait for source and generated-data verification; the game opens automatically when complete.
 4. Install `ladxhd.apworld` into Archipelago 0.6.7 and generate a room. In LADXHD, open
-   **Settings → Archipelago**, choose the generated `.apladxhd`, enter the server address and port,
+   **Settings → Archipelago**, choose the generated `.apladxhd`, enter the server address and port
+   and, for archipelago.gg hosting, paste the stable room page URL so sleeping rooms and changed
+   ports recover automatically,
    optional password, and target save. Sharing/opening the seed file from another app remains
    supported but is no longer required.
 

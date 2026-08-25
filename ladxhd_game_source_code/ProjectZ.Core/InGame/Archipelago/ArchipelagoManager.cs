@@ -59,6 +59,7 @@ namespace ProjectZ.InGame.Archipelago
         private const int MarinMabePositionY = 1216;
         private const int InitialReconnectDelaySeconds = 5;
         private const int MaximumReconnectDelaySeconds = 60;
+        private static readonly ArchipelagoHostedRoomResolver HostedRoomResolver = new ArchipelagoHostedRoomResolver();
 
         private readonly GameManager _gameManager;
         private readonly object _sessionLock = new object();
@@ -1012,18 +1013,56 @@ namespace ProjectZ.InGame.Archipelago
             }
 
             TelemetryManager.Client?.RecordConnectAttempt(attempt);
-            SetStatus($"Connecting to {settings.Server}...");
-            _ = Task.Run(() => ConnectWorker(generation, attempt, settings, seed));
+            SetStatus(string.IsNullOrWhiteSpace(settings.RoomUrl)
+                ? $"Connecting to {settings.Server}..."
+                : "Waking Archipelago hosted room...");
+            _ = Task.Run(() => ConnectWorkerAsync(generation, attempt, settings, seed));
         }
 
-        private void ConnectWorker(int generation, int attempt, ArchipelagoConnectionSettings settings,
+        private async Task ConnectWorkerAsync(int generation, int attempt, ArchipelagoConnectionSettings settings,
             ArchipelagoSeedManifest seed)
         {
             ArchipelagoSession newSession = null;
             var errorCategory = TelemetryConnectionError.Network;
+            Exception roomRecoveryFailure = null;
+            string persistenceWarning = null;
             try
             {
-                newSession = ArchipelagoSessionFactory.CreateSession(settings.Server);
+                var server = settings.Server?.Trim();
+                if (!string.IsNullOrWhiteSpace(settings.RoomUrl))
+                {
+                    try
+                    {
+                        var resolvedServer = await HostedRoomResolver.ResolveServerAsync(settings.RoomUrl)
+                            .ConfigureAwait(false);
+                        if (generation != Volatile.Read(ref _connectionGeneration) || !IsActive)
+                            return;
+
+                        if (!string.Equals(server, resolvedServer, StringComparison.OrdinalIgnoreCase))
+                        {
+                            server = resolvedServer;
+                            persistenceWarning = ApplyResolvedHostedRoomServer(
+                                generation, settings, resolvedServer);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        roomRecoveryFailure = ex;
+                        if (string.IsNullOrWhiteSpace(server))
+                            throw new InvalidOperationException(
+                                $"Could not wake the hosted room: {ex.Message}", ex);
+
+                        SetStatus($"Room wake failed; trying saved endpoint {server}...");
+                    }
+                }
+
+                if (generation != Volatile.Read(ref _connectionGeneration) || !IsActive)
+                    return;
+                if (string.IsNullOrWhiteSpace(server))
+                    throw new InvalidDataException("No Archipelago server endpoint is available.");
+
+                SetStatus($"Connecting to {server}...");
+                newSession = ArchipelagoSessionFactory.CreateSession(server);
                 newSession.Socket.ErrorReceived += (exception, _) =>
                 {
                     var reason = ClassifySocketFailure(exception);
@@ -1093,7 +1132,9 @@ namespace ProjectZ.InGame.Archipelago
                 {
                     if (generation != Volatile.Read(ref _connectionGeneration) || !IsActive)
                         return;
-                    SetStatus($"Connected: {seed.SlotName}");
+                    SetStatus(string.IsNullOrWhiteSpace(persistenceWarning)
+                        ? $"Connected: {seed.SlotName}"
+                        : $"Connected: {seed.SlotName}; {persistenceWarning}");
                     ResubmitCheckedLocations();
                     if (_gameManager.SaveManager.GetString(SaveGoalPending, "0") == "1")
                         ReportGoal();
@@ -1121,8 +1162,33 @@ namespace ProjectZ.InGame.Archipelago
                     TelemetryManager.Client?.RecordConnectFailure(
                         attempt, ElapsedMilliseconds(_connectionAttemptStartedUtc), errorCategory);
                     TelemetryManager.Client?.RecordReconnectScheduled(attempt + 1, reconnectDelaySeconds);
-                    SetStatus($"Connection failed: {ex.Message}");
+                    var failureMessage = roomRecoveryFailure == null || ReferenceEquals(ex, roomRecoveryFailure)
+                        ? ex.Message
+                        : $"{ex.Message} (room recovery also failed: {roomRecoveryFailure.Message})";
+                    SetStatus($"Connection failed: {failureMessage}");
                 }
+            }
+        }
+
+        private string ApplyResolvedHostedRoomServer(int generation,
+            ArchipelagoConnectionSettings settings, string resolvedServer)
+        {
+            lock (_sessionLock)
+            {
+                if (generation != _connectionGeneration || !ReferenceEquals(settings, _settings))
+                    return null;
+                settings.Server = resolvedServer;
+            }
+
+            try
+            {
+                settings.SaveCurrentProfile(Game1.UserDataPaths.UserDataRoot);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Archipelago] Could not persist hosted-room port: {ex.Message}");
+                return "new room port could not be saved";
             }
         }
 

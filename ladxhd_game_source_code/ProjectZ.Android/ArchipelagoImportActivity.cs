@@ -62,6 +62,7 @@ namespace ProjectZ.Android
     {
         public const string ActionConfigure = "com.zelda.ladxhd.archipelago.action.CONFIGURE";
         public const string ExtraServer = "com.zelda.ladxhd.archipelago.extra.SERVER";
+        public const string ExtraRoomUrl = "com.zelda.ladxhd.archipelago.extra.ROOM_URL";
         public const string ExtraPassword = "com.zelda.ladxhd.archipelago.extra.PASSWORD";
         public const string ExtraSaveSlot = "com.zelda.ladxhd.archipelago.extra.SAVE_SLOT";
 
@@ -71,6 +72,7 @@ namespace ProjectZ.Android
 
         private const long MaximumSeedBytes = 16 * 1024 * 1024;
         private const int MaximumServerCharacters = 512;
+        private const int MaximumRoomUrlCharacters = 512;
         private const int MaximumPasswordCharacters = 1024;
         private const int OpenSeedRequest = 7302;
 
@@ -78,9 +80,11 @@ namespace ProjectZ.Android
         private ArchipelagoSeedManifest _seed;
         private string _userDataRoot;
         private string _intentServer;
+        private string _intentRoomUrl;
         private string _intentPassword;
         private int? _intentSaveSlot;
         private bool _hasIntentServer;
+        private bool _hasIntentRoomUrl;
         private bool _hasIntentPassword;
         private bool _manualSetup;
         private bool _editingInstalledProfile;
@@ -154,9 +158,11 @@ namespace ProjectZ.Android
         private void ClearConnectionHints()
         {
             _intentServer = null;
+            _intentRoomUrl = null;
             _intentPassword = null;
             _intentSaveSlot = null;
             _hasIntentServer = false;
+            _hasIntentRoomUrl = false;
             _hasIntentPassword = false;
             _editingInstalledProfile = false;
         }
@@ -187,7 +193,7 @@ namespace ProjectZ.Android
 
             layout.AddView(new TextView(this)
             {
-                Text = "Choose a generated .apladxhd file for a new randomizer, or open an installed save profile to change its server, port, or password. The player slot is verified from the seed file.",
+                Text = "Choose a generated .apladxhd file for a new randomizer, or open an installed save profile to change its server, hosted room page, port, or password. The player slot is verified from the seed file.",
                 TextSize = 14
             });
 
@@ -304,18 +310,28 @@ namespace ProjectZ.Android
         {
             _editingInstalledProfile = false;
             var serverExtra = GetPresentExtra(intent, ExtraServer, LegacyExtraServer);
+            var roomUrlExtra = intent?.HasExtra(ExtraRoomUrl) == true ? ExtraRoomUrl : null;
             var passwordExtra = GetPresentExtra(intent, ExtraPassword, LegacyExtraPassword);
             var saveSlotExtra = GetPresentExtra(intent, ExtraSaveSlot, LegacyExtraSaveSlot);
 
             _hasIntentServer = serverExtra != null;
+            _hasIntentRoomUrl = roomUrlExtra != null;
             _hasIntentPassword = passwordExtra != null;
             _intentServer = _hasIntentServer ? intent.GetStringExtra(serverExtra)?.Trim() ?? string.Empty : null;
+            _intentRoomUrl = _hasIntentRoomUrl
+                ? intent.GetStringExtra(roomUrlExtra)?.Trim() ?? string.Empty
+                : null;
             _intentPassword = _hasIntentPassword ? intent.GetStringExtra(passwordExtra) ?? string.Empty : null;
             _intentSaveSlot = null;
 
             if (_intentServer?.Length > MaximumServerCharacters ||
                 _intentServer?.IndexOfAny(new[] { '\r', '\n' }) >= 0)
                 throw new InvalidDataException("The shared server address is invalid.");
+            if (_intentRoomUrl?.Length > MaximumRoomUrlCharacters ||
+                _intentRoomUrl?.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+                throw new InvalidDataException("The shared room page URL is invalid.");
+            if (!string.IsNullOrWhiteSpace(_intentRoomUrl))
+                _intentRoomUrl = ArchipelagoHostedRoomResolver.NormalizeRoomUrl(_intentRoomUrl);
             if (_intentPassword?.Length > MaximumPasswordCharacters)
                 throw new InvalidDataException("The shared server password is unexpectedly long.");
 
@@ -402,6 +418,14 @@ namespace ProjectZ.Android
             server.SetSingleLine(true);
             layout.AddView(server);
 
+            var roomUrl = new EditText(this)
+            {
+                Hint = "archipelago.gg room page URL (recommended)",
+                InputType = InputTypes.ClassText | InputTypes.TextVariationUri
+            };
+            roomUrl.SetSingleLine(true);
+            layout.AddView(roomUrl);
+
             var password = new EditText(this)
             {
                 Hint = "Password (optional)",
@@ -455,6 +479,9 @@ namespace ProjectZ.Android
                 server.Text = useIntentHints && _hasIntentServer
                     ? _intentServer
                     : selectedSettings?.Server ?? string.Empty;
+                roomUrl.Text = useIntentHints && _hasIntentRoomUrl
+                    ? _intentRoomUrl
+                    : selectedSettings?.RoomUrl ?? string.Empty;
                 password.Text = useIntentHints && _hasIntentPassword
                     ? _intentPassword
                     : selectedSettings?.Password ?? string.Empty;
@@ -471,21 +498,25 @@ namespace ProjectZ.Android
 
             var note = new TextView(this)
             {
-                Text = (_hasIntentServer || _hasIntentPassword || _intentSaveSlot.HasValue
+                Text = (_hasIntentServer || _hasIntentRoomUrl || _hasIntentPassword || _intentSaveSlot.HasValue
                     ? "Connection details were supplied by the sharing app. Review them before importing. "
                     : string.Empty) +
                     "Only the selected save profile is replaced, with a backup. Create a new save there for a new seed; other save profiles are unaffected. " +
+                    "Saving the stable archipelago.gg room page lets the game wake a sleeping room and follow port changes automatically. " +
                     "Allow Magpie LAN access only on a trusted local network.",
                 TextSize = 12
             };
             note.SetPadding(0, spacing, 0, 0);
             layout.AddView(note);
 
+            var scrollView = new ScrollView(this);
+            scrollView.AddView(layout);
+
             var dialog = new AlertDialog.Builder(this)
                 .SetTitle(_editingInstalledProfile
                     ? "Update Archipelago connection"
                     : "Import Archipelago randomizer")
-                .SetView(layout)
+                .SetView(scrollView)
                 .SetNegativeButton("Cancel", (_, _) => Finish())
                 .SetPositiveButton(_editingInstalledProfile ? "Save and launch" : "Import and launch",
                     (EventHandler<DialogClickEventArgs>)null)
@@ -496,16 +527,35 @@ namespace ProjectZ.Android
                 dialog.GetButton((int)DialogButtonType.Positive).Click += (_, _) =>
                 {
                     var serverValue = server.Text?.Trim();
-                    if (string.IsNullOrWhiteSpace(serverValue))
+                    var roomUrlValue = roomUrl.Text?.Trim();
+                    if (string.IsNullOrWhiteSpace(serverValue) && string.IsNullOrWhiteSpace(roomUrlValue))
                     {
-                        server.Error = "Enter the Archipelago server as host:port.";
+                        server.Error = "Enter a server endpoint or an archipelago.gg room page URL.";
                         return;
                     }
-                    if (serverValue.Length > MaximumServerCharacters ||
-                        serverValue.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+                    if ((serverValue?.Length ?? 0) > MaximumServerCharacters ||
+                        serverValue?.IndexOfAny(new[] { '\r', '\n' }) >= 0)
                     {
                         server.Error = "Enter a valid server address and port.";
                         return;
+                    }
+                    if ((roomUrlValue?.Length ?? 0) > MaximumRoomUrlCharacters ||
+                        roomUrlValue?.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+                    {
+                        roomUrl.Error = "Enter a valid room page URL.";
+                        return;
+                    }
+                    if (!string.IsNullOrWhiteSpace(roomUrlValue))
+                    {
+                        try
+                        {
+                            roomUrlValue = ArchipelagoHostedRoomResolver.NormalizeRoomUrl(roomUrlValue);
+                        }
+                        catch (Exception ex)
+                        {
+                            roomUrl.Error = ex.Message;
+                            return;
+                        }
                     }
                     if ((password.Text?.Length ?? 0) > MaximumPasswordCharacters)
                     {
@@ -518,7 +568,8 @@ namespace ProjectZ.Android
                         InstallSeed(new ArchipelagoConnectionSettings
                         {
                             Enabled = true,
-                            Server = serverValue,
+                            Server = serverValue ?? string.Empty,
+                            RoomUrl = string.IsNullOrWhiteSpace(roomUrlValue) ? null : roomUrlValue,
                             Slot = _seed.SlotName,
                             Password = password.Text ?? string.Empty,
                             SeedFile = ArchipelagoConnectionSettings.DefaultSeedFileName,

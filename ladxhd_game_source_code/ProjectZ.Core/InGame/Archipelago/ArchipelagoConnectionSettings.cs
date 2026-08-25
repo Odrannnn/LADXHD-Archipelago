@@ -19,6 +19,10 @@ namespace ProjectZ.InGame.Archipelago
         [JsonPropertyName("server")]
         public string Server { get; set; } = "localhost:38281";
 
+        [JsonPropertyName("room_url")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string RoomUrl { get; set; }
+
         [JsonPropertyName("slot")]
         public string Slot { get; set; }
 
@@ -69,6 +73,14 @@ namespace ProjectZ.InGame.Archipelago
             return LoadPath(GetProfilePath(userDataRoot, saveSlot));
         }
 
+        public void SaveCurrentProfile(string userDataRoot)
+        {
+            var path = SaveSlot.HasValue
+                ? GetProfilePath(userDataRoot, SaveSlot.Value)
+                : GetPath(userDataRoot);
+            SavePath(path);
+        }
+
         public static bool DeleteProfile(string userDataRoot, int saveSlot)
         {
             try
@@ -105,14 +117,44 @@ namespace ProjectZ.InGame.Archipelago
 
             if (settings == null)
                 throw new InvalidDataException($"'{path}' is empty.");
-            if (settings.Enabled && string.IsNullOrWhiteSpace(settings.Server))
-                throw new InvalidDataException("Archipelago server is required when the integration is enabled.");
+            if (settings.Enabled && string.IsNullOrWhiteSpace(settings.Server) &&
+                string.IsNullOrWhiteSpace(settings.RoomUrl))
+                throw new InvalidDataException(
+                    "An Archipelago server or hosted room page URL is required when the integration is enabled.");
+            if (!string.IsNullOrWhiteSpace(settings.RoomUrl))
+                settings.RoomUrl = ArchipelagoHostedRoomResolver.NormalizeRoomUrl(settings.RoomUrl);
             if (settings.Enabled && string.IsNullOrWhiteSpace(settings.Slot))
                 throw new InvalidDataException("Archipelago slot is required when the integration is enabled.");
             if (settings.SaveSlot is < 0 or >= ProfileCount)
                 throw new InvalidDataException($"Archipelago save_slot must be between 0 and {ProfileCount - 1}.");
 
             return settings;
+        }
+
+        private void SavePath(string path)
+        {
+            if (Enabled && string.IsNullOrWhiteSpace(Server) && string.IsNullOrWhiteSpace(RoomUrl))
+                throw new InvalidDataException("An Archipelago server or hosted room page URL is required.");
+            if (!string.IsNullOrWhiteSpace(RoomUrl))
+                RoomUrl = ArchipelagoHostedRoomResolver.NormalizeRoomUrl(RoomUrl);
+
+            var directory = Path.GetDirectoryName(path) ??
+                            throw new InvalidDataException("The Archipelago profile path has no directory.");
+            Directory.CreateDirectory(directory);
+            var temporaryPath = Path.Combine(directory, $"connection.update-{Guid.NewGuid():N}.json");
+            try
+            {
+                File.WriteAllText(temporaryPath, JsonSerializer.Serialize(this, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                }));
+                File.Move(temporaryPath, path, true);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+            }
         }
 
         public string ResolveSeedPath(string userDataRoot)
