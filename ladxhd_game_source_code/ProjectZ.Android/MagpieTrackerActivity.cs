@@ -156,7 +156,7 @@ namespace ProjectZ.Android
 
             var title = new TextView(context)
             {
-                Text = "Magpie Tracker — game continues",
+                Text = "Magpie Tracker — game paused",
                 TextSize = 16,
                 Gravity = GravityFlags.Center
             };

@@ -42,10 +42,11 @@ Android already declares `android.permission.INTERNET`; the network client lives
 ### Magpie Tracker autotracking
 
 On Android, pause an active Archipelago save and choose **Magpie Tracker** to open the official
-tracker page in a right-side overlay inside LADXHD. The pause menu closes and gameplay continues
-behind the panel. The page is preconfigured for Archipelago logic and connects to the game's
-WebSocket bridge through `127.0.0.1:17026`; no address setup is required. Opening the panel starts
-the bridge on demand even when the profile option below is disabled. The bridge implements
+tracker page in a right-side overlay inside LADXHD. The pause menu stays open underneath it, keeping
+gameplay and music paused; closing the panel returns to that pause menu. The page is preconfigured
+for Archipelago logic and connects to the game's WebSocket bridge through `127.0.0.1:17026`;
+no address setup is required. Opening the panel starts the bridge on demand even when the profile
+option below is disabled. The bridge implements
 Magpie's item, check, slot-setting, and GPS features, including full resynchronization after either
 side reconnects. Opening the tracker or reconnecting to Archipelago replays the server's complete
 received-item history, so items obtained before Magpie started are not lost. Standard LADX AP

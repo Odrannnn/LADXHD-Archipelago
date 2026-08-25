@@ -50,10 +50,10 @@ data on uninstall.
 5. Tap **Import and launch**, then create a new game in that save position for a new seed.
 
 While that Archipelago save is active, open the pause menu and choose **Magpie Tracker** to use
-the web tracker in a right-side overlay. LADXHD closes the pause menu so gameplay continues behind
-the tracker, automatically starts its local autotracker bridge, and opens the page with Archipelago
-logic selected. The page itself requires an internet connection; game state is supplied to it
-locally and the room password is not shared.
+the web tracker in a right-side overlay. LADXHD keeps the pause screen open underneath the tracker,
+automatically starts its local autotracker bridge, and opens the page with Archipelago logic
+selected. Closing the panel returns to the pause screen. The page itself requires an internet
+connection; game state is supplied to it locally and the room password is not shared.
 
 The setup screen also lists installed profiles. Open one to change its server port or password
 without importing the seed again. The player slot comes from the `.apladxhd`; credentials alone

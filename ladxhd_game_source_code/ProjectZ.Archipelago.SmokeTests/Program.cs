@@ -185,6 +185,14 @@ Assert(MagpieTrackerProtocol.ShouldCloseEmbeddedTracker(
        "Controller B/Select must close only a visible embedded tracker on the initial key press.");
 Assert(!new ProjectZ.UnavailableMagpieTrackerService().IsAvailable,
        "Non-Android platforms must not expose the embedded tracker pause command.");
+var warpTarget = ArchipelagoGameMenuPolicy.WarpToStartTarget;
+Assert(warpTarget.MapName == "house1.map" &&
+       warpTarget.Position == new Microsoft.Xna.Framework.Vector2(70, 70) &&
+       warpTarget.Direction == 3,
+       "Warp to Start must target the initial house save point directly.");
+Assert(ArchipelagoGameMenuPolicy.KeepPauseOpenForEmbeddedTracker,
+       "Opening embedded Magpie must keep the game pause page active.");
+
 using (var magpieHandshake = System.Text.Json.JsonDocument.Parse(
            MagpieTrackerProtocol.CreateHandshakeAcknowledgement()))
 {

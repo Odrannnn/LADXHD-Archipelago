@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using Microsoft.Xna.Framework;
+using ProjectZ.InGame.Archipelago;
+using ProjectZ.InGame.GameSystems;
 using ProjectZ.InGame.Controls;
 using ProjectZ.InGame.Interface;
 using ProjectZ.InGame.Map;
@@ -137,9 +139,10 @@ namespace ProjectZ.InGame.Pages
             // randomizer may otherwise strand a player whose available progression cannot
             // return them to the normal overworld route.
             var link = MapManager.ObjLink;
-            link.SaveMap = "house1.map";
-            link.SavePosition = new Vector2(70, 70);
-            link.SaveDirection = 3;
+            var target = ArchipelagoGameMenuPolicy.WarpToStartTarget;
+            link.SaveMap = target.MapName;
+            link.SavePosition = target.Position;
+            link.SaveDirection = target.Direction;
 
             if (Game1.GameManager.SaveManager.HistoryEnabled)
             {
@@ -151,16 +154,29 @@ namespace ProjectZ.InGame.Pages
             SaveGameSaveLoad.SaveGame(Game1.GameManager, false);
             AchievementManager.Save();
 
-            Game1.InProgress = false;
+            // Keep the loaded save and Archipelago session active. Starting the normal
+            // first-load transition here moves Link straight to the house without routing
+            // through the title screen and file select.
+            link.DirectionEntry = target.Direction;
+            link.TransitionOutWalking = false;
+            link.TransitionInWalking = false;
+            link.BlackScreenOverride = true;
+            link.SetNextMapPosition(target.Position);
             MapManager.CameraOffset = Vector2.Zero;
-            Game1.ScreenManager.ChangeScreen(Values.ScreenNameMenu);
+            ClosePage();
+
+            var transitionSystem =
+                (MapTransitionSystem)Game1.GameManager.GameSystems[typeof(MapTransitionSystem)];
+            transitionSystem.LoadMapFromFile(
+                target.MapName, true, true, Values.MapFirstTransitionColor, false);
         }
 
         public void OnClickMagpieTracker(InterfaceElement element)
         {
-            // Remove the pause menu before adding Android's in-activity tracker panel so the
-            // game loop and music continue behind it.
-            ClosePage();
+            // Keep the pause page mounted underneath Magpie so closing it returns here.
+            // This also keeps gameplay and music paused while the tracker is visible.
+            if (!ArchipelagoGameMenuPolicy.KeepPauseOpenForEmbeddedTracker)
+                ClosePage();
             Game1.GameManager.ArchipelagoManager.ShowEmbeddedTracker();
         }
 
