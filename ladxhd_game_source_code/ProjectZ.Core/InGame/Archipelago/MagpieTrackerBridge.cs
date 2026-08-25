@@ -51,6 +51,7 @@ namespace ProjectZ.InGame.Archipelago
             lock (_stateLock)
             {
                 _receivedItems.Clear();
+                _items.Clear();
                 foreach (var id in MagpieTrackerProtocol.ItemIds)
                     _items[id] = 0;
 
@@ -407,7 +408,8 @@ namespace ProjectZ.InGame.Archipelago
 
             foreach (var contribution in _receivedItems.Values)
             {
-                var quantity = _items[contribution.Id] + contribution.Quantity;
+                var quantity = (_items.TryGetValue(contribution.Id, out var current) ? current : 0) +
+                               contribution.Quantity;
                 _items[contribution.Id] = Math.Min(contribution.Maximum, quantity);
             }
         }

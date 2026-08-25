@@ -102,8 +102,13 @@ Assert(MagpieTrackerProtocol.TryGetItemContribution("Progressive Sword", out var
        magpieSword.Id == "SWORD" && magpieSword.Quantity == 1 && magpieSword.Maximum == 2 &&
        MagpieTrackerProtocol.TryGetItemContribution("Small Key (Color Dungeon)", out var magpieKey) &&
        magpieKey.Id == "KEY9" && magpieKey.Maximum == int.MaxValue &&
-       !MagpieTrackerProtocol.TryGetItemContribution("Zol Attack", out _),
-       "Magpie inventory mapping must count progressive and dungeon items without tracking traps.");
+       MagpieTrackerProtocol.TryGetItemContribution("Heart Piece", out var magpieHeartPiece) &&
+       magpieHeartPiece.Id == "HEART_PIECE" &&
+       MagpieTrackerProtocol.TryGetItemContribution("Zol Attack", out var magpieTrap) &&
+       magpieTrap.Id == "GEL" &&
+       MagpieTrackerProtocol.TryGetItemContribution("Future AP Item", out var magpieFutureItem) &&
+       magpieFutureItem.Id == "FUTURE_AP_ITEM",
+       "Magpie inventory mapping must cover standard, dungeon, trap, and future AP items.");
 var embeddedTrackerUri = MagpieTrackerProtocol.CreateEmbeddedTrackerUri();
 Assert(embeddedTrackerUri.Scheme == Uri.UriSchemeHttps &&
        embeddedTrackerUri.Host == "magpietracker.us" &&
@@ -189,7 +194,10 @@ magpieSeed.Validate();
 using (var magpieBridge = new MagpieTrackerBridge(0))
 {
     magpieBridge.Configure(enabled: false, allowLan: false, seed: magpieSeed);
-    magpieBridge.SynchronizeReceivedItems(new[] { "Progressive Sword", "Hookshot" });
+    magpieBridge.SynchronizeReceivedItems(new[]
+    {
+        "Progressive Sword", "Hookshot", "20 Rupees", "Future AP Item"
+    });
     magpieBridge.SetLocation(overworldLocation);
     Assert(magpieBridge.BoundPort == 0,
         "A disabled Magpie profile must not start the listener before the tracker is opened.");
@@ -224,7 +232,8 @@ using (var magpieBridge = new MagpieTrackerBridge(0))
         var quantities = fullItems.RootElement.GetProperty("items").EnumerateArray()
             .ToDictionary(item => item.GetProperty("id").GetString(), item => item.GetProperty("qty").GetInt32());
         Assert(!fullItems.RootElement.GetProperty("diff").GetBoolean() &&
-               quantities["SWORD"] == 1 && quantities["HOOKSHOT"] == 1,
+               quantities["SWORD"] == 1 && quantities["HOOKSHOT"] == 1 &&
+               quantities["RUPEES_20"] == 1 && quantities["FUTURE_AP_ITEM"] == 1,
             "Magpie full inventory must include AP items received before the tracker starts.");
     }
     using (var fullChecks = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
@@ -243,7 +252,7 @@ using (var magpieBridge = new MagpieTrackerBridge(0))
                locationDiff.RootElement.GetProperty("y").GetDouble() == 6,
             "Magpie bridge did not stream a changed GPS position.");
 
-    magpieBridge.RecordReceivedItem(2, "Boomerang");
+    magpieBridge.RecordReceivedItem(4, "Boomerang");
     using (var itemDiff = System.Text.Json.JsonDocument.Parse(await ReceiveWebSocketText(magpieSocket)))
         Assert(itemDiff.RootElement.GetProperty("items")[0].GetProperty("id").GetString() == "BOOMERANG" &&
                itemDiff.RootElement.GetProperty("items")[0].GetProperty("qty").GetInt32() == 1,

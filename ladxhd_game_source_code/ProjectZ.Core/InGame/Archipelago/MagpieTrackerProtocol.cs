@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using ProjectZ.InGame.Controls;
 
@@ -80,8 +81,27 @@ namespace ProjectZ.InGame.Archipelago
                 ["Face Key"] = BooleanItem("FACE_KEY"),
                 ["Bird Key"] = BooleanItem("BIRD_KEY"),
                 ["Flippers"] = BooleanItem("FLIPPERS"),
+                ["Medicine"] = BooleanItem("MEDICINE"),
                 ["Seashell"] = new MagpieItemContribution("SEASHELL", 1),
                 ["Gold Leaf"] = new MagpieItemContribution("GOLD_LEAF", 1, 5),
+                ["20 Rupees"] = new MagpieItemContribution("RUPEES_20", 1),
+                ["50 Rupees"] = new MagpieItemContribution("RUPEES_50", 1),
+                ["100 Rupees"] = new MagpieItemContribution("RUPEES_100", 1),
+                ["200 Rupees"] = new MagpieItemContribution("RUPEES_200", 1),
+                ["500 Rupees"] = new MagpieItemContribution("RUPEES_500", 1),
+                ["Nothing"] = new MagpieItemContribution("MESSAGE", 1),
+                ["Zol Attack"] = new MagpieItemContribution("GEL", 1),
+                ["Heart Piece"] = new MagpieItemContribution("HEART_PIECE", 1),
+                ["Heart Container"] = new MagpieItemContribution("HEART_CONTAINER", 1),
+                ["10 Arrows"] = new MagpieItemContribution("ARROWS_10", 1),
+                ["Single Arrow"] = new MagpieItemContribution("SINGLE_ARROW", 1),
+                ["Guardian Acorn"] = new MagpieItemContribution("GUARDIAN_ACORN", 1),
+                ["Piece Of Power"] = new MagpieItemContribution("PIECE_OF_POWER", 1),
+                ["Key"] = new MagpieItemContribution("KEY", 1),
+                ["Nightmare Key"] = BooleanItem("NIGHTMARE_KEY"),
+                ["Map"] = BooleanItem("MAP"),
+                ["Compass"] = BooleanItem("COMPASS"),
+                ["Stone Beak"] = BooleanItem("STONE_BEAK"),
                 ["Full Moon Cello"] = BooleanItem("INSTRUMENT1"),
                 ["Conch Horn"] = BooleanItem("INSTRUMENT2"),
                 ["Sea Lily's Bell"] = BooleanItem("INSTRUMENT3"),
@@ -203,6 +223,12 @@ namespace ProjectZ.InGame.Archipelago
                 return true;
             }
 
+            if (TryCreateFallbackItemId(itemName, out var fallbackId))
+            {
+                contribution = new MagpieItemContribution(fallbackId, 1);
+                return true;
+            }
+
             contribution = default;
             return false;
         }
@@ -252,29 +278,38 @@ namespace ProjectZ.InGame.Archipelago
         private static MagpieItemContribution BooleanItem(string id) =>
             new MagpieItemContribution(id, 1, 1);
 
+        private static bool TryCreateFallbackItemId(string itemName, out string id)
+        {
+            const int maximumLength = 64;
+            var builder = new StringBuilder(Math.Min(itemName.Length, maximumLength));
+            var pendingSeparator = false;
+
+            foreach (var character in itemName.Trim())
+            {
+                var isAsciiLetter = character is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
+                if (isAsciiLetter || character is >= '0' and <= '9')
+                {
+                    if (pendingSeparator && builder.Length > 0 && builder.Length < maximumLength)
+                        builder.Append('_');
+                    pendingSeparator = false;
+                    if (builder.Length < maximumLength)
+                        builder.Append(char.ToUpperInvariant(character));
+                }
+                else
+                {
+                    pendingSeparator = true;
+                }
+            }
+
+            id = builder.ToString();
+            return id.Length > 0;
+        }
+
         private static IReadOnlyList<string> BuildItemIds()
         {
-            var ids = new List<string>
-            {
-                "BOMB", "BOW", "HOOKSHOT", "MAGIC_ROD", "PEGASUS_BOOTS", "OCARINA", "FEATHER",
-                "SHOVEL", "MAGIC_POWDER", "BOOMERANG", "TOADSTOOL", "ROOSTER", "RUPEE_COUNT",
-                "SWORD", "POWER_BRACELET", "SHIELD", "BOWWOW", "MAX_POWDER_UPGRADE",
-                "MAX_BOMBS_UPGRADE", "MAX_ARROWS_UPGRADE", "TAIL_KEY", "SLIME_KEY", "ANGLER_KEY",
-                "FACE_KEY", "BIRD_KEY", "FLIPPERS", "SEASHELL", "GOLD_LEAF"
-            };
-
-            for (var dungeon = 1; dungeon <= 8; dungeon++)
-                ids.Add($"INSTRUMENT{dungeon}");
-
-            ids.AddRange(new[]
-            {
-                "TRADING_ITEM_YOSHI_DOLL", "TRADING_ITEM_RIBBON", "TRADING_ITEM_DOG_FOOD",
-                "TRADING_ITEM_BANANAS", "TRADING_ITEM_STICK", "TRADING_ITEM_HONEYCOMB",
-                "TRADING_ITEM_PINEAPPLE", "TRADING_ITEM_HIBISCUS", "TRADING_ITEM_LETTER",
-                "TRADING_ITEM_BROOM", "TRADING_ITEM_FISHING_HOOK", "TRADING_ITEM_NECKLACE",
-                "TRADING_ITEM_SCALE", "TRADING_ITEM_MAGNIFYING_GLASS", "SONG1", "SONG2", "SONG3",
-                "RED_TUNIC", "BLUE_TUNIC", "GREAT_FAIRY"
-            });
+            var ids = DirectItems.Values.Select(item => item.Id).Distinct(StringComparer.Ordinal).ToList();
+            ids.Add("RUPEE_COUNT");
+            ids.Add("GREAT_FAIRY");
 
             for (var dungeon = 1; dungeon <= 9; dungeon++)
             {
