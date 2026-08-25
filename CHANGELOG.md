@@ -1,5 +1,12 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.23**
+### Complete Magpie integration and randomized event fixes
+  * Replayed the complete Archipelago item history whenever Magpie opens or reconnects, added full item-quantity coverage including progressive, duplicate, filler, trap, health, ammunition, medicine, and dungeon items, and retained stable fallback identifiers for future items.
+  * Matched every supported Archipelago check to Magpie's native identifiers and identified bridge messages as Archipelago state so the embedded and LAN trackers select the correct logic automatically.
+  * Kept Marin's randomized Ballad teaching check available when Link has already received the Ballad from another location.
+  * Completed the Rooster revival location safely without starting a duplicate resurrection sequence when the Rooster is already following Link.
+
 ## **v2.0.22**
 ### Persistent Magpie tracking and randomized shop purchases
   * Kept pending randomized shop checks purchasable when Link already owns the shelf's vanilla Shovel or Bow.
