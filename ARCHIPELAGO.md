@@ -47,10 +47,17 @@ behind the panel. The page is preconfigured for Archipelago logic and connects t
 WebSocket bridge through `127.0.0.1:17026`; no address setup is required. Opening the panel starts
 the bridge on demand even when the profile option below is disabled. The bridge implements
 Magpie's item, check, slot-setting, and GPS features, including full resynchronization after either
-side reconnects. GPS is fine-grained on the overworld and dungeon maps; houses and caves follow
-the underworld tab without claiming an unavailable original room coordinate. The Archipelago
-password is never exposed. Use the panel's close button, Android Back, or controller B/Select to
-return to the unobstructed game.
+side reconnects. Opening the tracker or reconnecting to Archipelago replays the server's complete
+received-item history, so items obtained before Magpie started are not lost. Standard LADX AP
+items use Magpie's native identifiers; future item names fall back to stable text identifiers
+instead of being silently discarded. The bridge also identifies itself as an Archipelago LADX
+client and labels its state messages as Archipelago-originated, allowing both the embedded page
+and an external LAN tracker to select AP logic automatically.
+
+GPS is fine-grained on the overworld and dungeon maps; houses and caves follow the underworld tab
+without claiming an unavailable original room coordinate. The Archipelago password is never
+exposed. Use the panel's close button, Android Back, or controller B/Select to return to the
+unobstructed game.
 
 The embedded page requires internet access to load `magpietracker.us` and is third-party web
 content, so the tracker host receives normal web-request metadata. Autotracker messages remain on
@@ -68,10 +75,16 @@ The listener accepts only connections from the same device by default. Enable **
 connections from the local network** when Magpie runs on a computer and LADXHD runs on Android,
 then set Magpie's alternate autotracker IP to the Android device's local IP address. Only use the
 LAN option on a trusted network: any device on that network can otherwise read the current seed's
-tracker state from port `17026`. Entrance discovery messages are intentionally absent because the
-LADXHD APWorld currently rejects entrance-shuffled seeds and therefore has no entrance mapping to
-report; this matches the official LADX client, which enables that feature only when slot data
-contains a shuffled entrance mapping.
+tracker state from port `17026`.
+
+Entrance discovery messages are intentionally absent because the LADXHD APWorld currently rejects
+entrance-shuffled seeds and therefore has no entrance mapping to report; this matches the official
+LADX client, which enables that feature only when slot data contains a shuffled entrance mapping.
+Magpie's ROM and graphics messages target an emulator and Game Boy ROM, so they do not apply to the
+native HD runtime. The bridge also does not transmit a spoiler payload: Magpie's protocol accepts a
+complete spoiler log rather than incremental AP hints, and sending the generated seed manifest
+would disclose every placement to third-party webpage code. Room credentials and complete spoiler
+data therefore remain inside the native client.
 
 Desktop profiles can set the same behavior directly in `connection.json`:
 
