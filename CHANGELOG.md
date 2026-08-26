@@ -1,5 +1,11 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.28**
+### Restore Magpie inventory after reconnect
+  * Persisted received Archipelago item names per save so Magpie can restore tracked inventory before a live room connection is available.
+  * Backfilled existing saves from Archipelago's authoritative item replay without granting items again.
+  * Made opening Magpie immediately retry a missing auto-connect session while keeping gameplay paused.
+
 ## **v2.0.27**
 ### Pause-aware Magpie and direct start warp
   * Kept the pause screen active beneath the embedded Magpie tracker, keeping gameplay and music paused and returning to the pause menu when the tracker closes.
@@ -2097,5 +2103,4 @@
  * Turtle Rock (dungeon 8) fixed locked door that took a key but did not open.
  * Turtle Rock (dungeon 8) breakable wall was fixed (it couldn't be broken).
  * Play the secret discovery chime when taking the correct path in the egg.
-
 
