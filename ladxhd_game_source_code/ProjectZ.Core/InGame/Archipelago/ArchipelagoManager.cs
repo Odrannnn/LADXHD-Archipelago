@@ -32,6 +32,8 @@ namespace ProjectZ.InGame.Archipelago
         private const string SaveSeedName = "ap_seed_name";
         private const string SaveSlotName = "ap_slot_name";
         private const string SaveReceivedIndex = "ap_received_index";
+        private const string SaveReceivedItemPrefix = "ap_received_item_";
+        private const int MaximumPersistedReceivedItems = 10000;
         private const string SaveGoalPending = "ap_goal_pending";
         private const string SaveBowWowReceived = "ap_received_bowwow";
         private const string SaveRoosterReceived = "ap_received_rooster";
@@ -112,6 +114,16 @@ namespace ProjectZ.InGame.Archipelago
             return !string.IsNullOrWhiteSpace(seedName) && !string.IsNullOrWhiteSpace(slotName);
         }
 
+        public static string GetReceivedItemSaveKey(int index)
+        {
+            if (index < 0 || index >= MaximumPersistedReceivedItems)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            return SaveReceivedItemPrefix + index;
+        }
+
+        public static bool ShouldRecoverMagpieSession(bool active, bool autoConnect, bool sessionConnected) =>
+            active && autoConnect && !sessionConnected;
+
         public void ShowEmbeddedTracker()
         {
             if (!CanShowEmbeddedTracker)
@@ -120,7 +132,10 @@ namespace ProjectZ.InGame.Archipelago
             if (!_magpieTracker.Start(_settings?.MagpieTrackerAllowLan == true))
                 SetStatus($"Magpie tracker unavailable: port {MagpieTrackerProtocol.DefaultPort} is already in use");
 
-            SynchronizeMagpieReceivedItems(GetConnectedSession());
+            var session = GetConnectedSession();
+            SynchronizeMagpieReceivedItems(session);
+            if (ShouldRecoverMagpieSession(IsActive, _settings?.AutoConnect == true, session != null))
+                Connect();
             SynchronizeMagpieChecksFromSave();
             _magpieTracker.SetItemQuantity("RUPEE_COUNT", _gameManager.GetItem("ruby")?.Count ?? 0);
             Game1.MagpieTrackerService.Show();
@@ -697,6 +712,7 @@ namespace ProjectZ.InGame.Archipelago
             RecordRandomizerManifest();
             _magpieTracker.Configure(
                 _settings.MagpieTrackerEnabled, _settings.MagpieTrackerAllowLan, _seed);
+            SynchronizeMagpieReceivedItemsFromSave();
             SynchronizeMagpieChecksFromSave();
             _gameManager.MapManager?.CurrentMap?.Objects?.TriggerKeyChange();
             if (_settings.AutoConnect)
@@ -765,6 +781,7 @@ namespace ProjectZ.InGame.Archipelago
             var repairedReplayState = false;
             while (_receivedItems.TryPeek(out var queued) && queued.Index < _nextReceivedIndex)
             {
+                repairedReplayState |= PersistMagpieReceivedItem(queued.Index, queued.ItemName);
                 repairedReplayState |= RepairPreviouslyReceivedItem(queued.Index, queued.ItemName);
                 _receivedItems.TryDequeue(out _);
             }
@@ -782,6 +799,7 @@ namespace ProjectZ.InGame.Archipelago
             _nextReceivedIndex = next.Index + 1;
             _gameManager.SaveManager.SetInt(SaveReceivedIndex, _nextReceivedIndex);
 
+            PersistMagpieReceivedItem(next.Index, next.ItemName);
             // Item replay is part of the AP protocol. Persist each applied index immediately so
             // consumables and traps cannot be granted twice after an unclean shutdown.
             SaveGameSaveLoad.SaveGame(_gameManager, false);
@@ -1271,6 +1289,37 @@ namespace ProjectZ.InGame.Archipelago
             // tracker bridge started and makes opening Magpie a deterministic full resync.
             _magpieTracker.SynchronizeReceivedItems(
                 session.Items.AllItemsReceived.Select(item => item.ItemName));
+        }
+
+        private void SynchronizeMagpieReceivedItemsFromSave()
+        {
+            var itemCount = Math.Min(_nextReceivedIndex, MaximumPersistedReceivedItems);
+            if (itemCount <= 0)
+                return;
+
+            var itemNames = new string[itemCount];
+            var hasPersistedItem = false;
+            for (var index = 0; index < itemCount; index++)
+            {
+                itemNames[index] = _gameManager.SaveManager.GetString(GetReceivedItemSaveKey(index));
+                hasPersistedItem |= !string.IsNullOrWhiteSpace(itemNames[index]);
+            }
+
+            if (hasPersistedItem)
+                _magpieTracker.SynchronizeReceivedItems(itemNames);
+        }
+
+        private bool PersistMagpieReceivedItem(int index, string itemName)
+        {
+            if (index < 0 || index >= MaximumPersistedReceivedItems || string.IsNullOrWhiteSpace(itemName))
+                return false;
+
+            var saveKey = GetReceivedItemSaveKey(index);
+            if (string.Equals(_gameManager.SaveManager.GetString(saveKey), itemName, StringComparison.Ordinal))
+                return false;
+
+            _gameManager.SaveManager.SetString(saveKey, itemName);
+            return true;
         }
 
         private void RecordMagpieServerCheck(ArchipelagoSeedManifest seed, long locationId)

@@ -317,6 +317,17 @@ Assert(ArchipelagoManager.GetReconnectDelaySeconds(0) == 0 &&
        ArchipelagoManager.GetReconnectDelaySeconds(5) == 60 &&
        ArchipelagoManager.GetReconnectDelaySeconds(20) == 60,
        "Reconnect delays must back off from five seconds and remain capped at one minute.");
+Assert(ArchipelagoManager.GetReceivedItemSaveKey(0) == "ap_received_item_0" &&
+       ArchipelagoManager.GetReceivedItemSaveKey(42) == "ap_received_item_42",
+       "Magpie received-item snapshots must use deterministic per-save keys.");
+Assert(ArchipelagoManager.ShouldRecoverMagpieSession(
+           active: true, autoConnect: true, sessionConnected: false) &&
+       !ArchipelagoManager.ShouldRecoverMagpieSession(
+           active: true, autoConnect: true, sessionConnected: true) &&
+       !ArchipelagoManager.ShouldRecoverMagpieSession(
+           active: true, autoConnect: false, sessionConnected: false),
+       "Opening Magpie must recover only a missing auto-connect AP session.");
+
 
 const string testRoomId = "AAAAAAAAAAAAAAAAAAAAAA";
 var normalizedRoomUrl = ArchipelagoHostedRoomResolver.NormalizeRoomUrl(
