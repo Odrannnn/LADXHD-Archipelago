@@ -1186,14 +1186,10 @@ namespace ProjectZ.Android
                 frame.Y + frame.Height > asset.Bitmap.Height)
                 return;
 
-            var spriteWidth = frame.Width * scale;
-            var spriteHeight = frame.Height * scale;
             var source = new Rect(frame.X, frame.Y, frame.X + frame.Width, frame.Y + frame.Height);
+            var placement = asset.Animation.GetPlacement(frame, centerX, bottomY, scale);
             var destination = new RectF(
-                centerX - spriteWidth * 0.5f - frame.OffsetX * scale,
-                bottomY - spriteHeight - frame.OffsetY * scale,
-                centerX + spriteWidth * 0.5f - frame.OffsetX * scale,
-                bottomY - frame.OffsetY * scale);
+                placement.Left, placement.Top, placement.Right, placement.Bottom);
             var save = canvas.Save();
             if (frame.MirroredHorizontally)
                 canvas.Scale(-1f, 1f, destination.CenterX(), destination.CenterY());
