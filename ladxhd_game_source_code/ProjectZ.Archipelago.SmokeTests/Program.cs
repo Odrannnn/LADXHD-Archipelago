@@ -103,6 +103,18 @@ Assert(LiveWallpaperMap.TryLoad(new StringReader(wallpaperMapData), out var wall
 Assert(!LiveWallpaperMap.TryLoad(
            new StringReader("3\n0\n0\n../outside.png\n1\n1\n1\n0,\n"), out _),
        "The live wallpaper must reject unsafe installed tileset paths.");
+const string wallpaperCollisionMapData =
+    "3\n0\n0\noverworld.png\n4\n2\n1\n" +
+    ",,,,\n,,,,\n" +
+    "2\nc1\nhole\n2\n0;16;0;;;\n1;32;0;;;;;;\n";
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(wallpaperCollisionMapData), out var wallpaperCollisionMap) &&
+       wallpaperCollisionMap.CollisionCount == 1 &&
+       wallpaperCollisionMap.HazardCount == 1 &&
+       wallpaperCollisionMap.IntersectsCollision(18, 2, 8, 8, includeHoles: false) &&
+       !wallpaperCollisionMap.IntersectsCollision(33, 1, 8, 8, includeHoles: false) &&
+       wallpaperCollisionMap.IntersectsCollision(33, 1, 8, 8, includeHoles: true),
+       "The live wallpaper must parse solid and hole object records from installed maps.");
 const string wallpaperAtlasData = "1\n1\nnote:262,185,7,12,0,0\n" +
                                   "bowwow chain:310,91,6,6,3,6\n";
 Assert(LiveWallpaperAtlas.TryLoad(
@@ -210,6 +222,32 @@ Assert(simulatedWalkStart.Input.Move == Microsoft.Xna.Framework.Vector2.Zero &&
        simulatedFeather.Height > 0 && !wallpaperLinkSimulation.Body.IsGrounded &&
        wallpaperLinkSimulation.Body.Velocity.Z > 0,
        "Wallpaper Link must translate the scripted route into real body movement and feather input.");
+var constrainedMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    constrainedMapData.AppendLine(new string(',', 40));
+constrainedMapData.Append("1\nc1\n1\n0;384;1296;;;\n");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(constrainedMapData.ToString()), out var constrainedMap),
+       "The collision regression fixture must be a valid installed map.");
+var constrainedSimulation = new LiveWallpaperLinkSimulation();
+constrainedSimulation.Update(
+    1, new LiveWallpaperLinkState(true, true, 0f), 0, true, constrainedMap);
+LiveWallpaperSimulatedLinkState constrainedLink = default;
+for (var frame = 1; frame <= 30; frame++)
+{
+    constrainedLink = constrainedSimulation.Update(
+        1, new LiveWallpaperLinkState(true, true, 0.2f),
+        frame * 17L, true, constrainedMap);
+}
+Assert(constrainedLink.MapX <= 23.7501f &&
+       constrainedMap.IntersectsCollision(
+           constrainedLink.MapX * 16f + constrainedSimulation.Body.OffsetX + 1.1f,
+           constrainedLink.MapY * 16f + constrainedSimulation.Body.OffsetY,
+           constrainedSimulation.Body.Width,
+           constrainedSimulation.Body.Height,
+           includeHoles: true),
+       "Wallpaper Link must stop at installed solid collision instead of crossing walls.");
 var wallpaperFollowerSimulation = new LiveWallpaperFollowerSimulation();
 wallpaperFollowerSimulation.Update(2, -14f, 0, animated: true);
 var simulatedRooster = wallpaperFollowerSimulation.Update(2, 14f, 17, animated: true);

@@ -1027,7 +1027,8 @@ namespace ProjectZ.Android
             var state = LiveWallpaperLinkActivity.Resolve(activity, elapsed, animated);
             if (!state.Visible)
                 return;
-            var simulated = _linkSimulation.Update(scene, state, elapsed, animated);
+            var simulated = _linkSimulation.Update(
+                scene, state, elapsed, animated, _overworldMap?.Map);
             var direction = simulated.Direction;
             var asset = simulated.Action == LiveWallpaperLinkRouteAction.FeatherJump
                 ? _linkJumping[direction]

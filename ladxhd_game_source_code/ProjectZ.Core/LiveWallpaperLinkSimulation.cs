@@ -69,7 +69,8 @@ namespace ProjectZ
 
         public LiveWallpaperSimulatedLinkState Update(
             int scene, LiveWallpaperLinkState activity,
-            long elapsedMilliseconds, bool animated)
+            long elapsedMilliseconds, bool animated,
+            LiveWallpaperMap map = null)
         {
             var route = LiveWallpaperLinkRoute.Resolve(scene, activity.Journey, activity.Walking);
             var target = new Vector2(route.MapX * TileSize, route.MapY * TileSize);
@@ -101,16 +102,17 @@ namespace ProjectZ
             if (!reset && frameScale > 0)
             {
                 _body.VelocityTarget = input.Move * WalkSpeedPerFrame;
-                var movement = _body.VelocityTarget * frameScale;
-                if (movement.LengthSquared() > difference.LengthSquared())
-                    movement = difference;
-                _position.Offset(movement);
-
                 if (input.FeatherPressed && _body.IsGrounded)
                 {
                     _body.IsGrounded = false;
                     _body.Velocity.Z = 2.35f;
                 }
+
+                var movement = _body.VelocityTarget * frameScale;
+                if (movement.LengthSquared() > difference.LengthSquared())
+                    movement = difference;
+                ApplyMapConstrainedMovement(map, movement);
+
                 if (!_body.IsGrounded)
                 {
                     _position.Z += _body.Velocity.Z * frameScale;
@@ -129,5 +131,41 @@ namespace ProjectZ
                 _position.X / TileSize, _position.Y / TileSize, _position.Z,
                 route.Direction, route.Action, input);
         }
+
+        private void ApplyMapConstrainedMovement(
+            LiveWallpaperMap map, Vector2 movement)
+        {
+            if (map == null)
+            {
+                _position.Offset(movement);
+                return;
+            }
+
+            if (movement.X != 0)
+            {
+                var nextX = _position.X + movement.X;
+                if (!IntersectsMap(map, nextX, _position.Y))
+                    _position.X = nextX;
+                else
+                    _body.VelocityTarget.X = 0;
+            }
+            if (movement.Y != 0)
+            {
+                var nextY = _position.Y + movement.Y;
+                if (!IntersectsMap(map, _position.X, nextY))
+                    _position.Y = nextY;
+                else
+                    _body.VelocityTarget.Y = 0;
+            }
+        }
+
+        private bool IntersectsMap(
+            LiveWallpaperMap map, float positionX, float positionY) =>
+            map.IntersectsCollision(
+                positionX + _body.OffsetX,
+                positionY + _body.OffsetY,
+                _body.Width,
+                _body.Height,
+                includeHoles: _body.IsGrounded);
     }
 }
