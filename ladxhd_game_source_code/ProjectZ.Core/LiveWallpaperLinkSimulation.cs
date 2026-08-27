@@ -27,7 +27,8 @@ namespace ProjectZ
             bool carryingRooster = false,
             float roosterMapX = 0,
             float roosterMapY = 0,
-            float roosterHeight = 0)
+            float roosterHeight = 0,
+            int combatEnemyIndex = -1)
         {
             MapX = mapX;
             MapY = mapY;
@@ -41,6 +42,7 @@ namespace ProjectZ
             RoosterMapX = roosterMapX;
             RoosterMapY = roosterMapY;
             RoosterHeight = Math.Max(0f, roosterHeight);
+            CombatEnemyIndex = combatEnemyIndex;
         }
 
         public float MapX { get; }
@@ -55,6 +57,7 @@ namespace ProjectZ
         public float RoosterMapX { get; }
         public float RoosterMapY { get; }
         public float RoosterHeight { get; }
+        public int CombatEnemyIndex { get; }
     }
 
     /// <summary>
@@ -83,6 +86,7 @@ namespace ProjectZ
         private long _pauseUntil;
         private bool _interactionPauseStarted;
         private bool _roosterPickupPauseStarted;
+        private bool _combatPauseStarted;
         private bool _journeyIslandLife;
         private int _journeyOriginX = -1;
         private int _journeyOriginY = -1;
@@ -155,6 +159,7 @@ namespace ProjectZ
             var frameScale = Math.Clamp(elapsedDelta / (1000f / 60f), 0f, 6f);
             var inputMove = Vector2.Zero;
             var interactionActor = -1;
+            var combatEnemy = -1;
             var action = LiveWallpaperLinkRouteAction.Stand;
             var targetJourneyAction = _journeyPointIndex < _journeyPlan.Points.Count
                 ? _journeyPlan.Points[_journeyPointIndex].Action
@@ -218,6 +223,14 @@ namespace ProjectZ
                 else if (_body.IsGrounded)
                     _position.Z = 0;
                 if (_pauseUntil > elapsedMilliseconds &&
+                    _journeyPlan.HasCombat && _combatPauseStarted &&
+                    _journeyPointIndex == _journeyPlan.CombatPointIndex)
+                {
+                    action = LiveWallpaperLinkRouteAction.Attack;
+                    combatEnemy = _journeyPlan.CombatEnemyIndex;
+                    inputMove = FaceEnemy(map, combatEnemy);
+                }
+                else if (_pauseUntil > elapsedMilliseconds &&
                     _journeyPlan.HasInteraction && _interactionPauseStarted &&
                     _journeyPointIndex == _journeyPlan.InteractionPointIndex)
                 {
@@ -235,6 +248,8 @@ namespace ProjectZ
             var direction = ResolveDirection(inputMove, fallbackDirection);
             if (interactionActor >= 0)
                 direction = ResolveDirection(FaceActor(map, interactionActor), fallbackDirection);
+            else if (combatEnemy >= 0)
+                direction = ResolveDirection(FaceEnemy(map, combatEnemy), fallbackDirection);
             _lastRouteDirection = direction;
             var roosterVisible = _journeyPlan.HasRoosterFlight;
             ResolveRoosterState(carryingRooster,
@@ -243,7 +258,8 @@ namespace ProjectZ
                 _position.X / TileSize, _position.Y / TileSize, _position.Z,
                 direction, action, new LiveWallpaperLinkInput(inputMove, false),
                 interactionActor, roosterVisible, carryingRooster,
-                roosterX / TileSize, roosterY / TileSize, roosterHeight);
+                roosterX / TileSize, roosterY / TileSize, roosterHeight,
+                combatEnemy);
         }
 
         private void StartJourney(
@@ -265,6 +281,7 @@ namespace ProjectZ
             _pauseUntil = elapsedMilliseconds;
             _interactionPauseStarted = false;
             _roosterPickupPauseStarted = false;
+            _combatPauseStarted = false;
             if (_journeyPlan.Points.Count > 0)
             {
                 var start = _journeyPlan.Points[0];
@@ -302,6 +319,14 @@ namespace ProjectZ
 
         private void OnJourneyPointReached(long elapsedMilliseconds)
         {
+            if (_journeyPlan.HasCombat &&
+                _journeyPointIndex == _journeyPlan.CombatPointIndex &&
+                !_combatPauseStarted)
+            {
+                _combatPauseStarted = true;
+                _pauseUntil = elapsedMilliseconds + 700L;
+                return;
+            }
             if (_journeyPlan.HasInteraction &&
                 _journeyPointIndex == _journeyPlan.InteractionPointIndex &&
                 !_interactionPauseStarted)
@@ -362,6 +387,19 @@ namespace ProjectZ
                 : Vector2.Zero;
         }
 
+        private Vector2 FaceEnemy(LiveWallpaperMap map, int enemyIndex)
+        {
+            if (map == null || enemyIndex < 0 || enemyIndex >= map.Enemies.Count)
+                return Vector2.Zero;
+            var enemy = map.Enemies[enemyIndex];
+            var difference = new Vector2(
+                enemy.BodyX + enemy.BodyWidth / 2f - _position.X,
+                enemy.BodyY + enemy.BodyHeight / 2f - _position.Y);
+            return difference.LengthSquared() > 0.0001f
+                ? Vector2.Normalize(difference)
+                : Vector2.Zero;
+        }
+
         private void ApplyJourneyConstrainedMovement(
             LiveWallpaperMap map, Vector2 movement, bool includeHoles)
         {
@@ -393,6 +431,11 @@ namespace ProjectZ
                 _body.Height,
                 includeHoles) ||
             map.IntersectsActor(
+                positionX + _body.OffsetX,
+                positionY + _body.OffsetY,
+                _body.Width,
+                _body.Height) ||
+            map.IntersectsEnemy(
                 positionX + _body.OffsetX,
                 positionY + _body.OffsetY,
                 _body.Width,

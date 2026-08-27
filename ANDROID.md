@@ -66,7 +66,9 @@ Open **Settings → Live wallpaper** in LADXHD Archipelago. Choose whether the s
 whether Koholint wildlife should appear, select Marin, BowWow, the rooster, automatic rotation, or
 characters matched to each location, use automatic regional character placement or force a left,
 center, or right anchor, choose Mabe Village, Toronbo Shores, Mysterious Forest, Kanalet Castle,
-Animal Village, Wind Fish's Egg, or rotating installed locations, choose whether Link walks,
+Animal Village, Wind Fish's Egg, Martha's Bay, Ukuku Prairie, Cemetery, Goponga Swamp, Rapids
+Ride, Eastern Tal Tal Heights, Yarna Desert, Face Shrine, or rotating installed locations, choose
+whether Link walks,
 rests, alternates, or stays hidden, follow the
 phone's local time or force day, sunset, or night lighting, use a natural butterfly/owl schedule or
 keep all wildlife visible, choose whether taps do nothing, cycle the featured character, or switch
@@ -92,8 +94,15 @@ gameplay, audio, saves, or an Archipelago connection. It reads Link, Marin, BowW
 butterflies, the owl, the overworld map, and its tileset directly from the locally prepared files.
 The selected map region expands with real adjacent tiles to cover portrait and landscape screens;
 no substitute coast, sky, clouds, palms, stars, waves, or synthetic touch artwork is drawn.
-Link follows a location-specific route in overworld tile coordinates instead of crossing walls or
-pits in screen space. The forest route marks its narrow gap explicitly, uses the original
+Static map objects such as telephone houses, the Seashell Mansion, Witch's house, and village and
+castle roofs are read from the installed object layer and `objects.atlas`, rather than omitted or
+redrawn. Supported overworld enemies are read from their real spawn objects and animation files;
+they idle, wander, emerge, fly, or attack according to their species, and some generated journeys
+detour into a short sword fight. Those fights are visual only and never change enemy flags, drops,
+saves, or Archipelago state. Link follows a collision-planned route in overworld tile coordinates
+instead of crossing walls, NPCs, enemies, or pits in screen space. Entry/exit runs, doors, scenic
+waypoints, NPC visits, rooster flights, and enemy approaches provide deterministic route variety.
+The forest route marks its narrow gap explicitly, uses the original
 directional feather-jump animation for that segment, and lands Link back on the safe route.
 Automatic location rotation fades between regions every 45 seconds. The public assetless APK
 remains blank until the user completes the normal v1.0.0 ZIP setup; none of the game assets are

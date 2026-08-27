@@ -7,8 +7,9 @@ namespace ProjectZ
         private const long RotationIntervalMilliseconds = 45_000L;
         private const long TransitionDurationMilliseconds = 1_200L;
         public const int RotationSelection = 4;
-        public const int MaximumSelection = 7;
-        private static readonly int[] InstalledScenes = [1, 2, 3, 5, 6, 7];
+        public const int MaximumSelection = 15;
+        private static readonly int[] InstalledScenes =
+            [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
         public static int Resolve(int selection, long elapsedMilliseconds, bool installedMapAvailable)
         {
@@ -42,6 +43,14 @@ namespace ProjectZ
                 5 => (92, 42),
                 6 => (129, 99),
                 7 => (61, 6),
+                8 => (91, 100),
+                9 => (55, 73),
+                10 => (61, 61),
+                11 => (28, 43),
+                12 => (124, 34),
+                13 => (132, 8),
+                14 => (145, 111),
+                15 => (124, 70),
                 _ => (-1, -1)
             };
             return tileX >= 0;

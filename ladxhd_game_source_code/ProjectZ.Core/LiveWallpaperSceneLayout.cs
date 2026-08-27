@@ -22,6 +22,14 @@ namespace ProjectZ
             5 => new LiveWallpaperSceneLayout(6.0f, 0.5f),
             6 => new LiveWallpaperSceneLayout(6.0f, 0.76f),
             7 => new LiveWallpaperSceneLayout(6.0f, 0.5f),
+            8 => new LiveWallpaperSceneLayout(6.0f, 0.42f),
+            9 => new LiveWallpaperSceneLayout(6.0f, 0.68f),
+            10 => new LiveWallpaperSceneLayout(6.0f, 0.62f),
+            11 => new LiveWallpaperSceneLayout(6.0f, 0.55f),
+            12 => new LiveWallpaperSceneLayout(6.0f, 0.5f),
+            13 => new LiveWallpaperSceneLayout(6.0f, 0.58f),
+            14 => new LiveWallpaperSceneLayout(6.0f, 0.5f),
+            15 => new LiveWallpaperSceneLayout(6.0f, 0.5f),
             _ => new LiveWallpaperSceneLayout(5.6f, 0.72f)
         };
 

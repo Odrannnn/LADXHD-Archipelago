@@ -152,7 +152,15 @@ Assert(LiveWallpaperInteraction.NextFeaturedCharacter(0) == 1 &&
        LiveWallpaperInteraction.NextScene(3) == 5 &&
        LiveWallpaperInteraction.NextScene(5) == 6 &&
        LiveWallpaperInteraction.NextScene(6) == 7 &&
-       LiveWallpaperInteraction.NextScene(7) == 1 &&
+       LiveWallpaperInteraction.NextScene(7) == 8 &&
+       LiveWallpaperInteraction.NextScene(8) == 9 &&
+       LiveWallpaperInteraction.NextScene(9) == 10 &&
+       LiveWallpaperInteraction.NextScene(10) == 11 &&
+       LiveWallpaperInteraction.NextScene(11) == 12 &&
+       LiveWallpaperInteraction.NextScene(12) == 13 &&
+       LiveWallpaperInteraction.NextScene(13) == 14 &&
+       LiveWallpaperInteraction.NextScene(14) == 15 &&
+       LiveWallpaperInteraction.NextScene(15) == 1 &&
        LiveWallpaperInteraction.NextScene(4) == 1 &&
        LiveWallpaperInteraction.NextScene(99) == 1,
        "Wallpaper tap actions must cycle characters and scenery predictably.");
@@ -163,7 +171,15 @@ Assert(LiveWallpaperSceneSelection.Resolve(4, 0, true) == 1 &&
        LiveWallpaperSceneSelection.Resolve(4, 135_000, true) == 5 &&
        LiveWallpaperSceneSelection.Resolve(4, 180_000, true) == 6 &&
        LiveWallpaperSceneSelection.Resolve(4, 225_000, true) == 7 &&
-       LiveWallpaperSceneSelection.Resolve(4, 270_000, true) == 1 &&
+       LiveWallpaperSceneSelection.Resolve(4, 270_000, true) == 8 &&
+       LiveWallpaperSceneSelection.Resolve(4, 315_000, true) == 9 &&
+       LiveWallpaperSceneSelection.Resolve(4, 360_000, true) == 10 &&
+       LiveWallpaperSceneSelection.Resolve(4, 405_000, true) == 11 &&
+       LiveWallpaperSceneSelection.Resolve(4, 450_000, true) == 12 &&
+       LiveWallpaperSceneSelection.Resolve(4, 495_000, true) == 13 &&
+       LiveWallpaperSceneSelection.Resolve(4, 540_000, true) == 14 &&
+       LiveWallpaperSceneSelection.Resolve(4, 585_000, true) == 15 &&
+       LiveWallpaperSceneSelection.Resolve(4, 630_000, true) == 1 &&
        LiveWallpaperSceneSelection.Resolve(0, 0, true) == 1 &&
        LiveWallpaperSceneSelection.Resolve(2, 0, true) == 2 &&
        LiveWallpaperSceneSelection.Resolve(2, 0, false) == 0 &&
@@ -179,6 +195,22 @@ Assert(LiveWallpaperSceneSelection.Resolve(4, 0, true) == 1 &&
        animalX == 129 && animalY == 99 &&
        LiveWallpaperSceneSelection.TryGetTileOrigin(7, out var eggX, out var eggY) &&
        eggX == 61 && eggY == 6 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(8, out var marthaX, out var marthaY) &&
+       marthaX == 91 && marthaY == 100 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(9, out var prairieX, out var prairieY) &&
+       prairieX == 55 && prairieY == 73 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(10, out var cemeteryX, out var cemeteryY) &&
+       cemeteryX == 61 && cemeteryY == 61 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(11, out var swampX, out var swampY) &&
+       swampX == 28 && swampY == 43 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(12, out var rapidsX, out var rapidsY) &&
+       rapidsX == 124 && rapidsY == 34 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(13, out var heightsX, out var heightsY) &&
+       heightsX == 132 && heightsY == 8 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(14, out var desertX, out var desertY) &&
+       desertX == 145 && desertY == 111 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(15, out var shrineX, out var shrineY) &&
+       shrineX == 124 && shrineY == 70 &&
        !LiveWallpaperSceneSelection.TryGetTileOrigin(0, out _, out _),
        "Installed wallpaper scenes must resolve stable overworld crops and rotation intervals.");
 Assert(LiveWallpaperSceneSelection.GetRotationTransitionOpacity(1, 0) == 0f &&
@@ -270,8 +302,9 @@ Assert(LiveWallpaperMap.TryLoad(
        "The collision regression fixture must be a valid installed map.");
 var actorMapData =
     "3\n0\n0\noverworld.png\n2\n2\n1\n,\n,\n" +
-    "2\npersonNew\ndogo\n2\n" +
-    "0;16;16;;npc_green_boy;;stand_3\n1;0;0\n";
+    "4\npersonNew\ndogo\nenemy_respawner\nphonehouse\n4\n" +
+    "0;16;16;;npc_green_boy;;stand_3\n1;0;0\n" +
+    "2;32;16;e2;\n3;48;16\n";
 Assert(LiveWallpaperMap.TryLoad(new StringReader(actorMapData), out var actorMap) &&
        actorMap.Actors.Count == 2 &&
        actorMap.Actors[0].Kind == LiveWallpaperMapActorKind.Person &&
@@ -280,16 +313,25 @@ Assert(LiveWallpaperMap.TryLoad(new StringReader(actorMapData), out var actorMap
        actorMap.Actors[0].BodyX == 17 && actorMap.Actors[0].BodyY == 22 &&
        actorMap.Actors[0].BodyWidth == 14 && actorMap.Actors[0].BodyHeight == 10 &&
        actorMap.IntersectsActor(18, 23, 8, 8) &&
-       actorMap.Actors[1].Kind == LiveWallpaperMapActorKind.Dog,
-       "Wallpaper maps must retain installed NPC placement, animation, and gameplay body data.");
+       actorMap.Actors[1].Kind == LiveWallpaperMapActorKind.Dog &&
+       actorMap.Enemies.Count == 1 &&
+       actorMap.Enemies[0].Kind == LiveWallpaperMapEnemyKind.Octorok &&
+       actorMap.Enemies[0].EntityX == 40 && actorMap.Enemies[0].EntityY == 28 &&
+       actorMap.IntersectsEnemy(34, 19, 8, 8) &&
+       actorMap.Decorations.Count == 1 &&
+       actorMap.Decorations[0].SpriteId == "tree_phonehouse" &&
+       actorMap.Decorations[0].EntityX == 72 &&
+       actorMap.Decorations[0].EntityY == 40,
+       "Wallpaper maps must retain installed NPCs, enemies, and atlas-backed building objects.");
 var journeyMapData = new System.Text.StringBuilder(
     "3\n0\n0\noverworld.png\n40\n90\n1\n");
 for (var row = 0; row < 90; row++)
     journeyMapData.AppendLine(new string(',', 40));
 journeyMapData.Append(
-    "2\npersonNew\ndoor\n2\n" +
+    "3\npersonNew\ndoor\nenemy_respawner\n3\n" +
     "0;384;1248;;npc_green_boy;;stand_3\n" +
-    "1;416;1216;;;cave_rooster;cave rooster.map;cave_rooster;3;0;\n");
+    "1;416;1216;;;cave_rooster;cave rooster.map;cave_rooster;3;0;\n" +
+    "2;400;1280;e2;\n");
 Assert(LiveWallpaperMap.TryLoad(
            new StringReader(journeyMapData.ToString()), out var journeyMap) &&
        journeyMap.Portals.Count == 1 &&
@@ -301,9 +343,11 @@ Assert(LiveWallpaperMapViewport.TryCreate(
        "The wallpaper journey regression fixture must produce a map viewport.");
 LiveWallpaperJourneyPlan interactionJourney = null;
 LiveWallpaperJourneyPlan roosterJourney = null;
+LiveWallpaperJourneyPlan combatJourney = null;
 var interactionJourneyVariant = -1;
 var roosterJourneyVariant = -1;
-for (var variant = 0; variant < 60; variant++)
+var combatJourneyVariant = -1;
+for (var variant = 0; variant < 120; variant++)
 {
     var candidate = LiveWallpaperJourneyPlanner.Create(
         journeyMap, journeyViewport, 1, variant, allowIslandLife: true);
@@ -317,6 +361,11 @@ for (var variant = 0; variant < 60; variant++)
         roosterJourney = candidate;
         roosterJourneyVariant = variant;
     }
+    if (combatJourney == null && candidate.HasCombat)
+    {
+        combatJourney = candidate;
+        combatJourneyVariant = variant;
+    }
 }
 Assert(interactionJourney != null && interactionJourney.Points.Count > 2 &&
        interactionJourney.InteractionActorIndex == 0 &&
@@ -324,8 +373,12 @@ Assert(interactionJourney != null && interactionJourney.Points.Count > 2 &&
            LiveWallpaperJourneyAction.Interact &&
        roosterJourney != null && roosterJourney.Points.Count > 6 &&
        roosterJourney.Points.Any(point =>
-           point.Action == LiveWallpaperJourneyAction.RoosterFly),
-       "Wallpaper journeys must cross real scene boundaries and deterministically include NPC interactions and rooster flights.");
+           point.Action == LiveWallpaperJourneyAction.RoosterFly) &&
+       combatJourney != null && combatJourney.Points.Count > 2 &&
+       combatJourney.CombatEnemyIndex == 0 &&
+       combatJourney.Points[combatJourney.CombatPointIndex].Action ==
+           LiveWallpaperJourneyAction.Attack,
+       "Wallpaper journeys must cross real boundaries and include interactions, flights, and fights.");
 foreach (var point in interactionJourney.Points)
 {
     Assert(!journeyMap.IntersectsActor(
@@ -360,6 +413,29 @@ for (var frame = 0; frame < 3_000; frame++)
 }
 Assert(sawInteraction && sawRoosterFlight,
        "Wallpaper journey simulation must pause to face NPCs and use Link's rooster-flight state.");
+var combatSimulation = new LiveWallpaperLinkSimulation();
+var sawCombat = false;
+var combatStartTime = combatJourneyVariant * 20_000L;
+LiveWallpaperSimulatedLinkState combatLink = default;
+var sawEnemyReaction = false;
+for (var frame = 0; frame < 3_000; frame++)
+{
+    combatLink = combatSimulation.UpdateJourney(
+        1, 0, combatStartTime + frame * 17L, true,
+        journeyMap, journeyViewport, allowIslandLife: true);
+    var attacking = combatLink.Action == LiveWallpaperLinkRouteAction.Attack &&
+                    combatLink.CombatEnemyIndex == 0;
+    sawCombat |= attacking;
+    if (attacking)
+    {
+        var enemyState = LiveWallpaperEnemySimulation.Resolve(
+            journeyMap, 0, combatStartTime + frame * 17L, combatLink);
+        sawEnemyReaction |= enemyState.Action is LiveWallpaperEnemyAction.Hit or
+                            LiveWallpaperEnemyAction.Hidden;
+    }
+}
+Assert(sawCombat && sawEnemyReaction,
+       "Wallpaper combat must make Link attack an installed enemy and keep enemy reaction state side-effect-free.");
 var constrainedSimulation = new LiveWallpaperLinkSimulation();
 constrainedSimulation.Update(
     1, new LiveWallpaperLinkState(true, true, 0f), 0, true, constrainedMap);

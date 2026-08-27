@@ -29,10 +29,14 @@ ZIP.
 - An optional Android live wallpaper rendered exclusively from locally prepared in-game overworld
   tiles and animation sheets, with animated Link, selectable fixed, rotating, or location-matched
   island characters, wildlife, and smoothly rotating Mabe Village, Toronbo Shores, Mysterious
-  Forest, Kanalet Castle, Animal Village, and Wind Fish's Egg scenes, plus
+  Forest, Kanalet Castle, Animal Village, Wind Fish's Egg, Martha's Bay, Ukuku Prairie,
+  Cemetery, Goponga Swamp, Rapids Ride, Eastern Tal Tal Heights, Yarna Desert, and Face Shrine
+  scenes, plus
   authentic Marin singing notes, tethered BowWow wandering, hopping rooster behavior,
-  regional character anchors with manual placement overrides, map-safe Link routes with an
-  authentic feather jump across the forest gap, selectable Link activity,
+  regional character anchors with manual placement overrides, atlas-backed map buildings and
+  roofs, map-safe Link routes with an authentic feather jump across the forest gap, installed
+  overworld enemies with their original animation sheets and species-specific ambient behavior,
+  occasional collision-safe sword fights, selectable Link activity,
   local-time lighting, and Mabe Sunset, Forest Night, and Island Journey quick presets,
   naturally scheduled wildlife, parallax, configurable tap actions, adaptive static rendering,
   and battery-friendly frame rates.

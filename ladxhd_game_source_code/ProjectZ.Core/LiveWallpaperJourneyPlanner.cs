@@ -8,6 +8,7 @@ namespace ProjectZ
     {
         Walk,
         Interact,
+        Attack,
         FeatherJump,
         RoosterFly
     }
@@ -34,13 +35,17 @@ namespace ProjectZ
             int interactionPointIndex = -1,
             int interactionActorIndex = -1,
             int roosterPickupPointIndex = -1,
-            int roosterLandingPointIndex = -1)
+            int roosterLandingPointIndex = -1,
+            int combatPointIndex = -1,
+            int combatEnemyIndex = -1)
         {
             Points = points ?? [];
             InteractionPointIndex = interactionPointIndex;
             InteractionActorIndex = interactionActorIndex;
             RoosterPickupPointIndex = roosterPickupPointIndex;
             RoosterLandingPointIndex = roosterLandingPointIndex;
+            CombatPointIndex = combatPointIndex;
+            CombatEnemyIndex = combatEnemyIndex;
         }
 
         public IReadOnlyList<LiveWallpaperJourneyPoint> Points { get; }
@@ -48,8 +53,11 @@ namespace ProjectZ
         public int InteractionActorIndex { get; }
         public int RoosterPickupPointIndex { get; }
         public int RoosterLandingPointIndex { get; }
+        public int CombatPointIndex { get; }
+        public int CombatEnemyIndex { get; }
         public bool HasInteraction => InteractionPointIndex >= 0 && InteractionActorIndex >= 0;
         public bool HasRoosterFlight => RoosterPickupPointIndex >= 0 && RoosterLandingPointIndex >= 0;
+        public bool HasCombat => CombatPointIndex >= 0 && CombatEnemyIndex >= 0;
     }
 
     /// <summary>
@@ -118,7 +126,7 @@ namespace ProjectZ
             if (pairs.Count == 0)
                 return new LiveWallpaperJourneyPlan([]);
 
-            var pairOffset = PositiveHash(scene, variant, 17) % Math.Min(12, pairs.Count);
+            var pairOffset = PositiveHash(scene, variant, 17) % pairs.Count;
             List<Point> fallbackPath = null;
             for (var attempt = 0; attempt < pairs.Count; attempt++)
             {
@@ -136,26 +144,200 @@ namespace ProjectZ
                     continue;
                 }
 
-                fallbackPath ??= basePath;
                 var behavior = PositiveHash(scene, variant, 71);
-                if (allowIslandLife && behavior % 5 == 0)
+                if (behavior % 2 == 0 && TryAddScenicDetour(
+                        map, basePath, pair.Start, pair.End,
+                        pathMinX, pathMinY, pathMaxX, pathMaxY, behavior,
+                        out var scenicPath))
+                    basePath = scenicPath;
+                fallbackPath ??= basePath;
+                if (allowIslandLife && behavior % 7 == 0)
                     return AddRoosterFlight(
                         map, basePath, pathMinX, pathMinY, pathMaxX, pathMaxY);
-                if (allowIslandLife && behavior % 3 == 0 &&
+                if (allowIslandLife && behavior % 5 == 0 &&
                     TryAddInteraction(
                         map, basePath, pair.Start, pair.End,
                         minX, minY, maxX, maxY,
                         pathMinX, pathMinY, pathMaxX, pathMaxY, behavior,
                         out var interactionPlan))
                     return interactionPlan;
-                if (allowIslandLife && behavior % 3 == 0)
-                    continue;
+                if (allowIslandLife && behavior % 3 == 0 &&
+                    TryAddCombat(
+                        map, basePath, minX, minY, maxX, maxY,
+                        pathMinX, pathMinY, pathMaxX, pathMaxY, behavior,
+                        out var combatPlan))
+                    return combatPlan;
 
                 return ToPlan(basePath);
             }
             return fallbackPath != null
                 ? ToPlan(fallbackPath)
                 : new LiveWallpaperJourneyPlan([]);
+        }
+
+        private static bool TryAddScenicDetour(
+            LiveWallpaperMap map,
+            List<Point> basePath,
+            Endpoint start,
+            Endpoint end,
+            int minX,
+            int minY,
+            int maxX,
+            int maxY,
+            int behavior,
+            out List<Point> scenicPath)
+        {
+            scenicPath = null;
+            var candidates = new List<Point>();
+            const int candidateStep = GridStep * 3;
+            for (var y = minY + candidateStep; y <= maxY - candidateStep; y += candidateStep)
+            {
+                for (var x = minX + candidateStep; x <= maxX - candidateStep; x += candidateStep)
+                {
+                    if (!IsWalkable(map, x, y, true) ||
+                        DistanceToSegmentSquared(x, y, start.X, start.Y, end.X, end.Y) <
+                        32f * 32f)
+                        continue;
+                    candidates.Add(new Point(x, y));
+                }
+            }
+            if (candidates.Count == 0)
+                return false;
+
+            var candidateOffset = behavior % candidates.Count;
+            for (var attempt = 0; attempt < Math.Min(24, candidates.Count); attempt++)
+            {
+                var waypoint = candidates[(candidateOffset + attempt * 7) % candidates.Count];
+                var first = FindPath(
+                    map, start.X, start.Y, waypoint.X, waypoint.Y,
+                    minX, minY, maxX, maxY, includeHoles: true);
+                if (first.Count < 2)
+                    continue;
+                var second = FindPath(
+                    map, waypoint.X, waypoint.Y, end.X, end.Y,
+                    minX, minY, maxX, maxY, includeHoles: true);
+                if (second.Count < 2)
+                    continue;
+                var combinedCount = first.Count + second.Count - 1;
+                if (combinedCount < basePath.Count + 5 ||
+                    combinedCount > Math.Max(basePath.Count * 3, basePath.Count + 80))
+                    continue;
+                first.AddRange(second.GetRange(1, second.Count - 1));
+                scenicPath = first;
+                return true;
+            }
+            return false;
+        }
+
+        private static float DistanceToSegmentSquared(
+            float x, float y, float startX, float startY, float endX, float endY)
+        {
+            var segmentX = endX - startX;
+            var segmentY = endY - startY;
+            var lengthSquared = segmentX * segmentX + segmentY * segmentY;
+            if (lengthSquared <= 0.001f)
+            {
+                var deltaX = x - startX;
+                var deltaY = y - startY;
+                return deltaX * deltaX + deltaY * deltaY;
+            }
+            var progress = Math.Clamp(
+                ((x - startX) * segmentX + (y - startY) * segmentY) /
+                lengthSquared, 0f, 1f);
+            var nearestX = startX + segmentX * progress;
+            var nearestY = startY + segmentY * progress;
+            var nearestDeltaX = x - nearestX;
+            var nearestDeltaY = y - nearestY;
+            return nearestDeltaX * nearestDeltaX + nearestDeltaY * nearestDeltaY;
+        }
+
+        private static bool TryAddCombat(
+            LiveWallpaperMap map,
+            List<Point> basePath,
+            int minX,
+            int minY,
+            int maxX,
+            int maxY,
+            int pathMinX,
+            int pathMinY,
+            int pathMaxX,
+            int pathMaxY,
+            int behavior,
+            out LiveWallpaperJourneyPlan plan)
+        {
+            plan = null;
+            var enemies = new List<int>();
+            for (var index = 0; index < map.Enemies.Count; index++)
+            {
+                var enemy = map.Enemies[index];
+                var centerX = enemy.BodyX + enemy.BodyWidth / 2;
+                var centerY = enemy.BodyY + enemy.BodyHeight / 2;
+                if (centerX >= minX && centerX <= maxX &&
+                    centerY >= minY && centerY <= maxY)
+                    enemies.Add(index);
+            }
+            if (enemies.Count == 0)
+                return false;
+
+            var enemyOffset = behavior % enemies.Count;
+            for (var enemyAttempt = 0; enemyAttempt < enemies.Count; enemyAttempt++)
+            {
+                var enemyIndex = enemies[(enemyOffset + enemyAttempt) % enemies.Count];
+                var approaches = GetEnemyApproaches(map.Enemies[enemyIndex]);
+                for (var approachAttempt = 0; approachAttempt < approaches.Length;
+                     approachAttempt++)
+                {
+                    var approach = approaches[(approachAttempt + behavior) % approaches.Length];
+                    approach = new Point(
+                        Snap(Math.Clamp(approach.X, minX, maxX)),
+                        Snap(Math.Clamp(approach.Y, minY, maxY)));
+                    if (!IsWalkable(map, approach.X, approach.Y, true))
+                        continue;
+                    var detourIndex = FindNearestPointIndex(basePath, approach);
+                    var detourStart = basePath[detourIndex];
+                    var detour = FindPath(
+                        map, detourStart.X, detourStart.Y, approach.X, approach.Y,
+                        pathMinX, pathMinY, pathMaxX, pathMaxY,
+                        includeHoles: true);
+                    if (detour.Count < 2)
+                        continue;
+
+                    var points = new List<LiveWallpaperJourneyPoint>();
+                    for (var index = 0; index <= detourIndex; index++)
+                        points.Add(new LiveWallpaperJourneyPoint(
+                            basePath[index].X, basePath[index].Y));
+                    for (var index = 1; index < detour.Count; index++)
+                        points.Add(new LiveWallpaperJourneyPoint(
+                            detour[index].X, detour[index].Y));
+                    var combatPoint = points.Count - 1;
+                    points[combatPoint] = new LiveWallpaperJourneyPoint(
+                        approach.X, approach.Y, LiveWallpaperJourneyAction.Attack);
+                    for (var index = detour.Count - 2; index >= 0; index--)
+                        points.Add(new LiveWallpaperJourneyPoint(
+                            detour[index].X, detour[index].Y));
+                    for (var index = detourIndex + 1; index < basePath.Count; index++)
+                        points.Add(new LiveWallpaperJourneyPoint(
+                            basePath[index].X, basePath[index].Y));
+                    plan = new LiveWallpaperJourneyPlan(
+                        points.ToArray(), combatPointIndex: combatPoint,
+                        combatEnemyIndex: enemyIndex);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static Point[] GetEnemyApproaches(LiveWallpaperMapEnemy enemy)
+        {
+            var centerX = enemy.BodyX + enemy.BodyWidth / 2;
+            var centerY = enemy.BodyY + enemy.BodyHeight / 2;
+            return
+            [
+                new Point(enemy.BodyX - 12, centerY + 5),
+                new Point(enemy.BodyX + enemy.BodyWidth + 12, centerY + 5),
+                new Point(centerX, enemy.BodyY - 6),
+                new Point(centerX, enemy.BodyY + enemy.BodyHeight + 14)
+            ];
         }
 
         private static LiveWallpaperJourneyPlan AddRoosterFlight(
@@ -417,13 +599,36 @@ namespace ProjectZ
                     previous = value;
                 if ((!walkable || value + GridStep > end) && runStart != int.MinValue)
                 {
-                    var middle = Snap((runStart + previous) / 2);
-                    endpoints.Add(vertical
-                        ? new Endpoint(fixedValue, middle, side, isDoor: false)
-                        : new Endpoint(middle, fixedValue, side, isDoor: false));
+                    var runLength = previous - runStart;
+                    AddEdgeEndpoint(endpoints, vertical, fixedValue,
+                        Snap((runStart + previous) / 2), side);
+                    if (runLength >= GridStep * 6)
+                    {
+                        AddEdgeEndpoint(endpoints, vertical, fixedValue,
+                            Snap(runStart + runLength / 4), side);
+                        AddEdgeEndpoint(endpoints, vertical, fixedValue,
+                            Snap(runStart + runLength * 3 / 4), side);
+                    }
                     runStart = int.MinValue;
                 }
             }
+        }
+
+        private static void AddEdgeEndpoint(
+            List<Endpoint> endpoints,
+            bool vertical,
+            int fixedValue,
+            int variableValue,
+            int side)
+        {
+            var x = vertical ? fixedValue : variableValue;
+            var y = vertical ? variableValue : fixedValue;
+            foreach (var endpoint in endpoints)
+            {
+                if (endpoint.X == x && endpoint.Y == y && endpoint.Side == side)
+                    return;
+            }
+            endpoints.Add(new Endpoint(x, y, side, isDoor: false));
         }
 
         private static List<Pair> BuildPairs(
@@ -466,7 +671,8 @@ namespace ProjectZ
             int minY,
             int maxX,
             int maxY,
-            bool includeHoles)
+            bool includeHoles,
+            int ignoredEnemyIndex = -1)
         {
             startX = Snap(Math.Clamp(startX, minX, maxX));
             startY = Snap(Math.Clamp(startY, minY, maxY));
@@ -503,7 +709,8 @@ namespace ProjectZ
                     var next = nextY * columns + nextX;
                     var pixelX = minX + nextX * GridStep;
                     var pixelY = minY + nextY * GridStep;
-                    if (next != endIndex && !IsWalkable(map, pixelX, pixelY, includeHoles))
+                    if (next != endIndex && !IsWalkable(
+                            map, pixelX, pixelY, includeHoles, ignoredEnemyIndex))
                         continue;
                     var nextCost = cost[current] + 1;
                     if (nextCost >= cost[next])
@@ -532,13 +739,17 @@ namespace ProjectZ
         }
 
         private static bool IsWalkable(
-            LiveWallpaperMap map, float entityX, float entityY, bool includeHoles) =>
+            LiveWallpaperMap map, float entityX, float entityY, bool includeHoles,
+            int ignoredEnemyIndex = -1) =>
             !map.IntersectsCollision(
                 entityX + LinkBodyOffsetX, entityY + LinkBodyOffsetY,
                 LinkBodyWidth, LinkBodyHeight, includeHoles) &&
             !map.IntersectsActor(
                 entityX + LinkBodyOffsetX, entityY + LinkBodyOffsetY,
-                LinkBodyWidth, LinkBodyHeight);
+                LinkBodyWidth, LinkBodyHeight) &&
+            !map.IntersectsEnemy(
+                entityX + LinkBodyOffsetX, entityY + LinkBodyOffsetY,
+                LinkBodyWidth, LinkBodyHeight, ignoredEnemyIndex);
 
         private static int ToIndex(
             int pixelX, int pixelY, int minX, int minY, int columns) =>

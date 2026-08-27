@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Android.App;
 using Android.Content;
 using Android.Content.PM;
@@ -389,11 +390,14 @@ namespace ProjectZ.Android
             layout.AddView(sceneLabel);
             var scene = new Spinner(this) { Enabled = assetReady };
             int[] sceneValues =
-                [1, 2, 3, 5, 6, 7, LiveWallpaperSceneSelection.RotationSelection];
+                [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                 LiveWallpaperSceneSelection.RotationSelection];
             var sceneAdapter = new ArrayAdapter<string>(this,
                 global::Android.Resource.Layout.SimpleSpinnerItem,
                 ["Mabe Village", "Toronbo Shores", "Mysterious Forest", "Kanalet Castle",
-                 "Animal Village", "Wind Fish's Egg", "Rotate locations"]);
+                 "Animal Village", "Wind Fish's Egg", "Martha's Bay", "Ukuku Prairie",
+                 "Cemetery", "Goponga Swamp", "Rapids Ride", "Eastern Tal Tal Heights",
+                 "Yarna Desert", "Face Shrine", "Rotate locations"]);
             sceneAdapter.SetDropDownViewResource(
                 global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
             scene.Adapter = sceneAdapter;
@@ -837,6 +841,32 @@ namespace ProjectZ.Android
             public LiveWallpaperAtlasEntry Entry { get; }
         }
 
+        private sealed class EnemyAssetSet
+        {
+            public SpriteAsset[] Walk { get; } = new SpriteAsset[4];
+            public SpriteAsset[] Idle { get; } = new SpriteAsset[4];
+            public SpriteAsset[] Attack { get; } = new SpriteAsset[4];
+            public SpriteAsset[] Spawn { get; } = new SpriteAsset[4];
+            public SpriteAsset[] Leave { get; } = new SpriteAsset[4];
+
+            public SpriteAsset Resolve(LiveWallpaperEnemyState state)
+            {
+                var direction = Math.Clamp(state.Direction, 0, 3);
+                var preferred = state.Action switch
+                {
+                    LiveWallpaperEnemyAction.Attack => Attack,
+                    LiveWallpaperEnemyAction.Spawn => Spawn,
+                    LiveWallpaperEnemyAction.Leave => Leave,
+                    LiveWallpaperEnemyAction.Walk => Walk,
+                    _ => Idle
+                };
+                return preferred[direction] ?? Walk[direction] ?? Idle[direction] ??
+                       preferred.FirstOrDefault(asset => asset != null) ??
+                       Walk.FirstOrDefault(asset => asset != null) ??
+                       Idle.FirstOrDefault(asset => asset != null);
+            }
+        }
+
         // Keep bitmap opacity independent from the translucent lighting/fade overlays. Android
         // Paint retains its alpha between frames, so sharing one Paint can make all game art dark.
         private readonly Paint _bitmapPaint = new Paint
@@ -857,6 +887,8 @@ namespace ProjectZ.Android
         private readonly SpriteAsset[] _linkStanding = new SpriteAsset[4];
         private readonly SpriteAsset[] _linkJumping = new SpriteAsset[4];
         private readonly SpriteAsset[] _linkFlying = new SpriteAsset[4];
+        private readonly SpriteAsset[] _linkAttacking = new SpriteAsset[4];
+        private readonly SpriteAsset[] _linkSwords = new SpriteAsset[4];
         private readonly SpriteAsset[] _roosterDirections = new SpriteAsset[4];
         private SpriteAsset _marin;
         private SpriteAsset _bowWowLeft;
@@ -870,6 +902,10 @@ namespace ProjectZ.Android
         private SpriteAsset _mapOwl;
         private readonly Dictionary<string, SpriteAsset[]> _mapPeople =
             new Dictionary<string, SpriteAsset[]>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<LiveWallpaperMapEnemyKind, EnemyAssetSet> _mapEnemies =
+            new Dictionary<LiveWallpaperMapEnemyKind, EnemyAssetSet>();
+        private readonly Dictionary<string, AtlasSpriteAsset> _mapDecorations =
+            new Dictionary<string, AtlasSpriteAsset>(StringComparer.OrdinalIgnoreCase);
         private SpriteAsset _butterfly;
         private SpriteAsset _owl;
         private AtlasSpriteAsset _marinNote;
@@ -893,6 +929,10 @@ namespace ProjectZ.Android
                     context, "link0.ani", [$"jump_{direction}"]);
                 _linkFlying[direction] = LoadSprite(
                     context, "link0.ani", [$"flying_{direction}"]);
+                _linkAttacking[direction] = LoadSprite(
+                    context, "link0.ani", [$"attack_{direction}"]);
+                _linkSwords[direction] = LoadSprite(
+                    context, "Objects/sword.ani", [$"attack_{direction}"]);
                 _roosterDirections[direction] = LoadSprite(
                     context, "NPCs/cock.ani", [$"stand_{direction}"]);
             }
@@ -917,6 +957,17 @@ namespace ProjectZ.Android
             _overworldMap = LoadOverworldMap(context);
             if (_overworldMap != null)
             {
+                foreach (var decoration in _overworldMap.Map.Decorations)
+                {
+                    if (!_mapDecorations.ContainsKey(decoration.SpriteId))
+                        _mapDecorations[decoration.SpriteId] = LoadAtlasSprite(
+                            context, "objects", decoration.SpriteId);
+                }
+                foreach (var enemy in _overworldMap.Map.Enemies)
+                {
+                    if (!_mapEnemies.ContainsKey(enemy.Kind))
+                        _mapEnemies[enemy.Kind] = LoadEnemyAssetSet(context, enemy.Kind);
+                }
                 foreach (var actor in _overworldMap.Map.Actors)
                 {
                     if (actor.Kind != LiveWallpaperMapActorKind.Person)
@@ -973,6 +1024,7 @@ namespace ProjectZ.Android
                 return;
             var groundY = DrawInstalledMap(
                 canvas, width, height, resolvedScene, xOffset, out var viewport);
+            DrawInstalledMapDecorations(canvas, viewport);
             LiveWallpaperSimulatedLinkState? simulatedLink = null;
             if (linkActivity != 3)
             {
@@ -983,6 +1035,9 @@ namespace ProjectZ.Android
             if (showIslandLife)
                 DrawInstalledMapActors(
                     canvas, viewport, time, animated, wildlife, simulatedLink);
+            if (showIslandLife)
+                DrawInstalledMapEnemies(
+                    canvas, viewport, time, animated, simulatedLink);
             if (showIslandLife && wildlife.ShowOwl)
                 DrawOwl(canvas, width, height, time, unit, animated);
             if (showIslandLife)
@@ -1065,6 +1120,75 @@ namespace ProjectZ.Android
             }
 
             return viewport.GroundY;
+        }
+
+        private void DrawInstalledMapDecorations(
+            Canvas canvas, LiveWallpaperMapViewport viewport)
+        {
+            if (_overworldMap?.Map == null)
+                return;
+            var scale = viewport.TileSize / 16f;
+            foreach (var decoration in _overworldMap.Map.Decorations)
+            {
+                if (!_mapDecorations.TryGetValue(decoration.SpriteId, out var asset) ||
+                    asset == null)
+                    continue;
+                var anchorX = viewport.Left +
+                              (decoration.EntityX / 16f - viewport.OriginX) *
+                              viewport.TileSize;
+                var anchorY = viewport.Top +
+                              (decoration.EntityY / 16f - viewport.OriginY) *
+                              viewport.TileSize;
+                if (anchorX < viewport.Left - 64f * scale ||
+                    anchorX > viewport.Left + viewport.Columns * viewport.TileSize +
+                    64f * scale ||
+                    anchorY < viewport.Top - 64f * scale ||
+                    anchorY > viewport.Top + viewport.Rows * viewport.TileSize +
+                    64f * scale)
+                    continue;
+                DrawAtlasObjectAt(canvas, asset, anchorX, anchorY, scale);
+            }
+        }
+
+        private void DrawInstalledMapEnemies(
+            Canvas canvas,
+            LiveWallpaperMapViewport viewport,
+            long elapsed,
+            bool animated,
+            LiveWallpaperSimulatedLinkState? link)
+        {
+            if (_overworldMap?.Map == null)
+                return;
+            var scale = viewport.TileSize / 16f;
+            for (var enemyIndex = 0;
+                 enemyIndex < _overworldMap.Map.Enemies.Count;
+                 enemyIndex++)
+            {
+                var enemy = _overworldMap.Map.Enemies[enemyIndex];
+                var state = LiveWallpaperEnemySimulation.Resolve(
+                    _overworldMap.Map, enemyIndex, animated ? elapsed : 0L, link);
+                if (!state.Visible ||
+                    !_mapEnemies.TryGetValue(enemy.Kind, out var set))
+                    continue;
+                var asset = set.Resolve(state);
+                if (asset == null)
+                    continue;
+                var anchorX = viewport.Left +
+                              (state.PixelX / 16f - viewport.OriginX) *
+                              viewport.TileSize;
+                var anchorY = viewport.Top +
+                              (state.PixelY / 16f - viewport.OriginY) *
+                              viewport.TileSize;
+                if (anchorX < viewport.Left - 32f * scale ||
+                    anchorX > viewport.Left + viewport.Columns * viewport.TileSize +
+                    32f * scale ||
+                    anchorY < viewport.Top - 32f * scale ||
+                    anchorY > viewport.Top + viewport.Rows * viewport.TileSize +
+                    32f * scale)
+                    continue;
+                DrawSpriteAt(canvas, asset, elapsed, anchorX, anchorY, scale,
+                    engineDriven: true, animated: animated);
+            }
         }
 
         private void DrawInstalledMapActors(
@@ -1207,6 +1331,7 @@ namespace ProjectZ.Android
             {
                 LiveWallpaperLinkRouteAction.FeatherJump => _linkJumping[direction],
                 LiveWallpaperLinkRouteAction.RoosterFly => _linkFlying[direction],
+                LiveWallpaperLinkRouteAction.Attack => _linkAttacking[direction],
                 LiveWallpaperLinkRouteAction.Walk => _linkWalking[direction],
                 _ => _linkStanding[direction]
             };
@@ -1217,6 +1342,16 @@ namespace ProjectZ.Android
             DrawSpriteAt(canvas, asset, elapsed,
                 placement.AnchorX, placement.AnchorY, placement.Scale,
                 engineDriven: true, animated: animated);
+            if (simulated.Action == LiveWallpaperLinkRouteAction.Attack &&
+                _linkSwords[direction] != null)
+            {
+                // ObjLink draws AnimatorWeapons at entity X and entity Y - 16.
+                DrawSpriteAt(canvas, _linkSwords[direction], elapsed,
+                    placement.AnchorX + 7f * placement.Scale,
+                    placement.AnchorY,
+                    placement.Scale,
+                    engineDriven: true, animated: animated);
+            }
             DrawJourneyRooster(canvas, viewport, elapsed, animated, simulated);
         }
 
@@ -1446,6 +1581,31 @@ namespace ProjectZ.Android
             canvas.DrawBitmap(asset.Bitmap, source, destination, _bitmapPaint);
         }
 
+        private void DrawAtlasObjectAt(
+            Canvas canvas,
+            AtlasSpriteAsset asset,
+            float entityX,
+            float entityY,
+            float scale)
+        {
+            if (asset?.Bitmap == null)
+                return;
+            var entry = asset.Entry;
+            if (entry.X < 0 || entry.Y < 0 || entry.Width <= 0 || entry.Height <= 0 ||
+                entry.X + entry.Width > asset.Bitmap.Width ||
+                entry.Y + entry.Height > asset.Bitmap.Height)
+                return;
+            var source = new Rect(
+                entry.X, entry.Y, entry.X + entry.Width, entry.Y + entry.Height);
+            var left = entityX - entry.OriginX * scale;
+            var top = entityY - entry.OriginY * scale;
+            var destination = new RectF(
+                left, top,
+                left + entry.Width * scale,
+                top + entry.Height * scale);
+            canvas.DrawBitmap(asset.Bitmap, source, destination, _bitmapPaint);
+        }
+
         private SpriteAsset LoadSprite(
             Context context,
             string relativeAnimationPath,
@@ -1469,6 +1629,85 @@ namespace ProjectZ.Android
             {
                 return null;
             }
+        }
+
+        private EnemyAssetSet LoadEnemyAssetSet(
+            Context context, LiveWallpaperMapEnemyKind kind)
+        {
+            var set = new EnemyAssetSet();
+            var path = kind switch
+            {
+                LiveWallpaperMapEnemyKind.SeaUrchin => "Enemies/sea urchin.ani",
+                LiveWallpaperMapEnemyKind.Octorok => "Enemies/octorok.ani",
+                LiveWallpaperMapEnemyKind.Leever => "Enemies/leever.ani",
+                LiveWallpaperMapEnemyKind.Crab => "Enemies/crab.ani",
+                LiveWallpaperMapEnemyKind.Moblin => "Enemies/moblin.ani",
+                LiveWallpaperMapEnemyKind.MoblinSword => "Enemies/moblin sword.ani",
+                LiveWallpaperMapEnemyKind.RedZol => "Enemies/red zol.ani",
+                LiveWallpaperMapEnemyKind.RiverZora => "Enemies/river zora.ani",
+                LiveWallpaperMapEnemyKind.Ghini => "Enemies/ghini.ani",
+                _ => "Enemies/pincer.ani"
+            };
+            for (var direction = 0; direction < 4; direction++)
+            {
+                string[] walk;
+                string[] idle;
+                string[] attack;
+                string[] spawn;
+                string[] leave;
+                switch (kind)
+                {
+                    case LiveWallpaperMapEnemyKind.SeaUrchin:
+                        walk = idle = attack = spawn = leave = ["IDLE"];
+                        break;
+                    case LiveWallpaperMapEnemyKind.Octorok:
+                    case LiveWallpaperMapEnemyKind.Moblin:
+                    case LiveWallpaperMapEnemyKind.MoblinSword:
+                        walk = [$"walk_{direction}", $"stand_{direction}"];
+                        idle = [$"stand_{direction}", $"walk_{direction}"];
+                        attack = idle;
+                        spawn = leave = idle;
+                        break;
+                    case LiveWallpaperMapEnemyKind.Leever:
+                        walk = idle = ["MOVE", "SPAWN"];
+                        attack = walk;
+                        spawn = ["SPAWN", "MOVE"];
+                        leave = ["LEAVE", "MOVE"];
+                        break;
+                    case LiveWallpaperMapEnemyKind.Crab:
+                        walk = idle = attack = spawn = leave = ["walk"];
+                        break;
+                    case LiveWallpaperMapEnemyKind.RedZol:
+                        walk = ["WALK", "IDLE"];
+                        idle = ["IDLE", "WALK"];
+                        attack = walk;
+                        spawn = leave = idle;
+                        break;
+                    case LiveWallpaperMapEnemyKind.RiverZora:
+                        walk = idle = ["IDLE", "SPAWN"];
+                        attack = ["ATTACK", "IDLE"];
+                        spawn = ["SPAWN", "IDLE"];
+                        leave = idle;
+                        break;
+                    case LiveWallpaperMapEnemyKind.Ghini:
+                        var fly = direction is 0 or 1 ? "fly_-1" : "fly_1";
+                        walk = idle = attack = spawn = leave = [fly];
+                        break;
+                    default:
+                        var pincerDirection = (direction * 2).ToString();
+                        walk = idle = [pincerDirection, "eyes"];
+                        attack = [pincerDirection, "eyes"];
+                        spawn = attack;
+                        leave = idle;
+                        break;
+                }
+                set.Walk[direction] = LoadSprite(context, path, walk);
+                set.Idle[direction] = LoadSprite(context, path, idle);
+                set.Attack[direction] = LoadSprite(context, path, attack);
+                set.Spawn[direction] = LoadSprite(context, path, spawn);
+                set.Leave[direction] = LoadSprite(context, path, leave);
+            }
+            return set;
         }
 
         private AtlasSpriteAsset LoadAtlasSprite(

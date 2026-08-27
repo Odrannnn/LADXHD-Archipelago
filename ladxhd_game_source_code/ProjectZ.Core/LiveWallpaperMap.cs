@@ -16,6 +16,64 @@ namespace ProjectZ
         Butterfly
     }
 
+    public enum LiveWallpaperMapEnemyKind
+    {
+        SeaUrchin,
+        Octorok,
+        Leever,
+        Crab,
+        Moblin,
+        MoblinSword,
+        RedZol,
+        RiverZora,
+        Ghini,
+        Pincer
+    }
+
+    public readonly struct LiveWallpaperMapEnemy
+    {
+        public LiveWallpaperMapEnemy(
+            LiveWallpaperMapEnemyKind kind, int pixelX, int pixelY,
+            int entityX, int entityY,
+            int bodyX, int bodyY, int bodyWidth, int bodyHeight)
+        {
+            Kind = kind;
+            PixelX = pixelX;
+            PixelY = pixelY;
+            EntityX = entityX;
+            EntityY = entityY;
+            BodyX = bodyX;
+            BodyY = bodyY;
+            BodyWidth = bodyWidth;
+            BodyHeight = bodyHeight;
+        }
+
+        public LiveWallpaperMapEnemyKind Kind { get; }
+        public int PixelX { get; }
+        public int PixelY { get; }
+        public int EntityX { get; }
+        public int EntityY { get; }
+        public int BodyX { get; }
+        public int BodyY { get; }
+        public int BodyWidth { get; }
+        public int BodyHeight { get; }
+    }
+
+    public readonly struct LiveWallpaperMapDecoration
+    {
+        public LiveWallpaperMapDecoration(
+            string spriteId, int entityX, int entityY)
+        {
+            SpriteId = spriteId;
+            EntityX = entityX;
+            EntityY = entityY;
+        }
+
+        public string SpriteId { get; }
+        public int EntityX { get; }
+        public int EntityY { get; }
+    }
+
     public readonly struct LiveWallpaperMapActor
     {
         public LiveWallpaperMapActor(
@@ -94,7 +152,9 @@ namespace ProjectZ
             int hazardCount,
             int npcWallCount,
             LiveWallpaperMapActor[] actors,
-            LiveWallpaperMapPortal[] portals)
+            LiveWallpaperMapPortal[] portals,
+            LiveWallpaperMapEnemy[] enemies,
+            LiveWallpaperMapDecoration[] decorations)
         {
             TilesetPath = tilesetPath;
             Width = width;
@@ -107,6 +167,8 @@ namespace ProjectZ
             NpcWallCount = npcWallCount;
             Actors = actors ?? [];
             Portals = portals ?? [];
+            Enemies = enemies ?? [];
+            Decorations = decorations ?? [];
         }
 
         public string TilesetPath { get; }
@@ -119,6 +181,8 @@ namespace ProjectZ
         public int NpcWallCount { get; }
         public IReadOnlyList<LiveWallpaperMapActor> Actors { get; }
         public IReadOnlyList<LiveWallpaperMapPortal> Portals { get; }
+        public IReadOnlyList<LiveWallpaperMapEnemy> Enemies { get; }
+        public IReadOnlyList<LiveWallpaperMapDecoration> Decorations { get; }
 
         public int GetTile(int x, int y, int layer)
         {
@@ -193,6 +257,23 @@ namespace ProjectZ
             return false;
         }
 
+        public bool IntersectsEnemy(
+            float x, float y, float width, float height, int ignoredEnemyIndex = -1)
+        {
+            if (width <= 0 || height <= 0)
+                return false;
+            for (var index = 0; index < Enemies.Count; index++)
+            {
+                if (index == ignoredEnemyIndex)
+                    continue;
+                var enemy = Enemies[index];
+                if (x < enemy.BodyX + enemy.BodyWidth && x + width > enemy.BodyX &&
+                    y < enemy.BodyY + enemy.BodyHeight && y + height > enemy.BodyY)
+                    return true;
+            }
+            return false;
+        }
+
         public static bool TryLoad(TextReader reader, out LiveWallpaperMap map)
         {
             map = null;
@@ -237,12 +318,14 @@ namespace ProjectZ
 
             if (!TryLoadCollisionObjects(reader, width, height,
                     out var collisionGrid, out var collisionCount, out var hazardCount,
-                    out var npcWallCount, out var actors, out var portals))
+                    out var npcWallCount, out var actors, out var portals,
+                    out var enemies, out var decorations))
                 return false;
 
             map = new LiveWallpaperMap(
                 tilesetPath, width, height, depth, tiles,
-                collisionGrid, collisionCount, hazardCount, npcWallCount, actors, portals);
+                collisionGrid, collisionCount, hazardCount, npcWallCount, actors, portals,
+                enemies, decorations);
             return true;
         }
 
@@ -255,7 +338,9 @@ namespace ProjectZ
             out int hazardCount,
             out int npcWallCount,
             out LiveWallpaperMapActor[] actors,
-            out LiveWallpaperMapPortal[] portals)
+            out LiveWallpaperMapPortal[] portals,
+            out LiveWallpaperMapEnemy[] enemies,
+            out LiveWallpaperMapDecoration[] decorations)
         {
             collisionGrid = null;
             collisionCount = 0;
@@ -263,6 +348,8 @@ namespace ProjectZ
             npcWallCount = 0;
             actors = [];
             portals = [];
+            enemies = [];
+            decorations = [];
             var templateCountLine = reader.ReadLine();
             if (templateCountLine == null)
                 return true;
@@ -286,6 +373,8 @@ namespace ProjectZ
             collisionGrid = new List<CollisionRectangle>[width, height];
             var parsedActors = new List<LiveWallpaperMapActor>();
             var parsedPortals = new List<LiveWallpaperMapPortal>();
+            var parsedEnemies = new List<LiveWallpaperMapEnemy>();
+            var parsedDecorations = new List<LiveWallpaperMapDecoration>();
             for (var index = 0; index < objectCount; index++)
             {
                 var line = reader.ReadLine();
@@ -306,10 +395,96 @@ namespace ProjectZ
                     parsedActors, templates[templateIndex], parts, positionX, positionY);
                 TryAddMapPortal(
                     parsedPortals, templates[templateIndex], parts, positionX, positionY);
+                TryAddMapEnemy(
+                    parsedEnemies, templates[templateIndex], parts, positionX, positionY);
+                TryAddMapDecoration(
+                    parsedDecorations, templates[templateIndex], positionX, positionY);
             }
             actors = parsedActors.ToArray();
             portals = parsedPortals.ToArray();
+            enemies = parsedEnemies.ToArray();
+            decorations = parsedDecorations.ToArray();
             return true;
+        }
+
+        private static void TryAddMapEnemy(
+            List<LiveWallpaperMapEnemy> enemies,
+            string template,
+            string[] parts,
+            int positionX,
+            int positionY)
+        {
+            var enemyTemplate = template == "enemy_respawner" && parts.Length > 3
+                ? parts[3]?.Trim()
+                : template;
+            var kind = enemyTemplate switch
+            {
+                "e1" => LiveWallpaperMapEnemyKind.SeaUrchin,
+                "e2" => LiveWallpaperMapEnemyKind.Octorok,
+                "e3" => LiveWallpaperMapEnemyKind.Leever,
+                "e4" => LiveWallpaperMapEnemyKind.Crab,
+                "e5" => LiveWallpaperMapEnemyKind.Moblin,
+                "moblinSword" => LiveWallpaperMapEnemyKind.MoblinSword,
+                "e15" => LiveWallpaperMapEnemyKind.RedZol,
+                "e18" => LiveWallpaperMapEnemyKind.RiverZora,
+                "e21" => LiveWallpaperMapEnemyKind.Ghini,
+                "e23" => LiveWallpaperMapEnemyKind.Pincer,
+                _ => (LiveWallpaperMapEnemyKind?)null
+            };
+            if (!kind.HasValue)
+                return;
+
+            var body = kind.Value switch
+            {
+                LiveWallpaperMapEnemyKind.SeaUrchin => (16, -8, -16, 16, 16),
+                LiveWallpaperMapEnemyKind.Octorok => (12, -7, -12, 14, 12),
+                LiveWallpaperMapEnemyKind.Leever => (16, -7, -12, 14, 12),
+                LiveWallpaperMapEnemyKind.Crab => (16, -7, -10, 14, 10),
+                LiveWallpaperMapEnemyKind.Moblin => (16, -6, -10, 12, 10),
+                LiveWallpaperMapEnemyKind.MoblinSword => (16, -7, -14, 14, 14),
+                LiveWallpaperMapEnemyKind.RedZol => (13, -6, -10, 12, 10),
+                LiveWallpaperMapEnemyKind.RiverZora => (6, -6, -5, 12, 10),
+                LiveWallpaperMapEnemyKind.Ghini => (16, -6, -12, 12, 12),
+                _ => (8, -6, -6, 12, 12)
+            };
+            var entityX = positionX + 8;
+            var entityY = positionY + body.Item1;
+            enemies.Add(new LiveWallpaperMapEnemy(
+                kind.Value, positionX, positionY, entityX, entityY,
+                entityX + body.Item2, entityY + body.Item3,
+                body.Item4, body.Item5));
+        }
+
+        private static void TryAddMapDecoration(
+            List<LiveWallpaperMapDecoration> decorations,
+            string template,
+            int positionX,
+            int positionY)
+        {
+            var sprite = template switch
+            {
+                "phonehouse" => ("tree_phonehouse", 24, 24),
+                "seashell_house" => ("seashell_house", 24, 24),
+                "castle_roof_0" => ("castle_roof_0", 0, 17),
+                "castle_roof_1" => ("castle_roof_1", 0, 17),
+                "castle_roof_2" => ("castle_roof_2", 0, 17),
+                "castle_roof_3" => ("castle_roof_3", 0, 0),
+                "castle_roof_4" => ("castle_roof_4", 0, 16),
+                "castle_roof_5" => ("castle_roof_5", 0, 16),
+                "roof01" => ("roof_0", 0, 18),
+                "roof02" => ("roof_1", 0, 18),
+                "roof03" => ("roof_2", 0, 18),
+                "roof04" => ("roof_3", 0, 16),
+                "roof05" => ("roof_4", 0, 18),
+                "roof06" => ("roof_5", 0, 18),
+                "d5_entry" => ("d5_entry", 0, 0),
+                "witch_house" => ("witch_house", 0, 30),
+                _ => ((string)null, 0, 0)
+            };
+            if (sprite.Item1 == null)
+                return;
+            decorations.Add(new LiveWallpaperMapDecoration(
+                sprite.Item1, positionX + sprite.Item2, positionY + sprite.Item3));
         }
 
         private static void TryAddMapActor(

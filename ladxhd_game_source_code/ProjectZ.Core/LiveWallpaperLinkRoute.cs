@@ -8,6 +8,7 @@ namespace ProjectZ
         Walk,
         FeatherJump,
         Interact,
+        Attack,
         RoosterFly
     }
 
