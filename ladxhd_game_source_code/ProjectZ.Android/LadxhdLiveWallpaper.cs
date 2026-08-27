@@ -611,7 +611,9 @@ namespace ProjectZ.Android
                 _handler.RemoveCallbacks(_drawRunnable);
                 if (!_visible || !_surfaceReady)
                     return;
-                var delay = immediate ? 0L : 1000L / LadxhdWallpaperPreferences.GetFrameRate(_service);
+                var delay = immediate ? 0L : LiveWallpaperFrameScheduler.GetDelayMilliseconds(
+                    LadxhdWallpaperPreferences.IsAnimated(_service),
+                    LadxhdWallpaperPreferences.GetFrameRate(_service));
                 _handler.PostDelayed(_drawRunnable, delay);
             }
         }

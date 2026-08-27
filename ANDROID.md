@@ -72,6 +72,10 @@ character, or switch scenery, and select the
 battery-friendly 15 FPS mode or smoother 30 FPS mode. Tap **Preview and set wallpaper** to open
 Android's system wallpaper picker.
 
+Turning animation off automatically drops background rendering to one update per second while the
+wallpaper is visible. Touches and launcher-page movement still redraw immediately, and automatic
+location rotation and local-time lighting remain active.
+
 The wallpaper is a lightweight, standalone Koholint-inspired scene. It pauses when it is not
 visible, supports launcher-page parallax and touch effects, and does not start gameplay, audio,
 saves, or an Archipelago connection. When locally prepared game data is available it reads Link,

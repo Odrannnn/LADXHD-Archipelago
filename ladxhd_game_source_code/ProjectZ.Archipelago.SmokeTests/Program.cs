@@ -138,6 +138,11 @@ Assert(walkingStart.Visible && walkingStart.Walking && walkingStart.Journey == 0
        animationDisabled.Visible && !animationDisabled.Walking &&
        !hidden.Visible,
        "Installed Link wallpaper activity must resolve walking, resting, and hidden states.");
+Assert(LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 15) == 66 &&
+       LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 30) == 33 &&
+       LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 999) == 33 &&
+       LiveWallpaperFrameScheduler.GetDelayMilliseconds(false, 30) == 1_000,
+       "A static wallpaper must use its low-power cadence regardless of animation FPS.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");
