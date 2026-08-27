@@ -151,6 +151,15 @@ Assert(LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 15) == 66 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 999) == 33 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(false, 30) == 1_000,
        "A static wallpaper must use its low-power cadence regardless of animation FPS.");
+var dayWildlife = LiveWallpaperWildlife.Resolve(0, LiveWallpaperTimePhase.Day);
+var sunsetWildlife = LiveWallpaperWildlife.Resolve(0, LiveWallpaperTimePhase.Sunset);
+var nightWildlife = LiveWallpaperWildlife.Resolve(0, LiveWallpaperTimePhase.Night);
+var allWildlife = LiveWallpaperWildlife.Resolve(1, LiveWallpaperTimePhase.Night);
+Assert(dayWildlife.ShowButterflies && !dayWildlife.ShowOwl &&
+       sunsetWildlife.ShowButterflies && sunsetWildlife.ShowOwl &&
+       !nightWildlife.ShowButterflies && nightWildlife.ShowOwl &&
+       allWildlife.ShowButterflies && allWildlife.ShowOwl,
+       "Wallpaper wildlife must follow daylight unless the always-show override is selected.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");

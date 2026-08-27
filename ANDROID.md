@@ -66,11 +66,10 @@ Open **Settings → Live wallpaper** in LADXHD Archipelago. Choose whether the s
 whether Koholint wildlife should appear, select Marin, BowWow, the rooster, or automatic character
 rotation, choose the stylized coast, Mabe Village, Toronbo Shores, Mysterious Forest, or rotating
 installed locations, choose whether Link walks, rests, alternates, or stays hidden, follow the
-phone's local
-time or force day, sunset, or night lighting, choose whether taps show a ripple, cycle the featured
-character, or switch scenery, and select the
-battery-friendly 15 FPS mode or smoother 30 FPS mode. Tap **Preview and set wallpaper** to open
-Android's system wallpaper picker.
+phone's local time or force day, sunset, or night lighting, use a natural butterfly/owl schedule or
+keep all wildlife visible, choose whether taps show a ripple, cycle the featured character, or
+switch scenery, and select the battery-friendly 15 FPS mode or smoother 30 FPS mode. Tap **Preview
+and set wallpaper** to open Android's system wallpaper picker.
 
 Turning animation off automatically drops background rendering to one update per second while the
 wallpaper is visible. Touches and launcher-page movement still redraw immediately, and automatic

@@ -24,6 +24,7 @@ namespace ProjectZ.Android
         private const string TimeOfDayKey = "time_of_day";
         private const string TapActionKey = "tap_action";
         private const string LinkActivityKey = "link_activity";
+        private const string WildlifeScheduleKey = "wildlife_schedule";
         private const string FrameRateKey = "frame_rate";
 
         public static bool IsAnimated(Context context) =>
@@ -103,6 +104,17 @@ namespace ProjectZ.Android
         public static void SetLinkActivity(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutInt(LinkActivityKey, Math.Clamp(value, 0, 3))?.Apply();
+
+        public static int GetWildlifeSchedule(Context context)
+        {
+            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.GetInt(WildlifeScheduleKey, 0) ?? 0;
+            return Math.Clamp(value, 0, 1);
+        }
+
+        public static void SetWildlifeSchedule(Context context, int value) =>
+            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.Edit()?.PutInt(WildlifeScheduleKey, Math.Clamp(value, 0, 1))?.Apply();
 
         public static void SetFrameRate(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
@@ -219,6 +231,28 @@ namespace ProjectZ.Android
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             islandLifeParams.SetMargins(0, 0, 0, Dp(12));
             layout.AddView(islandLife, islandLifeParams);
+
+            var wildlifeLabel = new TextView(this)
+            {
+                Text = "Wildlife schedule",
+                TextSize = 17f,
+                Enabled = assetReady
+            };
+            layout.AddView(wildlifeLabel);
+            var wildlifeSchedule = new Spinner(this) { Enabled = assetReady };
+            var wildlifeAdapter = new ArrayAdapter<string>(this,
+                global::Android.Resource.Layout.SimpleSpinnerItem,
+                ["Follow day and night", "Always show butterflies and owl"]);
+            wildlifeAdapter.SetDropDownViewResource(
+                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
+            wildlifeSchedule.Adapter = wildlifeAdapter;
+            wildlifeSchedule.SetSelection(LadxhdWallpaperPreferences.GetWildlifeSchedule(this));
+            wildlifeSchedule.ItemSelected += (_, args) =>
+                LadxhdWallpaperPreferences.SetWildlifeSchedule(this, args.Position);
+            var wildlifeParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            wildlifeParams.SetMargins(0, 0, 0, Dp(12));
+            layout.AddView(wildlifeSchedule, wildlifeParams);
 
             var characterLabel = new TextView(this)
             {
@@ -595,7 +629,8 @@ namespace ProjectZ.Android
                             LadxhdWallpaperPreferences.GetFeaturedCharacter(_service),
                             LadxhdWallpaperPreferences.GetScene(_service),
                             LadxhdWallpaperPreferences.GetTimeOfDay(_service),
-                            LadxhdWallpaperPreferences.GetLinkActivity(_service));
+                            LadxhdWallpaperPreferences.GetLinkActivity(_service),
+                            LadxhdWallpaperPreferences.GetWildlifeSchedule(_service));
                     }
                 }
                 finally
@@ -706,7 +741,8 @@ namespace ProjectZ.Android
             int featuredCharacter,
             int scene,
             int timeOfDay,
-            int linkActivity)
+            int linkActivity,
+            int wildlifeSchedule)
         {
             var width = canvas.Width;
             var height = canvas.Height;
@@ -715,9 +751,10 @@ namespace ProjectZ.Android
             var time = animated ? elapsed : 0L;
             var unit = Math.Max(1f, Math.Min(width, height) / 240f);
             var phase = LiveWallpaperLighting.Resolve(timeOfDay, DateTime.Now.Hour);
+            var wildlife = LiveWallpaperWildlife.Resolve(wildlifeSchedule, phase);
 
             DrawSky(canvas, width, height, time, xOffset, unit, phase);
-            if (showIslandLife)
+            if (showIslandLife && wildlife.ShowOwl)
                 DrawOwl(canvas, width, height, time, unit, animated);
             var resolvedScene = LiveWallpaperSceneSelection.Resolve(
                 scene, elapsed, _overworldMap != null);
@@ -728,7 +765,8 @@ namespace ProjectZ.Android
             {
                 DrawFeaturedCharacter(canvas, width, groundY, time, xOffset, unit,
                     featuredCharacter);
-                DrawButterflies(canvas, width, groundY, time, unit, animated);
+                if (wildlife.ShowButterflies)
+                    DrawButterflies(canvas, width, groundY, time, unit, animated);
             }
             DrawLink(canvas, width, groundY, elapsed, unit, animated, linkActivity);
             DrawLightingOverlay(canvas, width, height, phase);
