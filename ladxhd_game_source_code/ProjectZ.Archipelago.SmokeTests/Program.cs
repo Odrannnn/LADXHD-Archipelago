@@ -211,14 +211,20 @@ var forestJump = LiveWallpaperLinkRoute.Resolve(3, 5f / 12f, true);
 var eggStairs = LiveWallpaperLinkRoute.Resolve(7, 0.25f, true);
 Assert(Math.Abs(mabeRouteStart.MapX - 23.5f) < 0.001f &&
        Math.Abs(mabeRouteStart.MapY - 77.5f) < 0.001f &&
-       mabeRouteStart.Direction == 3 &&
-       mabeRouteReturn.Direction == 2 &&
+       mabeRouteStart.Direction == 2 &&
+       mabeRouteReturn.Direction == 0 &&
        standingRoute.Action == LiveWallpaperLinkRouteAction.Stand &&
        forestJump.Action == LiveWallpaperLinkRouteAction.FeatherJump &&
        forestJump.JumpHeight > 0.99f &&
        Math.Abs(forestJump.MapX - 18.5f) < 0.001f &&
-       eggStairs.Direction == 0 && Math.Abs(eggStairs.MapY - 17.5f) < 0.001f,
+       eggStairs.Direction == 3 && Math.Abs(eggStairs.MapY - 17.5f) < 0.001f,
        "Wallpaper Link routes must stay map-aligned, reverse direction, and jump marked gaps.");
+var mabeAtOneSecond = LiveWallpaperLinkActivity.ResolveForScene(0, 1, 1_000, true);
+var mabeAtOneSecondRoute = LiveWallpaperLinkRoute.Resolve(
+    1, mabeAtOneSecond.Journey, mabeAtOneSecond.Walking);
+Assert(Math.Abs(mabeAtOneSecondRoute.MapX - 27.25f) < 0.001f &&
+       mabeAtOneSecondRoute.Direction == 2,
+       "Wallpaper Link must traverse routes at ObjLink's 1-pixel-per-frame walk speed.");
 Assert(LiveWallpaperMapViewport.TryCreate(
            1080, 2400, 128, 1, 0.5f, out var linkPlacementViewport),
        "The Link placement regression fixture must produce a map viewport.");
@@ -262,6 +268,98 @@ constrainedMapData.Append("1\nc1\n1\n0;384;1296;;;\n");
 Assert(LiveWallpaperMap.TryLoad(
            new StringReader(constrainedMapData.ToString()), out var constrainedMap),
        "The collision regression fixture must be a valid installed map.");
+var actorMapData =
+    "3\n0\n0\noverworld.png\n2\n2\n1\n,\n,\n" +
+    "2\npersonNew\ndogo\n2\n" +
+    "0;16;16;;npc_green_boy;;stand_3\n1;0;0\n";
+Assert(LiveWallpaperMap.TryLoad(new StringReader(actorMapData), out var actorMap) &&
+       actorMap.Actors.Count == 2 &&
+       actorMap.Actors[0].Kind == LiveWallpaperMapActorKind.Person &&
+       actorMap.Actors[0].AnimationId == "npc_green_boy" &&
+       actorMap.Actors[0].AnimationName == "stand_3" &&
+       actorMap.Actors[0].BodyX == 17 && actorMap.Actors[0].BodyY == 22 &&
+       actorMap.Actors[0].BodyWidth == 14 && actorMap.Actors[0].BodyHeight == 10 &&
+       actorMap.IntersectsActor(18, 23, 8, 8) &&
+       actorMap.Actors[1].Kind == LiveWallpaperMapActorKind.Dog,
+       "Wallpaper maps must retain installed NPC placement, animation, and gameplay body data.");
+var journeyMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    journeyMapData.AppendLine(new string(',', 40));
+journeyMapData.Append(
+    "2\npersonNew\ndoor\n2\n" +
+    "0;384;1248;;npc_green_boy;;stand_3\n" +
+    "1;416;1216;;;cave_rooster;cave rooster.map;cave_rooster;3;0;\n");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(journeyMapData.ToString()), out var journeyMap) &&
+       journeyMap.Portals.Count == 1 &&
+       Math.Abs(journeyMap.Portals[0].LinkTargetX - 424f) < 0.001f &&
+       Math.Abs(journeyMap.Portals[0].LinkTargetY - 1232f) < 0.001f,
+       "Wallpaper maps must expose ObjDoor-compatible targets to the journey planner.");
+Assert(LiveWallpaperMapViewport.TryCreate(
+           1080, 2400, journeyMap.Height, 1, 0.5f, out var journeyViewport),
+       "The wallpaper journey regression fixture must produce a map viewport.");
+LiveWallpaperJourneyPlan interactionJourney = null;
+LiveWallpaperJourneyPlan roosterJourney = null;
+var interactionJourneyVariant = -1;
+var roosterJourneyVariant = -1;
+for (var variant = 0; variant < 60; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        journeyMap, journeyViewport, 1, variant, allowIslandLife: true);
+    if (interactionJourney == null && candidate.HasInteraction)
+    {
+        interactionJourney = candidate;
+        interactionJourneyVariant = variant;
+    }
+    if (roosterJourney == null && candidate.HasRoosterFlight)
+    {
+        roosterJourney = candidate;
+        roosterJourneyVariant = variant;
+    }
+}
+Assert(interactionJourney != null && interactionJourney.Points.Count > 2 &&
+       interactionJourney.InteractionActorIndex == 0 &&
+       interactionJourney.Points[interactionJourney.InteractionPointIndex].Action ==
+           LiveWallpaperJourneyAction.Interact &&
+       roosterJourney != null && roosterJourney.Points.Count > 6 &&
+       roosterJourney.Points.Any(point =>
+           point.Action == LiveWallpaperJourneyAction.RoosterFly),
+       "Wallpaper journeys must cross real scene boundaries and deterministically include NPC interactions and rooster flights.");
+foreach (var point in interactionJourney.Points)
+{
+    Assert(!journeyMap.IntersectsActor(
+               point.PixelX - 4, point.PixelY - 10, 8, 10),
+           "Wallpaper journey paths must not cross installed NPC bodies.");
+}
+var interactionSimulation = new LiveWallpaperLinkSimulation();
+var sawInteraction = false;
+var interactionStartTime = interactionJourneyVariant * 20_000L;
+for (var frame = 0; frame < 3_000; frame++)
+{
+    var link = interactionSimulation.UpdateJourney(
+        1, 0, interactionStartTime + frame * 17L, true,
+        journeyMap, journeyViewport, allowIslandLife: true);
+    sawInteraction |= link.Action == LiveWallpaperLinkRouteAction.Interact &&
+                      link.InteractionActorIndex == 0;
+    Assert(!journeyMap.IntersectsActor(
+               link.MapX * 16f - 4, link.MapY * 16f - 10, 8, 10),
+           "Wallpaper Link must not enter an NPC body while following an interaction route.");
+}
+var roosterSimulation = new LiveWallpaperLinkSimulation();
+var sawRoosterFlight = false;
+var roosterStartTime = roosterJourneyVariant * 20_000L;
+for (var frame = 0; frame < 3_000; frame++)
+{
+    var link = roosterSimulation.UpdateJourney(
+        1, 0, roosterStartTime + frame * 17L, true,
+        journeyMap, journeyViewport, allowIslandLife: true);
+    sawRoosterFlight |= link.CarryingRooster &&
+                        link.Action == LiveWallpaperLinkRouteAction.RoosterFly &&
+                        link.RoosterHeight > link.Height;
+}
+Assert(sawInteraction && sawRoosterFlight,
+       "Wallpaper journey simulation must pause to face NPCs and use Link's rooster-flight state.");
 var constrainedSimulation = new LiveWallpaperLinkSimulation();
 constrainedSimulation.Update(
     1, new LiveWallpaperLinkState(true, true, 0f), 0, true, constrainedMap);

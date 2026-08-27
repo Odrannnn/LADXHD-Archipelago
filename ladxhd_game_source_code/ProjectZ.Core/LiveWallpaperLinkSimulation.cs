@@ -21,7 +21,13 @@ namespace ProjectZ
     {
         public LiveWallpaperSimulatedLinkState(
             float mapX, float mapY, float height, int direction,
-            LiveWallpaperLinkRouteAction action, LiveWallpaperLinkInput input)
+            LiveWallpaperLinkRouteAction action, LiveWallpaperLinkInput input,
+            int interactionActorIndex = -1,
+            bool roosterVisible = false,
+            bool carryingRooster = false,
+            float roosterMapX = 0,
+            float roosterMapY = 0,
+            float roosterHeight = 0)
         {
             MapX = mapX;
             MapY = mapY;
@@ -29,6 +35,12 @@ namespace ProjectZ
             Direction = Math.Clamp(direction, 0, 3);
             Action = action;
             Input = input;
+            InteractionActorIndex = interactionActorIndex;
+            RoosterVisible = roosterVisible;
+            CarryingRooster = carryingRooster;
+            RoosterMapX = roosterMapX;
+            RoosterMapY = roosterMapY;
+            RoosterHeight = Math.Max(0f, roosterHeight);
         }
 
         public float MapX { get; }
@@ -37,6 +49,12 @@ namespace ProjectZ
         public int Direction { get; }
         public LiveWallpaperLinkRouteAction Action { get; }
         public LiveWallpaperLinkInput Input { get; }
+        public int InteractionActorIndex { get; }
+        public bool RoosterVisible { get; }
+        public bool CarryingRooster { get; }
+        public float RoosterMapX { get; }
+        public float RoosterMapY { get; }
+        public float RoosterHeight { get; }
     }
 
     /// <summary>
@@ -58,6 +76,18 @@ namespace ProjectZ
         private Vector2 _blockedMove;
         private Vector2 _committedJumpMove;
         private float _committedJumpRemaining;
+        private LiveWallpaperJourneyPlan _journeyPlan;
+        private int _journeyPointIndex;
+        private int _journeyVariant;
+        private long _nextJourneyAt;
+        private long _pauseUntil;
+        private bool _interactionPauseStarted;
+        private bool _roosterPickupPauseStarted;
+        private bool _journeyIslandLife;
+        private int _journeyOriginX = -1;
+        private int _journeyOriginY = -1;
+        private int _journeyColumns = -1;
+        private int _journeyRows = -1;
 
         public LiveWallpaperLinkSimulation()
         {
@@ -71,6 +101,302 @@ namespace ProjectZ
         }
 
         public BodyComponent Body => _body;
+
+        public LiveWallpaperSimulatedLinkState UpdateJourney(
+            int scene,
+            int activityMode,
+            long elapsedMilliseconds,
+            bool animated,
+            LiveWallpaperMap map,
+            LiveWallpaperMapViewport viewport,
+            bool allowIslandLife)
+        {
+            var elapsedDelta = _lastElapsed.HasValue
+                ? elapsedMilliseconds - _lastElapsed.Value
+                : 0L;
+            var reset = _scene != scene || elapsedDelta < 0 || elapsedDelta > 1000 ||
+                        _journeyPlan == null || _journeyIslandLife != allowIslandLife ||
+                        _journeyOriginX != viewport.OriginX ||
+                        _journeyOriginY != viewport.OriginY ||
+                        _journeyColumns != viewport.Columns ||
+                        _journeyRows != viewport.Rows;
+            _scene = scene;
+            _lastElapsed = elapsedMilliseconds;
+            if (reset)
+            {
+                _journeyVariant = (int)Math.Max(0, elapsedMilliseconds / 20_000L);
+                StartJourney(map, viewport, scene, allowIslandLife, elapsedMilliseconds);
+                if (!animated || activityMode == 1)
+                    PlaceAtJourneyRestPoint(viewport);
+                elapsedDelta = 0;
+            }
+
+            if (_journeyPlan == null || _journeyPlan.Points.Count == 0)
+            {
+                var fallback = LiveWallpaperLinkActivity.ResolveForScene(
+                    activityMode, scene, elapsedMilliseconds, animated);
+                return Update(scene, fallback, elapsedMilliseconds, animated, map);
+            }
+
+            if (_journeyPointIndex >= _journeyPlan.Points.Count)
+            {
+                if (_nextJourneyAt <= 0)
+                    _nextJourneyAt = elapsedMilliseconds + (activityMode == 2 ? 4_000L : 650L);
+                if (animated && activityMode != 1 && elapsedMilliseconds >= _nextJourneyAt)
+                {
+                    _journeyVariant++;
+                    StartJourney(map, viewport, scene, allowIslandLife, elapsedMilliseconds);
+                }
+            }
+
+            var canMove = animated && activityMode != 1 &&
+                          elapsedMilliseconds >= _pauseUntil &&
+                          _journeyPointIndex < _journeyPlan.Points.Count;
+            var frameScale = Math.Clamp(elapsedDelta / (1000f / 60f), 0f, 6f);
+            var inputMove = Vector2.Zero;
+            var interactionActor = -1;
+            var action = LiveWallpaperLinkRouteAction.Stand;
+            var targetJourneyAction = _journeyPointIndex < _journeyPlan.Points.Count
+                ? _journeyPlan.Points[_journeyPointIndex].Action
+                : LiveWallpaperJourneyAction.Walk;
+            if (canMove && frameScale > 0)
+            {
+                var targetPoint = _journeyPlan.Points[_journeyPointIndex];
+                var target = new Vector2(targetPoint.PixelX, targetPoint.PixelY);
+                var difference = target - _position.Position;
+                var carrying = IsCarryingRooster();
+                var speed = carrying ? 0.5f : WalkSpeedPerFrame;
+                var maximumMovement = speed * frameScale;
+                if (difference.LengthSquared() <= maximumMovement * maximumMovement)
+                {
+                    _position.X = target.X;
+                    _position.Y = target.Y;
+                    OnJourneyPointReached(elapsedMilliseconds);
+                }
+                else
+                {
+                    inputMove = Vector2.Normalize(difference);
+                    var movement = inputMove * maximumMovement;
+                    var jumping = targetJourneyAction ==
+                                  LiveWallpaperJourneyAction.FeatherJump ||
+                                  !_body.IsGrounded;
+                    if (jumping && _body.IsGrounded)
+                    {
+                        _body.IsGrounded = false;
+                        _body.Velocity.Z = 2.35f;
+                    }
+                    ApplyJourneyConstrainedMovement(
+                        map, movement, includeHoles: !carrying && !jumping);
+                }
+            }
+
+            var carryingRooster = IsCarryingRooster();
+            if (carryingRooster)
+            {
+                // ObjCock holds itself at Z=36 and lifts Link by its real CarryHeight (14).
+                _position.Z = 22f + MathF.Sin(
+                    elapsedMilliseconds / 450f * MathF.PI * 2f) * 1.5f;
+                _body.IsGrounded = false;
+                _body.Velocity.Z = 0;
+                action = LiveWallpaperLinkRouteAction.RoosterFly;
+            }
+            else
+            {
+                if (!_body.IsGrounded && frameScale > 0)
+                {
+                    _position.Z += _body.Velocity.Z * frameScale;
+                    _body.Velocity.Z += _body.Gravity * frameScale;
+                    if (_position.Z <= 0)
+                    {
+                        _position.Z = 0;
+                        _body.Velocity.Z = 0;
+                        _body.IsGrounded = true;
+                    }
+                    else
+                        action = LiveWallpaperLinkRouteAction.FeatherJump;
+                }
+                else if (_body.IsGrounded)
+                    _position.Z = 0;
+                if (_pauseUntil > elapsedMilliseconds &&
+                    _journeyPlan.HasInteraction && _interactionPauseStarted &&
+                    _journeyPointIndex == _journeyPlan.InteractionPointIndex)
+                {
+                    action = LiveWallpaperLinkRouteAction.Interact;
+                    interactionActor = _journeyPlan.InteractionActorIndex;
+                    inputMove = FaceActor(map, interactionActor);
+                }
+                else if (inputMove != Vector2.Zero && _body.IsGrounded)
+                    action = targetJourneyAction == LiveWallpaperJourneyAction.FeatherJump
+                        ? LiveWallpaperLinkRouteAction.FeatherJump
+                        : LiveWallpaperLinkRouteAction.Walk;
+            }
+
+            var fallbackDirection = _lastRouteDirection;
+            var direction = ResolveDirection(inputMove, fallbackDirection);
+            if (interactionActor >= 0)
+                direction = ResolveDirection(FaceActor(map, interactionActor), fallbackDirection);
+            _lastRouteDirection = direction;
+            var roosterVisible = _journeyPlan.HasRoosterFlight;
+            ResolveRoosterState(carryingRooster,
+                out var roosterX, out var roosterY, out var roosterHeight);
+            return new LiveWallpaperSimulatedLinkState(
+                _position.X / TileSize, _position.Y / TileSize, _position.Z,
+                direction, action, new LiveWallpaperLinkInput(inputMove, false),
+                interactionActor, roosterVisible, carryingRooster,
+                roosterX / TileSize, roosterY / TileSize, roosterHeight);
+        }
+
+        private void StartJourney(
+            LiveWallpaperMap map,
+            LiveWallpaperMapViewport viewport,
+            int scene,
+            bool allowIslandLife,
+            long elapsedMilliseconds)
+        {
+            _journeyPlan = LiveWallpaperJourneyPlanner.Create(
+                map, viewport, scene, _journeyVariant, allowIslandLife);
+            _journeyIslandLife = allowIslandLife;
+            _journeyOriginX = viewport.OriginX;
+            _journeyOriginY = viewport.OriginY;
+            _journeyColumns = viewport.Columns;
+            _journeyRows = viewport.Rows;
+            _journeyPointIndex = _journeyPlan.Points.Count > 1 ? 1 : 0;
+            _nextJourneyAt = 0;
+            _pauseUntil = elapsedMilliseconds;
+            _interactionPauseStarted = false;
+            _roosterPickupPauseStarted = false;
+            if (_journeyPlan.Points.Count > 0)
+            {
+                var start = _journeyPlan.Points[0];
+                _position.Set(new Vector3(start.PixelX, start.PixelY, 0));
+            }
+            _body.Velocity = Vector3.Zero;
+            _body.VelocityTarget = Vector2.Zero;
+            _body.IsGrounded = true;
+        }
+
+        private void PlaceAtJourneyRestPoint(LiveWallpaperMapViewport viewport)
+        {
+            if (_journeyPlan == null || _journeyPlan.Points.Count == 0)
+                return;
+            var centerX = (viewport.OriginX + viewport.Columns / 2f) * TileSize;
+            var centerY = (viewport.OriginY + viewport.Rows / 2f) * TileSize;
+            var nearestIndex = 0;
+            var nearestDistance = float.MaxValue;
+            for (var index = 0; index < _journeyPlan.Points.Count; index++)
+            {
+                var point = _journeyPlan.Points[index];
+                var deltaX = point.PixelX - centerX;
+                var deltaY = point.PixelY - centerY;
+                var distance = deltaX * deltaX + deltaY * deltaY;
+                if (distance >= nearestDistance)
+                    continue;
+                nearestDistance = distance;
+                nearestIndex = index;
+            }
+            var restingPoint = _journeyPlan.Points[nearestIndex];
+            _position.Set(new Vector3(restingPoint.PixelX, restingPoint.PixelY, 0));
+            _journeyPointIndex = nearestIndex;
+            _body.IsGrounded = true;
+        }
+
+        private void OnJourneyPointReached(long elapsedMilliseconds)
+        {
+            if (_journeyPlan.HasInteraction &&
+                _journeyPointIndex == _journeyPlan.InteractionPointIndex &&
+                !_interactionPauseStarted)
+            {
+                _interactionPauseStarted = true;
+                _pauseUntil = elapsedMilliseconds + 2_200L;
+                return;
+            }
+            if (_journeyPlan.HasRoosterFlight &&
+                _journeyPointIndex == _journeyPlan.RoosterPickupPointIndex &&
+                !_roosterPickupPauseStarted)
+            {
+                _roosterPickupPauseStarted = true;
+                _pauseUntil = elapsedMilliseconds + 900L;
+                return;
+            }
+            _journeyPointIndex++;
+        }
+
+        private bool IsCarryingRooster() =>
+            _journeyPlan?.HasRoosterFlight == true &&
+            _roosterPickupPauseStarted &&
+            _journeyPointIndex > _journeyPlan.RoosterPickupPointIndex &&
+            _journeyPointIndex <= _journeyPlan.RoosterLandingPointIndex;
+
+        private void ResolveRoosterState(
+            bool carrying, out float pixelX, out float pixelY, out float height)
+        {
+            pixelX = _position.X;
+            pixelY = _position.Y;
+            height = 0;
+            if (_journeyPlan?.HasRoosterFlight != true)
+                return;
+            if (carrying)
+            {
+                height = _position.Z + 14f;
+                return;
+            }
+            var pointIndex = _roosterPickupPauseStarted
+                ? _journeyPlan.RoosterLandingPointIndex
+                : _journeyPlan.RoosterPickupPointIndex;
+            var point = _journeyPlan.Points[Math.Clamp(
+                pointIndex, 0, _journeyPlan.Points.Count - 1)];
+            pixelX = point.PixelX;
+            pixelY = point.PixelY;
+        }
+
+        private Vector2 FaceActor(LiveWallpaperMap map, int actorIndex)
+        {
+            if (map == null || actorIndex < 0 || actorIndex >= map.Actors.Count)
+                return Vector2.Zero;
+            var actor = map.Actors[actorIndex];
+            var difference = new Vector2(
+                actor.BodyX + actor.BodyWidth / 2f - _position.X,
+                actor.BodyY + actor.BodyHeight / 2f - _position.Y);
+            return difference.LengthSquared() > 0.0001f
+                ? Vector2.Normalize(difference)
+                : Vector2.Zero;
+        }
+
+        private void ApplyJourneyConstrainedMovement(
+            LiveWallpaperMap map, Vector2 movement, bool includeHoles)
+        {
+            if (map == null)
+            {
+                _position.Offset(movement);
+                return;
+            }
+            if (movement.X != 0)
+            {
+                var nextX = _position.X + movement.X;
+                if (!IntersectsJourneyMap(map, nextX, _position.Y, includeHoles))
+                    _position.X = nextX;
+            }
+            if (movement.Y != 0)
+            {
+                var nextY = _position.Y + movement.Y;
+                if (!IntersectsJourneyMap(map, _position.X, nextY, includeHoles))
+                    _position.Y = nextY;
+            }
+        }
+
+        private bool IntersectsJourneyMap(
+            LiveWallpaperMap map, float positionX, float positionY, bool includeHoles) =>
+            map.IntersectsCollision(
+                positionX + _body.OffsetX,
+                positionY + _body.OffsetY,
+                _body.Width,
+                _body.Height,
+                includeHoles) ||
+            map.IntersectsActor(
+                positionX + _body.OffsetX,
+                positionY + _body.OffsetY,
+                _body.Width,
+                _body.Height);
 
         public LiveWallpaperSimulatedLinkState Update(
             int scene, LiveWallpaperLinkState activity,
@@ -252,16 +578,16 @@ namespace ProjectZ
             if (move.LengthSquared() <= 0.0001f)
                 return fallback;
             if (MathF.Abs(move.X) >= MathF.Abs(move.Y))
-                return move.X < 0 ? 2 : 3;
-            return move.Y < 0 ? 1 : 0;
+                return move.X < 0 ? 0 : 2;
+            return move.Y < 0 ? 1 : 3;
         }
 
         private static Vector2 DirectionToVector(int direction) => direction switch
         {
-            0 => Vector2.UnitY,
+            0 => -Vector2.UnitX,
             1 => -Vector2.UnitY,
-            2 => -Vector2.UnitX,
-            _ => Vector2.UnitX
+            2 => Vector2.UnitX,
+            _ => Vector2.UnitY
         };
 
         private void ApplyMapConstrainedMovement(
@@ -298,6 +624,11 @@ namespace ProjectZ
                 positionY + _body.OffsetY,
                 _body.Width,
                 _body.Height,
-                includeHoles: _body.IsGrounded);
+                includeHoles: _body.IsGrounded) ||
+            map.IntersectsActor(
+                positionX + _body.OffsetX,
+                positionY + _body.OffsetY,
+                _body.Width,
+                _body.Height);
     }
 }

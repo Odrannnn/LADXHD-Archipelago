@@ -856,11 +856,20 @@ namespace ProjectZ.Android
         private readonly SpriteAsset[] _linkWalking = new SpriteAsset[4];
         private readonly SpriteAsset[] _linkStanding = new SpriteAsset[4];
         private readonly SpriteAsset[] _linkJumping = new SpriteAsset[4];
+        private readonly SpriteAsset[] _linkFlying = new SpriteAsset[4];
+        private readonly SpriteAsset[] _roosterDirections = new SpriteAsset[4];
         private SpriteAsset _marin;
         private SpriteAsset _bowWowLeft;
         private SpriteAsset _bowWowRight;
         private SpriteAsset _roosterLeft;
         private SpriteAsset _roosterRight;
+        private SpriteAsset _mapDog;
+        private SpriteAsset _mapGrandmother;
+        private SpriteAsset _mapRaccoon;
+        private SpriteAsset _mapWeatherBird;
+        private SpriteAsset _mapOwl;
+        private readonly Dictionary<string, SpriteAsset[]> _mapPeople =
+            new Dictionary<string, SpriteAsset[]>(StringComparer.OrdinalIgnoreCase);
         private SpriteAsset _butterfly;
         private SpriteAsset _owl;
         private AtlasSpriteAsset _marinNote;
@@ -882,12 +891,22 @@ namespace ProjectZ.Android
                     context, "link0.ani", [$"stand_{direction}"]);
                 _linkJumping[direction] = LoadSprite(
                     context, "link0.ani", [$"jump_{direction}"]);
+                _linkFlying[direction] = LoadSprite(
+                    context, "link0.ani", [$"flying_{direction}"]);
+                _roosterDirections[direction] = LoadSprite(
+                    context, "NPCs/cock.ani", [$"stand_{direction}"]);
             }
             _marin = LoadSprite(context, "NPCs/marin.ani", ["sing"]);
-            _bowWowLeft = LoadSprite(context, "NPCs/BowWow.ani", ["walk_2"]);
-            _bowWowRight = LoadSprite(context, "NPCs/BowWow.ani", ["walk_3"]);
-            _roosterLeft = LoadSprite(context, "NPCs/cock.ani", ["stand_2"]);
-            _roosterRight = LoadSprite(context, "NPCs/cock.ani", ["stand_3"]);
+            _bowWowLeft = LoadSprite(context, "NPCs/BowWow.ani", ["walk_0"]);
+            _bowWowRight = LoadSprite(context, "NPCs/BowWow.ani", ["walk_2"]);
+            _roosterLeft = _roosterDirections[0];
+            _roosterRight = _roosterDirections[2];
+            _mapDog = LoadSprite(context, "NPCs/dog.ani", ["idle_0"]);
+            _mapGrandmother = LoadSprite(
+                context, "NPCs/npc_woman_broom.ani", ["stand_-1"]);
+            _mapRaccoon = LoadSprite(context, "NPCs/raccoon.ani", ["idle"]);
+            _mapWeatherBird = LoadSprite(context, "Objects/weatherBird.ani", ["IDLE"]);
+            _mapOwl = LoadSprite(context, "NPCs/owl.ani", ["idle"]);
             _butterfly = LoadSprite(context, "NPCs/butterfly.ani", ["idle"]);
             _owl = LoadSprite(context, "NPCs/owl.ani", ["fly", "hover", "idle"]);
             _marinNote = LoadAtlasSprite(context, "npcs", "note");
@@ -896,6 +915,29 @@ namespace ProjectZ.Android
             _roosterParticleMedium = LoadAtlasSprite(context, "npcs", "cock_particle_1");
             _roosterParticleSmall = LoadAtlasSprite(context, "npcs", "cock_particle_2");
             _overworldMap = LoadOverworldMap(context);
+            if (_overworldMap != null)
+            {
+                foreach (var actor in _overworldMap.Map.Actors)
+                {
+                    if (actor.Kind != LiveWallpaperMapActorKind.Person)
+                        continue;
+                    var animationName = string.IsNullOrWhiteSpace(actor.AnimationName)
+                        ? "stand_3"
+                        : actor.AnimationName;
+                    var key = actor.AnimationId + "\n" + animationName;
+                    if (!_mapPeople.ContainsKey(key))
+                    {
+                        var directions = new SpriteAsset[4];
+                        for (var direction = 0; direction < directions.Length; direction++)
+                        {
+                            directions[direction] = LoadSprite(
+                                context, "NPCs/" + actor.AnimationId + ".ani",
+                                [$"stand_{direction}", animationName, "stand_3"]);
+                        }
+                        _mapPeople[key] = directions;
+                    }
+                }
+            }
         }
 
         public void Draw(
@@ -931,16 +973,26 @@ namespace ProjectZ.Android
                 return;
             var groundY = DrawInstalledMap(
                 canvas, width, height, resolvedScene, xOffset, out var viewport);
+            LiveWallpaperSimulatedLinkState? simulatedLink = null;
+            if (linkActivity != 3)
+            {
+                simulatedLink = _linkSimulation.UpdateJourney(
+                    resolvedScene, linkActivity, elapsed, animated,
+                    _overworldMap?.Map, viewport, showIslandLife);
+            }
+            if (showIslandLife)
+                DrawInstalledMapActors(
+                    canvas, viewport, time, animated, wildlife, simulatedLink);
             if (showIslandLife && wildlife.ShowOwl)
                 DrawOwl(canvas, width, height, time, unit, animated);
             if (showIslandLife)
             {
                 DrawFeaturedCharacter(canvas, width, groundY, viewport, time, xOffset, unit,
-                    animated, featuredCharacter, resolvedScene, characterPosition);
-                if (wildlife.ShowButterflies)
-                    DrawButterflies(canvas, width, groundY, time, unit, animated);
+                    animated, featuredCharacter, resolvedScene, characterPosition,
+                    simulatedLink?.RoosterVisible == true);
             }
-            DrawLink(canvas, viewport, resolvedScene, elapsed, unit, animated, linkActivity);
+            if (simulatedLink.HasValue)
+                DrawLink(canvas, viewport, elapsed, animated, simulatedLink.Value);
             DrawLightingOverlay(canvas, width, height, phase);
             DrawSceneTransition(canvas, width, height, scene, elapsed);
         }
@@ -1015,26 +1067,149 @@ namespace ProjectZ.Android
             return viewport.GroundY;
         }
 
+        private void DrawInstalledMapActors(
+            Canvas canvas,
+            LiveWallpaperMapViewport viewport,
+            long elapsed,
+            bool animated,
+            LiveWallpaperWildlifeState wildlife,
+            LiveWallpaperSimulatedLinkState? link)
+        {
+            if (_overworldMap?.Map == null)
+                return;
+            var scale = viewport.TileSize / 16f;
+            for (var actorIndex = 0;
+                 actorIndex < _overworldMap.Map.Actors.Count;
+                 actorIndex++)
+            {
+                var actor = _overworldMap.Map.Actors[actorIndex];
+                if (actor.Kind == LiveWallpaperMapActorKind.Butterfly &&
+                    !wildlife.ShowButterflies)
+                    continue;
+
+                var facingDirection = actorIndex == link?.InteractionActorIndex
+                    ? ResolveActorFacingDirection(actor, link.Value)
+                    : -1;
+                var asset = ResolveMapActorAsset(actor, facingDirection);
+                if (asset == null)
+                    continue;
+
+                var anchorPixelX = actor.PixelX;
+                var anchorPixelY = actor.PixelY;
+                switch (actor.Kind)
+                {
+                    case LiveWallpaperMapActorKind.Person:
+                    case LiveWallpaperMapActorKind.Dog:
+                    case LiveWallpaperMapActorKind.Grandmother:
+                    case LiveWallpaperMapActorKind.Owl:
+                        anchorPixelX += 8;
+                        anchorPixelY += 16;
+                        break;
+                    case LiveWallpaperMapActorKind.Raccoon:
+                        // ObjRaccoon: entity (+8,+16), sprite offset (-8,-16).
+                        break;
+                    case LiveWallpaperMapActorKind.WeatherBird:
+                        // ObjWeatherBird: entity (+1,+30), sprite offset (0,-30).
+                        anchorPixelX += 1;
+                        break;
+                    case LiveWallpaperMapActorKind.Butterfly:
+                        // ObjButterfly: entity (+8,+23,15), rendered at Y-Z.
+                        anchorPixelX += 8;
+                        anchorPixelY += 8;
+                        break;
+                }
+
+                var anchorX = viewport.Left +
+                              (anchorPixelX / 16f - viewport.OriginX) *
+                              viewport.TileSize;
+                var anchorY = viewport.Top +
+                              (anchorPixelY / 16f - viewport.OriginY) *
+                              viewport.TileSize;
+                if (anchorX < viewport.Left - 64f * scale ||
+                    anchorX > viewport.Left + viewport.Columns * viewport.TileSize +
+                    64f * scale ||
+                    anchorY < viewport.Top - 64f * scale ||
+                    anchorY > viewport.Top + viewport.Rows * viewport.TileSize +
+                    64f * scale)
+                    continue;
+                DrawSpriteAt(canvas, asset, elapsed, anchorX, anchorY, scale,
+                    engineDriven: true, animated: animated);
+            }
+        }
+
+        private SpriteAsset ResolveMapActorAsset(
+            LiveWallpaperMapActor actor, int facingDirection)
+        {
+            return actor.Kind switch
+            {
+                LiveWallpaperMapActorKind.Person => ResolveMapPersonAsset(
+                    actor, facingDirection),
+                LiveWallpaperMapActorKind.Dog => _mapDog,
+                LiveWallpaperMapActorKind.Grandmother => _mapGrandmother,
+                LiveWallpaperMapActorKind.Raccoon => _mapRaccoon,
+                LiveWallpaperMapActorKind.WeatherBird => _mapWeatherBird,
+                LiveWallpaperMapActorKind.Owl => _mapOwl,
+                LiveWallpaperMapActorKind.Butterfly => _butterfly,
+                _ => null
+            };
+        }
+
+        private SpriteAsset ResolveMapPersonAsset(
+            LiveWallpaperMapActor actor, int facingDirection)
+        {
+            var key = actor.AnimationId + "\n" +
+                      (string.IsNullOrWhiteSpace(actor.AnimationName)
+                          ? "stand_3"
+                          : actor.AnimationName);
+            if (!_mapPeople.TryGetValue(key, out var directions))
+                return null;
+            var direction = facingDirection >= 0
+                ? Math.Clamp(facingDirection, 0, 3)
+                : ResolveAnimationDirection(actor.AnimationName, 3);
+            return directions[direction] ?? directions[3] ?? directions[0];
+        }
+
+        private static int ResolveAnimationDirection(string animationName, int fallback)
+        {
+            if (string.IsNullOrWhiteSpace(animationName))
+                return fallback;
+            var separator = animationName.LastIndexOf('_');
+            return separator >= 0 &&
+                   int.TryParse(animationName[(separator + 1)..], out var direction)
+                ? Math.Clamp(direction, 0, 3)
+                : fallback;
+        }
+
+        private static int ResolveActorFacingDirection(
+            LiveWallpaperMapActor actor,
+            LiveWallpaperSimulatedLinkState link)
+        {
+            var actorX = actor.BodyX + actor.BodyWidth / 2f;
+            var actorY = actor.BodyY + actor.BodyHeight / 2f;
+            var linkX = link.MapX * 16f;
+            var linkY = link.MapY * 16f;
+            var deltaX = linkX - actorX;
+            var deltaY = linkY - actorY;
+            if (MathF.Abs(deltaX) >= MathF.Abs(deltaY))
+                return deltaX < 0 ? 0 : 2;
+            return deltaY < 0 ? 1 : 3;
+        }
+
         private void DrawLink(
             Canvas canvas,
             LiveWallpaperMapViewport viewport,
-            int scene,
             long elapsed,
-            float unit,
             bool animated,
-            int activity)
+            LiveWallpaperSimulatedLinkState simulated)
         {
-            var state = LiveWallpaperLinkActivity.Resolve(activity, elapsed, animated);
-            if (!state.Visible)
-                return;
-            var simulated = _linkSimulation.Update(
-                scene, state, elapsed, animated, _overworldMap?.Map);
             var direction = simulated.Direction;
-            var asset = simulated.Action == LiveWallpaperLinkRouteAction.FeatherJump
-                ? _linkJumping[direction]
-                : simulated.Action == LiveWallpaperLinkRouteAction.Walk
-                    ? _linkWalking[direction]
-                    : _linkStanding[direction];
+            var asset = simulated.Action switch
+            {
+                LiveWallpaperLinkRouteAction.FeatherJump => _linkJumping[direction],
+                LiveWallpaperLinkRouteAction.RoosterFly => _linkFlying[direction],
+                LiveWallpaperLinkRouteAction.Walk => _linkWalking[direction],
+                _ => _linkStanding[direction]
+            };
             asset ??= _linkStanding[direction] ?? _linkWalking[direction];
             if (asset == null)
                 return;
@@ -1042,6 +1217,33 @@ namespace ProjectZ.Android
             DrawSpriteAt(canvas, asset, elapsed,
                 placement.AnchorX, placement.AnchorY, placement.Scale,
                 engineDriven: true, animated: animated);
+            DrawJourneyRooster(canvas, viewport, elapsed, animated, simulated);
+        }
+
+        private void DrawJourneyRooster(
+            Canvas canvas,
+            LiveWallpaperMapViewport viewport,
+            long elapsed,
+            bool animated,
+            LiveWallpaperSimulatedLinkState link)
+        {
+            if (!link.RoosterVisible)
+                return;
+            var direction = Math.Clamp(link.Direction, 0, 3);
+            var asset = _roosterDirections[direction] ??
+                        (direction is 0 or 1 ? _roosterLeft : _roosterRight);
+            if (asset == null)
+                return;
+            var scale = viewport.TileSize / 16f;
+            var anchorX = viewport.Left +
+                          (link.RoosterMapX - viewport.OriginX) * viewport.TileSize;
+            var anchorY = viewport.Top +
+                          (link.RoosterMapY - viewport.OriginY) * viewport.TileSize -
+                          link.RoosterHeight * scale;
+            DrawSpriteAt(canvas, asset, elapsed, anchorX, anchorY, scale,
+                engineDriven: true, animated: animated);
+            if (link.CarryingRooster)
+                DrawRoosterParticles(canvas, anchorX, anchorY, elapsed, scale);
         }
 
         private void DrawFeaturedCharacter(
@@ -1055,10 +1257,13 @@ namespace ProjectZ.Android
             bool animated,
             int featuredCharacter,
             int scene,
-            int characterPosition)
+            int characterPosition,
+            bool suppressRooster)
         {
             var selection = LiveWallpaperCharacterSelection.Resolve(
                 featuredCharacter, scene, elapsed);
+            if (suppressRooster && selection == 2)
+                return;
             var motion = LiveWallpaperCharacterMotion.Resolve(selection, elapsed, animated);
             var baseX = width * LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(
                 characterPosition, scene) - (xOffset - 0.5f) * 20f * unit;
@@ -1068,16 +1273,16 @@ namespace ProjectZ.Android
                 2 => 14f,
                 _ => 0f
             };
+            var mapScale = viewport.TileSize / 16f;
             var anchorMapX = (viewport.OriginX +
                               (baseX - viewport.Left) / viewport.TileSize) * 16f;
             var anchorMapY = (viewport.OriginY +
                               (groundY - viewport.Top) / viewport.TileSize) * 16f;
-            var mapOffsetScale = unit * 16f / viewport.TileSize;
             var follower = _followerSimulation.Update(
                 selection, motion.HorizontalOffset * movementRadius, elapsed, animated,
-                _overworldMap?.Map, anchorMapX, anchorMapY, mapOffsetScale);
-            var centerX = baseX + follower.HorizontalOffset * unit;
-            var bottomY = groundY - follower.Height * unit;
+                _overworldMap?.Map, anchorMapX, anchorMapY, 1f);
+            var centerX = baseX + follower.HorizontalOffset * mapScale;
+            var bottomY = groundY - follower.Height * mapScale;
             var asset = selection switch
             {
                 1 => follower.FacingRight ? _bowWowRight : _bowWowLeft,
@@ -1087,14 +1292,16 @@ namespace ProjectZ.Android
             if (asset == null)
                 return;
             if (selection == 1)
-                DrawBowWowChain(canvas, baseX, groundY, centerX, bottomY, unit);
+                DrawBowWowChain(canvas, baseX, groundY, centerX, bottomY, mapScale);
             else if (selection == 2 && follower.Height > 3f)
-                DrawRoosterParticles(canvas, centerX, bottomY, elapsed, unit);
-            var scale = selection == 0 ? 2.05f : 1.9f;
-            DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY,
-                Math.Max(2f, unit * scale), engineDriven: true, animated: animated);
+                DrawRoosterParticles(canvas, centerX, bottomY, elapsed, mapScale);
+            var spriteOffsetX = selection == 1 ? -8f * mapScale : 0f;
+            var spriteOffsetY = selection == 1 ? -16f * mapScale : 0f;
+            DrawSpriteAt(canvas, asset, elapsed,
+                centerX + spriteOffsetX, bottomY + spriteOffsetY, mapScale,
+                engineDriven: true, animated: animated);
             if (selection == 0 && motion.ShowNotes)
-                DrawMarinNotes(canvas, centerX, groundY, elapsed, unit);
+                DrawMarinNotes(canvas, centerX, groundY, elapsed, mapScale);
         }
 
         private void DrawMarinNotes(

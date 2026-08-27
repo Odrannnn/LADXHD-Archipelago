@@ -5,6 +5,76 @@ using System.IO;
 
 namespace ProjectZ
 {
+    public enum LiveWallpaperMapActorKind
+    {
+        Person,
+        Dog,
+        Grandmother,
+        Raccoon,
+        WeatherBird,
+        Owl,
+        Butterfly
+    }
+
+    public readonly struct LiveWallpaperMapActor
+    {
+        public LiveWallpaperMapActor(
+            LiveWallpaperMapActorKind kind, int pixelX, int pixelY,
+            string animationId = null, string animationName = null,
+            int bodyX = 0, int bodyY = 0, int bodyWidth = 0, int bodyHeight = 0)
+        {
+            Kind = kind;
+            PixelX = pixelX;
+            PixelY = pixelY;
+            AnimationId = animationId;
+            AnimationName = animationName;
+            BodyX = bodyX;
+            BodyY = bodyY;
+            BodyWidth = bodyWidth;
+            BodyHeight = bodyHeight;
+        }
+
+        public LiveWallpaperMapActorKind Kind { get; }
+        public int PixelX { get; }
+        public int PixelY { get; }
+        public string AnimationId { get; }
+        public string AnimationName { get; }
+        public int BodyX { get; }
+        public int BodyY { get; }
+        public int BodyWidth { get; }
+        public int BodyHeight { get; }
+    }
+
+    public readonly struct LiveWallpaperMapPortal
+    {
+        public LiveWallpaperMapPortal(
+            int pixelX, int pixelY, int width, int height,
+            int direction, int mode)
+        {
+            PixelX = pixelX;
+            PixelY = pixelY;
+            Width = Math.Max(1, width);
+            Height = Math.Max(1, height);
+            Direction = Math.Clamp(direction, 0, 3);
+            Mode = Math.Max(0, mode);
+        }
+
+        public int PixelX { get; }
+        public int PixelY { get; }
+        public int Width { get; }
+        public int Height { get; }
+        public int Direction { get; }
+        public int Mode { get; }
+
+        // Mirrors ObjDoor's overworld transition target for Link's real 8x10 body.
+        public float LinkTargetX => PixelX + Width / 2f;
+        public float LinkTargetY => Mode == 0 && Direction == 1
+            ? PixelY + 8f
+            : Mode == 0 && Direction == 3
+                ? PixelY + 16f
+                : PixelY + Height / 2f + 5f;
+    }
+
     public sealed class LiveWallpaperMap
     {
         private const int MaximumWidth = 512;
@@ -22,7 +92,9 @@ namespace ProjectZ
             List<CollisionRectangle>[,] collisionGrid,
             int collisionCount,
             int hazardCount,
-            int npcWallCount)
+            int npcWallCount,
+            LiveWallpaperMapActor[] actors,
+            LiveWallpaperMapPortal[] portals)
         {
             TilesetPath = tilesetPath;
             Width = width;
@@ -33,6 +105,8 @@ namespace ProjectZ
             CollisionCount = collisionCount;
             HazardCount = hazardCount;
             NpcWallCount = npcWallCount;
+            Actors = actors ?? [];
+            Portals = portals ?? [];
         }
 
         public string TilesetPath { get; }
@@ -43,6 +117,8 @@ namespace ProjectZ
         public int CollisionCount { get; }
         public int HazardCount { get; }
         public int NpcWallCount { get; }
+        public IReadOnlyList<LiveWallpaperMapActor> Actors { get; }
+        public IReadOnlyList<LiveWallpaperMapPortal> Portals { get; }
 
         public int GetTile(int x, int y, int layer)
         {
@@ -95,6 +171,28 @@ namespace ProjectZ
         public bool IntersectsNpcWall(float x, float y, float width, float height) =>
             IntersectsKind(x, y, width, height, CollisionKind.NpcWall);
 
+        public bool IntersectsHole(float x, float y, float width, float height) =>
+            IntersectsKind(x, y, width, height, CollisionKind.Hole);
+
+        public bool IntersectsActor(
+            float x, float y, float width, float height, int ignoredActorIndex = -1)
+        {
+            if (width <= 0 || height <= 0)
+                return false;
+            for (var index = 0; index < Actors.Count; index++)
+            {
+                if (index == ignoredActorIndex)
+                    continue;
+                var actor = Actors[index];
+                if (actor.BodyWidth <= 0 || actor.BodyHeight <= 0)
+                    continue;
+                if (x < actor.BodyX + actor.BodyWidth && x + width > actor.BodyX &&
+                    y < actor.BodyY + actor.BodyHeight && y + height > actor.BodyY)
+                    return true;
+            }
+            return false;
+        }
+
         public static bool TryLoad(TextReader reader, out LiveWallpaperMap map)
         {
             map = null;
@@ -139,12 +237,12 @@ namespace ProjectZ
 
             if (!TryLoadCollisionObjects(reader, width, height,
                     out var collisionGrid, out var collisionCount, out var hazardCount,
-                    out var npcWallCount))
+                    out var npcWallCount, out var actors, out var portals))
                 return false;
 
             map = new LiveWallpaperMap(
                 tilesetPath, width, height, depth, tiles,
-                collisionGrid, collisionCount, hazardCount, npcWallCount);
+                collisionGrid, collisionCount, hazardCount, npcWallCount, actors, portals);
             return true;
         }
 
@@ -155,12 +253,16 @@ namespace ProjectZ
             out List<CollisionRectangle>[,] collisionGrid,
             out int collisionCount,
             out int hazardCount,
-            out int npcWallCount)
+            out int npcWallCount,
+            out LiveWallpaperMapActor[] actors,
+            out LiveWallpaperMapPortal[] portals)
         {
             collisionGrid = null;
             collisionCount = 0;
             hazardCount = 0;
             npcWallCount = 0;
+            actors = [];
+            portals = [];
             var templateCountLine = reader.ReadLine();
             if (templateCountLine == null)
                 return true;
@@ -182,6 +284,8 @@ namespace ProjectZ
                 return false;
 
             collisionGrid = new List<CollisionRectangle>[width, height];
+            var parsedActors = new List<LiveWallpaperMapActor>();
+            var parsedPortals = new List<LiveWallpaperMapPortal>();
             for (var index = 0; index < objectCount; index++)
             {
                 var line = reader.ReadLine();
@@ -198,8 +302,84 @@ namespace ProjectZ
                     collisionGrid, width, height, templates[templateIndex], parts,
                     positionX, positionY, ref collisionCount, ref hazardCount,
                     ref npcWallCount);
+                TryAddMapActor(
+                    parsedActors, templates[templateIndex], parts, positionX, positionY);
+                TryAddMapPortal(
+                    parsedPortals, templates[templateIndex], parts, positionX, positionY);
             }
+            actors = parsedActors.ToArray();
+            portals = parsedPortals.ToArray();
             return true;
+        }
+
+        private static void TryAddMapActor(
+            List<LiveWallpaperMapActor> actors,
+            string template,
+            string[] parts,
+            int positionX,
+            int positionY)
+        {
+            var kind = template switch
+            {
+                "personNew" => LiveWallpaperMapActorKind.Person,
+                "dogo" => LiveWallpaperMapActorKind.Dog,
+                "grandmother" => LiveWallpaperMapActorKind.Grandmother,
+                "raccoon" => LiveWallpaperMapActorKind.Raccoon,
+                "weatherBird" => LiveWallpaperMapActorKind.WeatherBird,
+                "owl" => LiveWallpaperMapActorKind.Owl,
+                "butterfly" => LiveWallpaperMapActorKind.Butterfly,
+                _ => (LiveWallpaperMapActorKind?)null
+            };
+            if (!kind.HasValue)
+                return;
+
+            string animationId = null;
+            string animationName = null;
+            if (kind == LiveWallpaperMapActorKind.Person)
+            {
+                animationId = parts.Length > 4 ? parts[4]?.Trim() : null;
+                animationName = parts.Length > 6 ? parts[6]?.Trim() : null;
+                if (string.IsNullOrWhiteSpace(animationId) ||
+                    !LiveWallpaperAnimation.TryNormalizeRelativePath(
+                        "NPCs/" + animationId + ".ani", out _))
+                    return;
+            }
+            var body = kind.Value switch
+            {
+                LiveWallpaperMapActorKind.Person =>
+                    new LocalRectangle(positionX + 1, positionY + 6, 14, 10),
+                LiveWallpaperMapActorKind.Dog =>
+                    new LocalRectangle(positionX + 2, positionY + 8, 12, 8),
+                LiveWallpaperMapActorKind.Grandmother =>
+                    new LocalRectangle(positionX + 1, positionY + 4, 14, 12),
+                LiveWallpaperMapActorKind.Raccoon =>
+                    new LocalRectangle(positionX + 1, positionY + 6, 14, 10),
+                LiveWallpaperMapActorKind.WeatherBird =>
+                    new LocalRectangle(positionX + 1, positionY + 20, 14, 12),
+                LiveWallpaperMapActorKind.Owl =>
+                    new LocalRectangle(positionX + 2, positionY + 8, 12, 8),
+                _ => new LocalRectangle(0, 0, 0, 0)
+            };
+            actors.Add(new LiveWallpaperMapActor(
+                kind.Value, positionX, positionY, animationId, animationName,
+                body.X, body.Y, body.Width, body.Height));
+        }
+
+        private static void TryAddMapPortal(
+            List<LiveWallpaperMapPortal> portals,
+            string template,
+            string[] parts,
+            int positionX,
+            int positionY)
+        {
+            if (template != "door")
+                return;
+            var width = GetOptionalPositiveInt(parts, 3, 16);
+            var height = GetOptionalPositiveInt(parts, 4, 16);
+            var direction = Math.Clamp(GetOptionalInt(parts, 8, 0), 0, 3);
+            var mode = Math.Max(0, GetOptionalInt(parts, 9, 0));
+            portals.Add(new LiveWallpaperMapPortal(
+                positionX, positionY, width, height, direction, mode));
         }
 
         private static void AddObjectCollision(

@@ -6,7 +6,9 @@ namespace ProjectZ
     {
         Stand,
         Walk,
-        FeatherJump
+        FeatherJump,
+        Interact,
+        RoosterFly
     }
 
     public readonly struct LiveWallpaperLinkRouteState
@@ -75,24 +77,26 @@ namespace ProjectZ
         public static LiveWallpaperLinkRouteState Resolve(
             int scene, float journey, bool walking)
         {
-            var segments = scene switch
-            {
-                2 => ToronboRoute,
-                3 => ForestRoute,
-                5 => CastleRoute,
-                6 => AnimalVillageRoute,
-                7 => EggRoute,
-                _ => MabeRoute
-            };
+            var segments = GetSegments(scene);
             var clampedJourney = Math.Clamp(journey, 0f, 1f);
             var reversing = clampedJourney > 0.5f;
             var routeProgress = reversing
                 ? (1f - clampedJourney) * 2f
                 : clampedJourney * 2f;
-            var scaledProgress = routeProgress * segments.Length;
-            var index = Math.Min(segments.Length - 1, (int)scaledProgress);
-            var localProgress = Math.Clamp(scaledProgress - index, 0f, 1f);
+            var totalLength = GetLengthTiles(segments);
+            var remainingDistance = routeProgress * totalLength;
+            var index = 0;
+            while (index < segments.Length - 1)
+            {
+                var segmentLength = GetLengthTiles(segments[index]);
+                if (remainingDistance <= segmentLength)
+                    break;
+                remainingDistance -= segmentLength;
+                index++;
+            }
             var segment = segments[index];
+            var localProgress = Math.Clamp(
+                remainingDistance / Math.Max(0.001f, GetLengthTiles(segment)), 0f, 1f);
             var mapX = Lerp(segment.StartX, segment.EndX, localProgress);
             var mapY = Lerp(segment.StartY, segment.EndY, localProgress);
             var direction = ResolveDirection(
@@ -105,6 +109,34 @@ namespace ProjectZ
                 mapX, mapY, direction, jumpHeight, action);
         }
 
+        public static float GetPathLengthPixels(int scene) =>
+            GetLengthTiles(GetSegments(scene)) * 16f;
+
+        private static Segment[] GetSegments(int scene) => scene switch
+        {
+            2 => ToronboRoute,
+            3 => ForestRoute,
+            5 => CastleRoute,
+            6 => AnimalVillageRoute,
+            7 => EggRoute,
+            _ => MabeRoute
+        };
+
+        private static float GetLengthTiles(Segment[] segments)
+        {
+            var length = 0f;
+            foreach (var segment in segments)
+                length += GetLengthTiles(segment);
+            return length;
+        }
+
+        private static float GetLengthTiles(Segment segment)
+        {
+            var deltaX = segment.EndX - segment.StartX;
+            var deltaY = segment.EndY - segment.StartY;
+            return MathF.Sqrt(deltaX * deltaX + deltaY * deltaY);
+        }
+
         private static int ResolveDirection(float deltaX, float deltaY, bool reversing)
         {
             if (reversing)
@@ -113,8 +145,8 @@ namespace ProjectZ
                 deltaY = -deltaY;
             }
             if (MathF.Abs(deltaX) >= MathF.Abs(deltaY))
-                return deltaX < 0f ? 2 : 3;
-            return deltaY < 0f ? 1 : 0;
+                return deltaX < 0f ? 0 : 2;
+            return deltaY < 0f ? 1 : 3;
         }
 
         private static float Lerp(float start, float end, float amount) =>
