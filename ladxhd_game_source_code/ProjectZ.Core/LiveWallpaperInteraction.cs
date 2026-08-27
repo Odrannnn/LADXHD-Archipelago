@@ -6,6 +6,6 @@ namespace ProjectZ
             current is >= 0 and < 2 ? current + 1 : 0;
 
         public static int NextScene(int current) =>
-            current is >= 1 and < 3 ? current + 1 : 1;
+            LiveWallpaperSceneSelection.NextFixedScene(current);
     }
 }

@@ -17,6 +17,9 @@ namespace ProjectZ
                     1 => 0,
                     2 => 2,
                     3 => 1,
+                    5 => 2,
+                    6 => 0,
+                    7 => 2,
                     _ => ResolveRotation(elapsedMilliseconds)
                 };
             }

@@ -28,8 +28,8 @@ ZIP.
 - A persistent in-game Magpie overlay with item, check, slot-setting, and position autotracking.
 - An optional Android live wallpaper rendered exclusively from locally prepared in-game overworld
   tiles and animation sheets, with animated Link, selectable fixed, rotating, or location-matched
-  island characters, wildlife, and smoothly rotating Mabe Village, Toronbo Shores, and Mysterious
-  Forest scenes, plus
+  island characters, wildlife, and smoothly rotating Mabe Village, Toronbo Shores, Mysterious
+  Forest, Kanalet Castle, Animal Village, and Wind Fish's Egg scenes, plus
   regional character anchors with manual placement overrides, selectable Link activity,
   local-time lighting, and Mabe Sunset, Forest Night, and Island Journey quick presets,
   naturally scheduled wildlife, parallax, configurable tap actions, adaptive static rendering,

@@ -65,12 +65,15 @@ namespace ProjectZ.Android
         {
             var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.GetInt(SceneKey, 1) ?? 1;
-            return value <= 0 ? 1 : Math.Clamp(value, 1, 4);
+            return value <= 0
+                ? 1
+                : Math.Clamp(value, 1, LiveWallpaperSceneSelection.MaximumSelection);
         }
 
         public static void SetScene(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.Edit()?.PutInt(SceneKey, Math.Clamp(value, 1, 4))?.Apply();
+                ?.Edit()?.PutInt(SceneKey,
+                    Math.Clamp(value, 1, LiveWallpaperSceneSelection.MaximumSelection))?.Apply();
 
         public static int GetTimeOfDay(Context context)
         {
@@ -385,15 +388,20 @@ namespace ProjectZ.Android
             };
             layout.AddView(sceneLabel);
             var scene = new Spinner(this) { Enabled = assetReady };
+            int[] sceneValues =
+                [1, 2, 3, 5, 6, 7, LiveWallpaperSceneSelection.RotationSelection];
             var sceneAdapter = new ArrayAdapter<string>(this,
                 global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Mabe Village", "Toronbo Shores", "Mysterious Forest", "Rotate locations"]);
+                ["Mabe Village", "Toronbo Shores", "Mysterious Forest", "Kanalet Castle",
+                 "Animal Village", "Wind Fish's Egg", "Rotate locations"]);
             sceneAdapter.SetDropDownViewResource(
                 global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
             scene.Adapter = sceneAdapter;
-            scene.SetSelection(LadxhdWallpaperPreferences.GetScene(this) - 1);
+            var selectedSceneIndex = Array.IndexOf(
+                sceneValues, LadxhdWallpaperPreferences.GetScene(this));
+            scene.SetSelection(Math.Max(0, selectedSceneIndex));
             scene.ItemSelected += (_, args) =>
-                LadxhdWallpaperPreferences.SetScene(this, args.Position + 1);
+                LadxhdWallpaperPreferences.SetScene(this, sceneValues[args.Position]);
             var sceneParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             sceneParams.SetMargins(0, 0, 0, Dp(12));

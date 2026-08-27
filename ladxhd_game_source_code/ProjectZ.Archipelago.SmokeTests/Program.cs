@@ -105,14 +105,21 @@ Assert(LiveWallpaperInteraction.NextFeaturedCharacter(0) == 1 &&
        LiveWallpaperInteraction.NextScene(0) == 1 &&
        LiveWallpaperInteraction.NextScene(1) == 2 &&
        LiveWallpaperInteraction.NextScene(2) == 3 &&
-       LiveWallpaperInteraction.NextScene(3) == 1 &&
+       LiveWallpaperInteraction.NextScene(3) == 5 &&
+       LiveWallpaperInteraction.NextScene(5) == 6 &&
+       LiveWallpaperInteraction.NextScene(6) == 7 &&
+       LiveWallpaperInteraction.NextScene(7) == 1 &&
+       LiveWallpaperInteraction.NextScene(4) == 1 &&
        LiveWallpaperInteraction.NextScene(99) == 1,
        "Wallpaper tap actions must cycle characters and scenery predictably.");
 Assert(LiveWallpaperSceneSelection.Resolve(4, 0, true) == 1 &&
        LiveWallpaperSceneSelection.Resolve(4, 44_999, true) == 1 &&
        LiveWallpaperSceneSelection.Resolve(4, 45_000, true) == 2 &&
        LiveWallpaperSceneSelection.Resolve(4, 90_000, true) == 3 &&
-       LiveWallpaperSceneSelection.Resolve(4, 135_000, true) == 1 &&
+       LiveWallpaperSceneSelection.Resolve(4, 135_000, true) == 5 &&
+       LiveWallpaperSceneSelection.Resolve(4, 180_000, true) == 6 &&
+       LiveWallpaperSceneSelection.Resolve(4, 225_000, true) == 7 &&
+       LiveWallpaperSceneSelection.Resolve(4, 270_000, true) == 1 &&
        LiveWallpaperSceneSelection.Resolve(0, 0, true) == 1 &&
        LiveWallpaperSceneSelection.Resolve(2, 0, true) == 2 &&
        LiveWallpaperSceneSelection.Resolve(2, 0, false) == 0 &&
@@ -122,6 +129,12 @@ Assert(LiveWallpaperSceneSelection.Resolve(4, 0, true) == 1 &&
        shoreX == 10 && shoreY == 112 &&
        LiveWallpaperSceneSelection.TryGetTileOrigin(3, out var forestX, out var forestY) &&
        forestX == 10 && forestY == 32 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(5, out var castleX, out var castleY) &&
+       castleX == 92 && castleY == 42 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(6, out var animalX, out var animalY) &&
+       animalX == 129 && animalY == 99 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(7, out var eggX, out var eggY) &&
+       eggX == 61 && eggY == 6 &&
        !LiveWallpaperSceneSelection.TryGetTileOrigin(0, out _, out _),
        "Installed wallpaper scenes must resolve stable overworld crops and rotation intervals.");
 Assert(LiveWallpaperSceneSelection.GetRotationTransitionOpacity(1, 0) == 0f &&
@@ -170,12 +183,18 @@ Assert(LiveWallpaperCharacterSelection.Resolve(0, 3, 90_000) == 0 &&
        LiveWallpaperCharacterSelection.Resolve(4, 1, 60_000) == 0 &&
        LiveWallpaperCharacterSelection.Resolve(4, 2, 0) == 2 &&
        LiveWallpaperCharacterSelection.Resolve(4, 3, 0) == 1 &&
+       LiveWallpaperCharacterSelection.Resolve(4, 5, 0) == 2 &&
+       LiveWallpaperCharacterSelection.Resolve(4, 6, 0) == 0 &&
+       LiveWallpaperCharacterSelection.Resolve(4, 7, 0) == 2 &&
        LiveWallpaperCharacterSelection.Resolve(4, 0, 30_000) == 1,
        "Wallpaper featured characters must honor fixed, rotating, and scene-matched modes.");
 var defaultLayout = LiveWallpaperSceneLayouts.Resolve(0);
 var mabeLayout = LiveWallpaperSceneLayouts.Resolve(1);
 var shoreLayout = LiveWallpaperSceneLayouts.Resolve(2);
 var forestLayout = LiveWallpaperSceneLayouts.Resolve(3);
+var castleLayout = LiveWallpaperSceneLayouts.Resolve(5);
+var animalLayout = LiveWallpaperSceneLayouts.Resolve(6);
+var eggLayout = LiveWallpaperSceneLayouts.Resolve(7);
 Assert(Math.Abs(defaultLayout.FeaturedXRatio - 0.72f) < 0.001f &&
        Math.Abs(mabeLayout.GroundTileRow - 5.6f) < 0.001f &&
        Math.Abs(mabeLayout.FeaturedXRatio - 0.72f) < 0.001f &&
@@ -183,6 +202,9 @@ Assert(Math.Abs(defaultLayout.FeaturedXRatio - 0.72f) < 0.001f &&
        Math.Abs(shoreLayout.FeaturedXRatio - 0.82f) < 0.001f &&
        Math.Abs(forestLayout.GroundTileRow - 5.35f) < 0.001f &&
        Math.Abs(forestLayout.FeaturedXRatio - 0.66f) < 0.001f &&
+       Math.Abs(castleLayout.FeaturedXRatio - 0.5f) < 0.001f &&
+       Math.Abs(animalLayout.FeaturedXRatio - 0.76f) < 0.001f &&
+       Math.Abs(eggLayout.FeaturedXRatio - 0.5f) < 0.001f &&
        Math.Abs(LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(1, 2) - 0.24f) < 0.001f &&
        Math.Abs(LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(2, 2) - 0.5f) < 0.001f &&
        Math.Abs(LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(3, 2) - 0.76f) < 0.001f,
