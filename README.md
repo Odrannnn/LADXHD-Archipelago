@@ -29,7 +29,8 @@ ZIP.
 - An optional Android live wallpaper with a pixel-art Koholint scene, animated Link, selectable
   fixed, rotating, or location-matched island characters, wildlife, and smoothly rotating Mabe
   Village, Toronbo Shores, and Mysterious Forest scenes from locally prepared assets, plus
-  selectable Link activity, local-time lighting,
+  regional character anchors with manual placement overrides, selectable Link activity,
+  local-time lighting,
   naturally scheduled wildlife, parallax, configurable tap actions, adaptive static rendering,
   and battery-friendly frame rates.
 - A phone-native, transactional game-data builder: select the original v1.0.0 ZIP on first launch,

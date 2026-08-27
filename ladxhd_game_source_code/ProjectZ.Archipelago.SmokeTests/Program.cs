@@ -171,6 +171,21 @@ Assert(LiveWallpaperCharacterSelection.Resolve(0, 3, 90_000) == 0 &&
        LiveWallpaperCharacterSelection.Resolve(4, 3, 0) == 1 &&
        LiveWallpaperCharacterSelection.Resolve(4, 0, 30_000) == 1,
        "Wallpaper featured characters must honor fixed, rotating, and scene-matched modes.");
+var coastLayout = LiveWallpaperSceneLayouts.Resolve(0);
+var mabeLayout = LiveWallpaperSceneLayouts.Resolve(1);
+var shoreLayout = LiveWallpaperSceneLayouts.Resolve(2);
+var forestLayout = LiveWallpaperSceneLayouts.Resolve(3);
+Assert(Math.Abs(coastLayout.FeaturedXRatio - 0.78f) < 0.001f &&
+       Math.Abs(mabeLayout.GroundTileRow - 5.6f) < 0.001f &&
+       Math.Abs(mabeLayout.FeaturedXRatio - 0.72f) < 0.001f &&
+       Math.Abs(shoreLayout.GroundTileRow - 6f) < 0.001f &&
+       Math.Abs(shoreLayout.FeaturedXRatio - 0.82f) < 0.001f &&
+       Math.Abs(forestLayout.GroundTileRow - 5.35f) < 0.001f &&
+       Math.Abs(forestLayout.FeaturedXRatio - 0.66f) < 0.001f &&
+       Math.Abs(LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(1, 2) - 0.24f) < 0.001f &&
+       Math.Abs(LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(2, 2) - 0.5f) < 0.001f &&
+       Math.Abs(LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(3, 2) - 0.76f) < 0.001f,
+       "Wallpaper scene layouts must expose stable regional and user-overridden anchors.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");

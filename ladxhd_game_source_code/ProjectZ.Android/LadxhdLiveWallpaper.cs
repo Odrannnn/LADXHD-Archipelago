@@ -25,6 +25,7 @@ namespace ProjectZ.Android
         private const string TapActionKey = "tap_action";
         private const string LinkActivityKey = "link_activity";
         private const string WildlifeScheduleKey = "wildlife_schedule";
+        private const string CharacterPositionKey = "character_position";
         private const string FrameRateKey = "frame_rate";
 
         public static bool IsAnimated(Context context) =>
@@ -115,6 +116,17 @@ namespace ProjectZ.Android
         public static void SetWildlifeSchedule(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutInt(WildlifeScheduleKey, Math.Clamp(value, 0, 1))?.Apply();
+
+        public static int GetCharacterPosition(Context context)
+        {
+            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.GetInt(CharacterPositionKey, 0) ?? 0;
+            return Math.Clamp(value, 0, 3);
+        }
+
+        public static void SetCharacterPosition(Context context, int value) =>
+            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.Edit()?.PutInt(CharacterPositionKey, Math.Clamp(value, 0, 3))?.Apply();
 
         public static void SetFrameRate(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
@@ -275,6 +287,28 @@ namespace ProjectZ.Android
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             characterParams.SetMargins(0, 0, 0, Dp(12));
             layout.AddView(character, characterParams);
+
+            var positionLabel = new TextView(this)
+            {
+                Text = "Featured character position",
+                TextSize = 17f,
+                Enabled = assetReady
+            };
+            layout.AddView(positionLabel);
+            var characterPosition = new Spinner(this) { Enabled = assetReady };
+            var positionAdapter = new ArrayAdapter<string>(this,
+                global::Android.Resource.Layout.SimpleSpinnerItem,
+                ["Match scenery", "Left", "Center", "Right"]);
+            positionAdapter.SetDropDownViewResource(
+                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
+            characterPosition.Adapter = positionAdapter;
+            characterPosition.SetSelection(LadxhdWallpaperPreferences.GetCharacterPosition(this));
+            characterPosition.ItemSelected += (_, args) =>
+                LadxhdWallpaperPreferences.SetCharacterPosition(this, args.Position);
+            var positionParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            positionParams.SetMargins(0, 0, 0, Dp(12));
+            layout.AddView(characterPosition, positionParams);
 
             var linkLabel = new TextView(this)
             {
@@ -630,7 +664,8 @@ namespace ProjectZ.Android
                             LadxhdWallpaperPreferences.GetScene(_service),
                             LadxhdWallpaperPreferences.GetTimeOfDay(_service),
                             LadxhdWallpaperPreferences.GetLinkActivity(_service),
-                            LadxhdWallpaperPreferences.GetWildlifeSchedule(_service));
+                            LadxhdWallpaperPreferences.GetWildlifeSchedule(_service),
+                            LadxhdWallpaperPreferences.GetCharacterPosition(_service));
                     }
                 }
                 finally
@@ -742,7 +777,8 @@ namespace ProjectZ.Android
             int scene,
             int timeOfDay,
             int linkActivity,
-            int wildlifeSchedule)
+            int wildlifeSchedule,
+            int characterPosition)
         {
             var width = canvas.Width;
             var height = canvas.Height;
@@ -764,7 +800,7 @@ namespace ProjectZ.Android
             if (showIslandLife)
             {
                 DrawFeaturedCharacter(canvas, width, groundY, time, xOffset, unit,
-                    featuredCharacter, resolvedScene);
+                    featuredCharacter, resolvedScene, characterPosition);
                 if (wildlife.ShowButterflies)
                     DrawButterflies(canvas, width, groundY, time, unit, animated);
             }
@@ -930,7 +966,8 @@ namespace ProjectZ.Android
                 }
             }
 
-            return top + destinationTileSize * 5.6f;
+            return top + destinationTileSize *
+                LiveWallpaperSceneLayouts.Resolve(scene).GroundTileRow;
         }
 
         private void DrawLink(
@@ -960,7 +997,8 @@ namespace ProjectZ.Android
             float xOffset,
             float unit,
             int featuredCharacter,
-            int scene)
+            int scene,
+            int characterPosition)
         {
             var selection = LiveWallpaperCharacterSelection.Resolve(
                 featuredCharacter, scene, elapsed);
@@ -972,7 +1010,8 @@ namespace ProjectZ.Android
             };
             if (asset == null)
                 return;
-            var centerX = width * 0.78f - (xOffset - 0.5f) * 20f * unit;
+            var centerX = width * LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(
+                characterPosition, scene) - (xOffset - 0.5f) * 20f * unit;
             var scale = selection == 0 ? 2.05f : 1.9f;
             DrawSpriteAt(canvas, asset, elapsed, centerX, groundY,
                 Math.Max(2f, unit * scale));
