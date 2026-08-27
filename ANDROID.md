@@ -64,15 +64,17 @@ or sharing a `.apladxhd` from another app remains available as an alternative.
 
 Open **Settings → Live wallpaper** in LADXHD Archipelago. Choose whether the scene should animate,
 whether Koholint wildlife should appear, select Marin, BowWow, the rooster, or automatic character
-rotation, and select the battery-friendly 15 FPS mode or smoother 30 FPS mode. Tap **Preview and
-set wallpaper** to open Android's system wallpaper picker.
+rotation, choose the stylized coast or the installed Mabe Village map, and select the
+battery-friendly 15 FPS mode or smoother 30 FPS mode. Tap **Preview and set wallpaper** to open
+Android's system wallpaper picker.
 
 The wallpaper is a lightweight, standalone Koholint-inspired scene. It pauses when it is not
 visible, supports launcher-page parallax and touch effects, and does not start gameplay, audio,
 saves, or an Archipelago connection. When locally prepared game data is available it reads Link,
 Marin, BowWow, the rooster, butterflies, and the owl directly from the installed animation and
-sprite sheets. The public assetless APK instead shows the scenery by itself until the user completes
-the normal v1.0.0 ZIP setup; none of those assets are embedded in the APK.
+sprite sheets. The Mabe scene likewise reads the installed overworld map and tileset at runtime.
+The public assetless APK instead shows the scenery by itself until the user completes the normal
+v1.0.0 ZIP setup; none of those assets are embedded in the APK.
 
 ----
 

@@ -20,6 +20,7 @@ namespace ProjectZ.Android
         private const string AnimateKey = "animate";
         private const string IslandLifeKey = "island_life";
         private const string FeaturedCharacterKey = "featured_character";
+        private const string SceneKey = "scene";
         private const string FrameRateKey = "frame_rate";
 
         public static bool IsAnimated(Context context) =>
@@ -55,6 +56,17 @@ namespace ProjectZ.Android
         public static void SetFeaturedCharacter(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutInt(FeaturedCharacterKey, Math.Clamp(value, 0, 3))?.Apply();
+
+        public static int GetScene(Context context)
+        {
+            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.GetInt(SceneKey, 0) ?? 0;
+            return Math.Clamp(value, 0, 1);
+        }
+
+        public static void SetScene(Context context, int value) =>
+            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.Edit()?.PutInt(SceneKey, Math.Clamp(value, 0, 1))?.Apply();
 
         public static void SetFrameRate(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
@@ -194,6 +206,28 @@ namespace ProjectZ.Android
             characterParams.SetMargins(0, 0, 0, Dp(12));
             layout.AddView(character, characterParams);
 
+            var sceneLabel = new TextView(this)
+            {
+                Text = "Wallpaper scenery",
+                TextSize = 17f,
+                Enabled = assetReady
+            };
+            layout.AddView(sceneLabel);
+            var scene = new Spinner(this) { Enabled = assetReady };
+            var sceneAdapter = new ArrayAdapter<string>(this,
+                global::Android.Resource.Layout.SimpleSpinnerItem,
+                ["Stylized Koholint coast", "Installed Mabe Village map"]);
+            sceneAdapter.SetDropDownViewResource(
+                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
+            scene.Adapter = sceneAdapter;
+            scene.SetSelection(LadxhdWallpaperPreferences.GetScene(this));
+            scene.ItemSelected += (_, args) =>
+                LadxhdWallpaperPreferences.SetScene(this, args.Position);
+            var sceneParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            sceneParams.SetMargins(0, 0, 0, Dp(12));
+            layout.AddView(scene, sceneParams);
+
             var rateLabel = new TextView(this) { Text = "Animation frame rate", TextSize = 17f };
             layout.AddView(rateLabel);
             var rates = new RadioGroup(this) { Orientation = Orientation.Horizontal };
@@ -293,6 +327,48 @@ namespace ProjectZ.Android
             {
                 animation = null;
                 spritePath = null;
+                reason = exception.Message;
+                return false;
+            }
+        }
+
+        public static bool TryResolveMabeMap(
+            Context context,
+            out LiveWallpaperMap map,
+            out string tilesetPath,
+            out string reason)
+        {
+            map = null;
+            tilesetPath = null;
+            reason = null;
+            if (!AndroidAssetInstallation.TryGetActiveRoot(context, out var root, out reason))
+                return false;
+
+            try
+            {
+                var dataRoot = FilePath.GetFullPath(FilePath.Combine(root, "Data"));
+                var mapPath = FilePath.Combine(dataRoot, "Maps", "overworld.map");
+                using var reader = File.OpenText(mapPath);
+                if (!LiveWallpaperMap.TryLoad(reader, out map))
+                    throw new InvalidDataException("The installed overworld map is unavailable.");
+
+                var tilesetRoot = FilePath.GetFullPath(
+                    FilePath.Combine(dataRoot, "Maps", "Tilesets"));
+                var candidate = FilePath.GetFullPath(FilePath.Combine(tilesetRoot,
+                    map.TilesetPath.Replace('/', FilePath.DirectorySeparatorChar)));
+                var rootPrefix = tilesetRoot.TrimEnd(FilePath.DirectorySeparatorChar) +
+                                 FilePath.DirectorySeparatorChar;
+                if (!candidate.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase) ||
+                    !File.Exists(candidate))
+                    throw new FileNotFoundException("The installed overworld tileset is unavailable.");
+
+                tilesetPath = candidate;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                map = null;
+                tilesetPath = null;
                 reason = exception.Message;
                 return false;
             }
@@ -402,7 +478,8 @@ namespace ProjectZ.Android
                         _scene.Draw(canvas, elapsed, _xOffset,
                             LadxhdWallpaperPreferences.IsAnimated(_service),
                             LadxhdWallpaperPreferences.ShowIslandLife(_service),
-                            LadxhdWallpaperPreferences.GetFeaturedCharacter(_service));
+                            LadxhdWallpaperPreferences.GetFeaturedCharacter(_service),
+                            LadxhdWallpaperPreferences.GetScene(_service));
                     }
                 }
                 finally
@@ -445,6 +522,18 @@ namespace ProjectZ.Android
             public LiveWallpaperAnimation Animation { get; }
         }
 
+        private sealed class MapAsset
+        {
+            public MapAsset(Bitmap bitmap, LiveWallpaperMap map)
+            {
+                Bitmap = bitmap;
+                Map = map;
+            }
+
+            public Bitmap Bitmap { get; }
+            public LiveWallpaperMap Map { get; }
+        }
+
         private readonly Paint _paint = new Paint { AntiAlias = false, FilterBitmap = false };
         private readonly Paint _smoothPaint = new Paint { AntiAlias = true };
         private readonly Random _random = new Random(0x4C415844);
@@ -457,6 +546,7 @@ namespace ProjectZ.Android
         private SpriteAsset _rooster;
         private SpriteAsset _butterfly;
         private SpriteAsset _owl;
+        private MapAsset _mabeMap;
         private float _touchX;
         private float _touchY;
         private long _touchAt = long.MinValue;
@@ -476,6 +566,7 @@ namespace ProjectZ.Android
                 ["stand_3", "stand_2", "stand_0", "spawn"]);
             _butterfly = LoadSprite(context, "NPCs/butterfly.ani", ["idle"]);
             _owl = LoadSprite(context, "NPCs/owl.ani", ["fly", "hover", "idle"]);
+            _mabeMap = LoadMabeMap(context);
         }
 
         public void OnTouch(float x, float y, long elapsed)
@@ -491,7 +582,8 @@ namespace ProjectZ.Android
             float xOffset,
             bool animated,
             bool showIslandLife,
-            int featuredCharacter)
+            int featuredCharacter,
+            int scene)
         {
             var width = canvas.Width;
             var height = canvas.Height;
@@ -503,14 +595,17 @@ namespace ProjectZ.Android
             DrawSky(canvas, width, height, time, xOffset, unit);
             if (showIslandLife)
                 DrawOwl(canvas, width, height, time, unit, animated);
-            DrawIsland(canvas, width, height, time, xOffset, unit);
+            var useMabeMap = scene == 1 && _mabeMap != null;
+            var groundY = useMabeMap
+                ? DrawMabeMap(canvas, width, height)
+                : DrawIsland(canvas, width, height, time, xOffset, unit);
             if (showIslandLife)
             {
-                DrawFeaturedCharacter(canvas, width, height, time, xOffset, unit,
+                DrawFeaturedCharacter(canvas, width, groundY, time, xOffset, unit,
                     featuredCharacter);
-                DrawButterflies(canvas, width, height, time, unit, animated);
+                DrawButterflies(canvas, width, groundY, time, unit, animated);
             }
-            DrawLink(canvas, width, height, time, unit, animated);
+            DrawLink(canvas, width, groundY, time, unit, animated);
             DrawTouchEffect(canvas, time, unit, animated);
         }
 
@@ -554,7 +649,8 @@ namespace ProjectZ.Android
             canvas.DrawPath(mountains, _paint);
         }
 
-        private void DrawIsland(Canvas canvas, int width, int height, long elapsed, float xOffset, float unit)
+        private float DrawIsland(
+            Canvas canvas, int width, int height, long elapsed, float xOffset, float unit)
         {
             var waterTop = height * 0.58f;
             Fill(canvas, Color.Rgb(32, 93, 132), 0, waterTop, width, height);
@@ -583,10 +679,56 @@ namespace ProjectZ.Android
                 height * 0.77f, unit * 1.25f);
             DrawPalm(canvas, width * 0.88f - (xOffset - 0.5f) * 28f * unit,
                 height * 0.79f, unit * 0.9f);
+            return height * 0.78f;
+        }
+
+        private float DrawMabeMap(Canvas canvas, int width, int height)
+        {
+            const int originTileX = 20;
+            const int originTileY = 72;
+            const int columns = 10;
+            const int rows = 8;
+            const int tileSize = 16;
+            const int atlasStride = tileSize + 2;
+            var map = _mabeMap.Map;
+            var tileset = _mabeMap.Bitmap;
+            var destinationTileSize = MathF.Ceiling(width / (float)columns);
+            var top = height - rows * destinationTileSize;
+            var tilesPerRow = tileset.Width / atlasStride;
+            if (tilesPerRow <= 0)
+                return height * 0.78f;
+
+            for (var layer = 0; layer < map.DrawableDepth; layer++)
+            {
+                for (var y = 0; y < rows; y++)
+                {
+                    for (var x = 0; x < columns; x++)
+                    {
+                        var tile = map.GetTile(originTileX + x, originTileY + y, layer);
+                        if (tile < 0)
+                            continue;
+                        var sourceX = tile % tilesPerRow * atlasStride + 1;
+                        var sourceY = tile / tilesPerRow * atlasStride + 1;
+                        if (sourceX + tileSize > tileset.Width ||
+                            sourceY + tileSize > tileset.Height)
+                            continue;
+                        var source = new Rect(sourceX, sourceY,
+                            sourceX + tileSize, sourceY + tileSize);
+                        var destination = new RectF(
+                            x * destinationTileSize,
+                            top + y * destinationTileSize,
+                            (x + 1) * destinationTileSize,
+                            top + (y + 1) * destinationTileSize);
+                        canvas.DrawBitmap(tileset, source, destination, _paint);
+                    }
+                }
+            }
+
+            return top + destinationTileSize * 5.6f;
         }
 
         private void DrawLink(
-            Canvas canvas, int width, int height, long elapsed, float unit, bool animated)
+            Canvas canvas, int width, float groundY, long elapsed, float unit, bool animated)
         {
             if (_link == null)
                 return;
@@ -595,13 +737,13 @@ namespace ProjectZ.Android
             var spriteWidth = frame.Width * scale;
             var journey = animated ? (elapsed % 14000L) / 14000f : 0.5f;
             var centerX = -spriteWidth * 0.5f + journey * (width + spriteWidth);
-            DrawSpriteAt(canvas, _link, elapsed, centerX, height * 0.78f, scale);
+            DrawSpriteAt(canvas, _link, elapsed, centerX, groundY, scale);
         }
 
         private void DrawFeaturedCharacter(
             Canvas canvas,
             int width,
-            int height,
+            float groundY,
             long elapsed,
             float xOffset,
             float unit,
@@ -620,12 +762,12 @@ namespace ProjectZ.Android
                 return;
             var centerX = width * 0.78f - (xOffset - 0.5f) * 20f * unit;
             var scale = selection == 0 ? 2.05f : 1.9f;
-            DrawSpriteAt(canvas, asset, elapsed, centerX, height * 0.78f,
+            DrawSpriteAt(canvas, asset, elapsed, centerX, groundY,
                 Math.Max(2f, unit * scale));
         }
 
         private void DrawButterflies(
-            Canvas canvas, int width, int height, long elapsed, float unit, bool animated)
+            Canvas canvas, int width, float groundY, long elapsed, float unit, bool animated)
         {
             if (_butterfly == null)
                 return;
@@ -634,7 +776,8 @@ namespace ProjectZ.Android
                 var phase = index * 2.1f;
                 var motion = animated ? elapsed / 850f + phase : phase;
                 var centerX = width * (0.28f + index * 0.17f) + MathF.Sin(motion) * 12f * unit;
-                var centerY = height * (0.72f - index * 0.025f) + MathF.Cos(motion * 1.3f) * 7f * unit;
+                var centerY = groundY - (14f + index * 6f) * unit +
+                              MathF.Cos(motion * 1.3f) * 7f * unit;
                 DrawSpriteAt(canvas, _butterfly, elapsed + index * 90L,
                     centerX, centerY, Math.Max(1.5f, unit * 1.35f));
             }
@@ -749,6 +892,28 @@ namespace ProjectZ.Android
                     _spriteSheets.Add(spritePath, bitmap);
                 }
                 return new SpriteAsset(bitmap, animation);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private MapAsset LoadMabeMap(Context context)
+        {
+            if (!LadxhdWallpaperAssets.TryResolveMabeMap(
+                    context, out var map, out var tilesetPath, out _))
+                return null;
+            try
+            {
+                if (!_spriteSheets.TryGetValue(tilesetPath, out var bitmap))
+                {
+                    bitmap = BitmapFactory.DecodeFile(tilesetPath) ??
+                             throw new InvalidDataException(
+                                 "The wallpaper tileset could not be decoded.");
+                    _spriteSheets.Add(tilesetPath, bitmap);
+                }
+                return new MapAsset(bitmap, map);
             }
             catch
             {

@@ -77,6 +77,18 @@ Assert(LiveWallpaperAnimation.TryNormalizeRelativePath(
        wallpaperNpcPath == "NPCs/butterfly.ani" &&
        !LiveWallpaperAnimation.TryNormalizeRelativePath("/Data/Animations/owl.ani", out _),
        "The live wallpaper must normalize safe nested animation paths and reject rooted paths.");
+const string wallpaperMapData = "3\n0\n0\noverworld.png\n3\n2\n2\n" +
+                               "0,1,2,\n3,,4,\n,5,,\n6,7,8,\n";
+Assert(LiveWallpaperMap.TryLoad(new StringReader(wallpaperMapData), out var wallpaperMap) &&
+       wallpaperMap.TilesetPath == "overworld.png" &&
+       wallpaperMap.Width == 3 && wallpaperMap.Height == 2 &&
+       wallpaperMap.Depth == 2 && wallpaperMap.DrawableDepth == 1 &&
+       wallpaperMap.GetTile(1, 0, 0) == 1 && wallpaperMap.GetTile(1, 1, 0) == -1 &&
+       wallpaperMap.GetTile(2, 1, 1) == 8 && wallpaperMap.GetTile(99, 99, 0) == -1,
+       "The live wallpaper must safely parse installed map tiles and preserve empty cells.");
+Assert(!LiveWallpaperMap.TryLoad(
+           new StringReader("3\n0\n0\n../outside.png\n1\n1\n1\n0,\n"), out _),
+       "The live wallpaper must reject unsafe installed tileset paths.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");
