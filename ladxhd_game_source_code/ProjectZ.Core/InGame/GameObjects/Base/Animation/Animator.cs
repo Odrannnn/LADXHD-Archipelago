@@ -49,13 +49,15 @@ namespace ProjectZ.InGame.GameObjects.Base
         private int _currentFrameIndex;
         private int _finishFrameIndex;
 
-        public void Update()
+        public void Update() => Update(Game1.DeltaTime);
+
+        public void Update(float deltaTime)
         {
             var stoppedPlaying = false;
 
             if (IsPlaying)
             {
-                _frameCounter += Game1.DeltaTime * SpeedMultiplier;
+                _frameCounter += Math.Max(0f, deltaTime) * SpeedMultiplier;
 
                 while (_frameCounter > Animations[_currentAnimation].Frames[CurrentFrameIndex].FrameTime)
                 {

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using Microsoft.Xna.Framework;
+using ProjectZ.InGame.GameObjects.Base;
 
 namespace ProjectZ
 {
@@ -149,6 +151,8 @@ namespace ProjectZ
                 left, top, left + frame.Width * scale, top + frame.Height * scale);
         }
 
+        public LiveWallpaperEngineAnimation CreateEngineAnimation() => new(this);
+
         public static bool TryLoad(
             TextReader reader,
             IEnumerable<string> preferredAnimationIds,
@@ -244,5 +248,57 @@ namespace ProjectZ
 
         private static bool TryInt(string value, out int result) =>
             int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
+    }
+
+    /// <summary>
+    /// Drives wallpaper frames through the same Animator state machine used by game objects,
+    /// without requiring gameplay, audio, saves, or Archipelago networking.
+    /// </summary>
+    public sealed class LiveWallpaperEngineAnimation
+    {
+        private readonly LiveWallpaperAnimation _source;
+        private readonly Animator _animator;
+        private long? _lastElapsed;
+
+        internal LiveWallpaperEngineAnimation(LiveWallpaperAnimation source)
+        {
+            _source = source ?? throw new ArgumentNullException(nameof(source));
+            var gameAnimation = new Animation(source.AnimationId)
+            {
+                Offset = new Point(source.OffsetX, source.OffsetY),
+                LoopCount = -1,
+                Frames = source.Frames.Select(frame => new Frame
+                {
+                    FrameTime = frame.DurationMilliseconds,
+                    SourceRectangle = new Rectangle(frame.X, frame.Y, frame.Width, frame.Height),
+                    Offset = new Point(frame.OffsetX, frame.OffsetY),
+                    CollisionRectangle = Rectangle.Empty,
+                    MirroredV = frame.MirroredVertically,
+                    MirroredH = frame.MirroredHorizontally
+                }).ToArray()
+            };
+            _animator = new Animator();
+            _animator.AddAnimation(gameAnimation);
+            _animator.Play(source.AnimationId);
+        }
+
+        public int CurrentFrameIndex => _animator.CurrentFrameIndex;
+
+        public LiveWallpaperFrame Advance(long elapsedMilliseconds, bool animated)
+        {
+            if (!animated)
+            {
+                _animator.Play(_source.AnimationId, 0, 0);
+                _lastElapsed = elapsedMilliseconds;
+                return _source.Frames[0];
+            }
+
+            var delta = _lastElapsed.HasValue
+                ? Math.Clamp(elapsedMilliseconds - _lastElapsed.Value, 0L, 250L)
+                : 0L;
+            _lastElapsed = elapsedMilliseconds;
+            _animator.Update(delta);
+            return _source.Frames[_animator.CurrentFrameIndex];
+        }
     }
 }

@@ -70,6 +70,12 @@ Assert(Math.Abs(wallpaperPlacement.Left - 86f) < 0.001f &&
        Math.Abs(wallpaperPlacement.Right - 118f) < 0.001f &&
        Math.Abs(wallpaperPlacement.Bottom - 214f) < 0.001f,
        "The live wallpaper must place frames with the same animation and frame origin semantics as the game Animator.");
+var wallpaperEngineAnimation = wallpaperAnimation.CreateEngineAnimation();
+var wallpaperEngineFirstFrame = wallpaperEngineAnimation.Advance(0, animated: true);
+var wallpaperEngineSecondFrame = wallpaperEngineAnimation.Advance(101, animated: true);
+Assert(wallpaperEngineFirstFrame.X == 16 && wallpaperEngineSecondFrame.X == 32 &&
+       wallpaperEngineAnimation.CurrentFrameIndex == 1,
+       "The live wallpaper must drive character frames through the game's Animator state machine.");
 Assert(!LiveWallpaperAnimation.TryLoad(
            new StringReader("1\nlink0.png\nwalk_2;;0;0;0;99\n"), ["walk_2"], out _),
        "The live wallpaper must reject malformed or excessive animation frame data.");

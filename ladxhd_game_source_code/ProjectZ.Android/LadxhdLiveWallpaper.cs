@@ -805,10 +805,12 @@ namespace ProjectZ.Android
             {
                 Bitmap = bitmap;
                 Animation = animation;
+                EngineAnimation = animation.CreateEngineAnimation();
             }
 
             public Bitmap Bitmap { get; }
             public LiveWallpaperAnimation Animation { get; }
+            public LiveWallpaperEngineAnimation EngineAnimation { get; }
         }
 
         private sealed class MapAsset
@@ -1039,7 +1041,7 @@ namespace ProjectZ.Android
             var bottomY = viewport.Top +
                           (route.MapY - viewport.OriginY) * viewport.TileSize -
                           route.JumpHeight * viewport.TileSize * 1.15f;
-            DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY, scale);
+            DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY, scale, animated);
         }
 
         private void DrawFeaturedCharacter(
@@ -1082,7 +1084,7 @@ namespace ProjectZ.Android
                 DrawRoosterParticles(canvas, centerX, bottomY, elapsed, unit);
             var scale = selection == 0 ? 2.05f : 1.9f;
             DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY,
-                Math.Max(2f, unit * scale));
+                Math.Max(2f, unit * scale), animated);
             if (selection == 0 && motion.ShowNotes)
                 DrawMarinNotes(canvas, centerX, groundY, elapsed, unit);
         }
@@ -1176,11 +1178,14 @@ namespace ProjectZ.Android
             long elapsed,
             float centerX,
             float bottomY,
-            float scale)
+            float scale,
+            bool engineDriven = false)
         {
             if (asset?.Bitmap == null || asset.Animation == null)
                 return;
-            var frame = asset.Animation.GetFrame(elapsed);
+            var frame = engineDriven
+                ? asset.EngineAnimation.Advance(elapsed, animated: true)
+                : asset.Animation.GetFrame(elapsed);
             if (frame.X < 0 || frame.Y < 0 ||
                 frame.X + frame.Width > asset.Bitmap.Width ||
                 frame.Y + frame.Height > asset.Bitmap.Height)
