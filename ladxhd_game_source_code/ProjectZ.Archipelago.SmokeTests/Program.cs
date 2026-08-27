@@ -241,20 +241,22 @@ var constrainedSimulation = new LiveWallpaperLinkSimulation();
 constrainedSimulation.Update(
     1, new LiveWallpaperLinkState(true, true, 0f), 0, true, constrainedMap);
 LiveWallpaperSimulatedLinkState constrainedLink = default;
-for (var frame = 1; frame <= 30; frame++)
+var detourMinimumY = float.MaxValue;
+for (var frame = 1; frame <= 90; frame++)
 {
     constrainedLink = constrainedSimulation.Update(
         1, new LiveWallpaperLinkState(true, true, 0.2f),
         frame * 17L, true, constrainedMap);
+    detourMinimumY = Math.Min(detourMinimumY, constrainedLink.MapY);
 }
-Assert(constrainedLink.MapX <= 23.7501f &&
-       constrainedMap.IntersectsCollision(
-           constrainedLink.MapX * 16f + constrainedSimulation.Body.OffsetX + 1.1f,
+Assert(constrainedLink.MapX > 25.5f && detourMinimumY < 81.25f &&
+       !constrainedMap.IntersectsCollision(
+           constrainedLink.MapX * 16f + constrainedSimulation.Body.OffsetX,
            constrainedLink.MapY * 16f + constrainedSimulation.Body.OffsetY,
            constrainedSimulation.Body.Width,
            constrainedSimulation.Body.Height,
            includeHoles: true),
-       "Wallpaper Link must stop at installed solid collision instead of crossing walls.");
+       "Wallpaper Link must steer through a nearby passage without crossing installed collision.");
 var wallpaperFollowerSimulation = new LiveWallpaperFollowerSimulation();
 wallpaperFollowerSimulation.Update(2, -14f, 0, animated: true);
 var simulatedRooster = wallpaperFollowerSimulation.Update(2, 14f, 17, animated: true);

@@ -53,6 +53,8 @@ namespace ProjectZ
         private int _scene = -1;
         private long? _lastElapsed;
         private LiveWallpaperLinkRouteAction _lastAction;
+        private Vector2 _detourMove;
+        private Vector2 _blockedMove;
 
         public LiveWallpaperLinkSimulation()
         {
@@ -87,26 +89,30 @@ namespace ProjectZ
                 _body.Velocity = Vector3.Zero;
                 _body.IsGrounded = _position.Z <= 0;
                 _lastAction = route.Action;
+                _detourMove = Vector2.Zero;
+                _blockedMove = Vector2.Zero;
             }
 
             var frameScale = Math.Clamp(elapsedDelta / (1000f / 60f), 0f, 6f);
             var difference = target - _position.Position;
-            var move = activity.Walking && difference.LengthSquared() > 0.0001f
+            var desiredMove = activity.Walking && difference.LengthSquared() > 0.0001f
                 ? Vector2.Normalize(difference)
                 : Vector2.Zero;
             var featherPressed = animated &&
                 route.Action == LiveWallpaperLinkRouteAction.FeatherJump &&
                 _lastAction != LiveWallpaperLinkRouteAction.FeatherJump;
-            var input = new LiveWallpaperLinkInput(move, featherPressed);
+            var inputMove = desiredMove;
 
             if (!reset && frameScale > 0)
             {
-                _body.VelocityTarget = input.Move * WalkSpeedPerFrame;
-                if (input.FeatherPressed && _body.IsGrounded)
+                if (featherPressed && _body.IsGrounded)
                 {
                     _body.IsGrounded = false;
                     _body.Velocity.Z = 2.35f;
                 }
+
+                inputMove = ResolveSteeredMove(map, desiredMove, frameScale);
+                _body.VelocityTarget = inputMove * WalkSpeedPerFrame;
 
                 var movement = _body.VelocityTarget * frameScale;
                 if (movement.LengthSquared() > difference.LengthSquared())
@@ -126,10 +132,96 @@ namespace ProjectZ
                 }
             }
 
+            var input = new LiveWallpaperLinkInput(inputMove, featherPressed);
             _lastAction = route.Action;
             return new LiveWallpaperSimulatedLinkState(
                 _position.X / TileSize, _position.Y / TileSize, _position.Z,
-                route.Direction, route.Action, input);
+                ResolveDirection(input.Move, route.Direction), route.Action, input);
+        }
+
+        private Vector2 ResolveSteeredMove(
+            LiveWallpaperMap map, Vector2 desiredMove, float frameScale)
+        {
+            if (map == null || desiredMove.LengthSquared() <= 0.0001f)
+            {
+                _detourMove = Vector2.Zero;
+                _blockedMove = Vector2.Zero;
+                return desiredMove;
+            }
+
+            var primaryMove = DominantCardinal(desiredMove);
+            var probeDistance = Math.Max(1f, WalkSpeedPerFrame * frameScale);
+            if (_detourMove != Vector2.Zero)
+            {
+                if (Vector2.Dot(primaryMove, _blockedMove) <= 0 ||
+                    CanMove(map, _blockedMove * probeDistance))
+                {
+                    _detourMove = Vector2.Zero;
+                    _blockedMove = Vector2.Zero;
+                    return desiredMove;
+                }
+                if (CanMove(map, _detourMove * probeDistance))
+                    return _detourMove;
+                _detourMove = -_detourMove;
+                if (CanMove(map, _detourMove * probeDistance))
+                    return _detourMove;
+                _detourMove = Vector2.Zero;
+                _blockedMove = Vector2.Zero;
+                return Vector2.Zero;
+            }
+
+            if (CanMove(map, desiredMove * probeDistance))
+                return desiredMove;
+
+            var firstSide = primaryMove.X != 0 ? -Vector2.UnitY : -Vector2.UnitX;
+            var secondSide = -firstSide;
+            var firstDistance = FindDetourDistance(
+                map, primaryMove, firstSide, probeDistance);
+            var secondDistance = FindDetourDistance(
+                map, primaryMove, secondSide, probeDistance);
+            if (firstDistance == int.MaxValue && secondDistance == int.MaxValue)
+                return Vector2.Zero;
+
+            _blockedMove = primaryMove;
+            _detourMove = firstDistance <= secondDistance ? firstSide : secondSide;
+            return _detourMove;
+        }
+
+        private int FindDetourDistance(
+            LiveWallpaperMap map, Vector2 forward, Vector2 side, float probeDistance)
+        {
+            const int maximumDetourPixels = 32;
+            for (var distance = 1; distance <= maximumDetourPixels; distance++)
+            {
+                var offset = side * distance;
+                if (IntersectsMap(
+                        map, _position.X + offset.X, _position.Y + offset.Y))
+                    return int.MaxValue;
+                if (!IntersectsMap(
+                        map, _position.X + offset.X + forward.X * probeDistance,
+                        _position.Y + offset.Y + forward.Y * probeDistance))
+                    return distance;
+            }
+            return int.MaxValue;
+        }
+
+        private bool CanMove(LiveWallpaperMap map, Vector2 move) =>
+            !IntersectsMap(map, _position.X + move.X, _position.Y + move.Y);
+
+        private static Vector2 DominantCardinal(Vector2 move)
+        {
+            if (MathF.Abs(move.X) >= MathF.Abs(move.Y))
+                return new Vector2(MathF.Sign(move.X), 0);
+            return new Vector2(0, MathF.Sign(move.Y));
+        }
+
+        private static int ResolveDirection(Vector2 move, int fallback)
+        {
+            if (move.LengthSquared() <= 0.0001f)
+                return fallback;
+            if (MathF.Abs(move.X) >= MathF.Abs(move.Y))
+                return move.X < 0 ? 2 : 3;
+            return move.Y < 0 ? 1 : 0;
         }
 
         private void ApplyMapConstrainedMovement(
