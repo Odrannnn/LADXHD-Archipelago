@@ -210,6 +210,15 @@ Assert(simulatedWalkStart.Input.Move == Microsoft.Xna.Framework.Vector2.Zero &&
        simulatedFeather.Height > 0 && !wallpaperLinkSimulation.Body.IsGrounded &&
        wallpaperLinkSimulation.Body.Velocity.Z > 0,
        "Wallpaper Link must translate the scripted route into real body movement and feather input.");
+var wallpaperFollowerSimulation = new LiveWallpaperFollowerSimulation();
+wallpaperFollowerSimulation.Update(2, -14f, 0, animated: true);
+var simulatedRooster = wallpaperFollowerSimulation.Update(2, 14f, 17, animated: true);
+Assert(simulatedRooster.HorizontalOffset > -14f && simulatedRooster.FacingRight &&
+       simulatedRooster.Height > 0 && !wallpaperFollowerSimulation.Body.IsGrounded,
+       "Wallpaper followers must use body-backed distance steering and rooster hopping.");
+var simulatedBowWow = wallpaperFollowerSimulation.Update(1, 100f, 2_000, animated: true);
+Assert(simulatedBowWow.HorizontalOffset <= 46f,
+       "Wallpaper BowWow must remain constrained by the in-game chain radius.");
 Assert(LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 15) == 66 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 30) == 33 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 999) == 33 &&

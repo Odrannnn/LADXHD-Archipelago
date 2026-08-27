@@ -870,6 +870,7 @@ namespace ProjectZ.Android
         private AtlasSpriteAsset _roosterParticleSmall;
         private MapAsset _overworldMap;
         private readonly LiveWallpaperLinkSimulation _linkSimulation = new();
+        private readonly LiveWallpaperFollowerSimulation _followerSimulation = new();
 
         public LadxhdWallpaperScene(Context context)
         {
@@ -1069,20 +1070,21 @@ namespace ProjectZ.Android
                 2 => 14f,
                 _ => 0f
             };
-            var centerX = baseX + motion.HorizontalOffset * movementRadius * unit;
-            var lift = selection == 2 ? 13f : selection == 1 ? 5f : 0f;
-            var bottomY = groundY - motion.Lift * lift * unit;
+            var follower = _followerSimulation.Update(
+                selection, motion.HorizontalOffset * movementRadius, elapsed, animated);
+            var centerX = baseX + follower.HorizontalOffset * unit;
+            var bottomY = groundY - follower.Height * unit;
             var asset = selection switch
             {
-                1 => motion.FacingRight ? _bowWowRight : _bowWowLeft,
-                2 => motion.FacingRight ? _roosterRight : _roosterLeft,
+                1 => follower.FacingRight ? _bowWowRight : _bowWowLeft,
+                2 => follower.FacingRight ? _roosterRight : _roosterLeft,
                 _ => _marin
             };
             if (asset == null)
                 return;
             if (selection == 1)
                 DrawBowWowChain(canvas, baseX, groundY, centerX, bottomY, unit);
-            else if (selection == 2 && motion.Lift > 0.35f)
+            else if (selection == 2 && follower.Height > 3f)
                 DrawRoosterParticles(canvas, centerX, bottomY, elapsed, unit);
             var scale = selection == 0 ? 2.05f : 1.9f;
             DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY,
