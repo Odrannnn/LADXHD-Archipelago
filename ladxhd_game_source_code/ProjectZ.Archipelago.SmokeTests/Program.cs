@@ -98,6 +98,14 @@ Assert(LiveWallpaperLighting.Resolve(0, 4) == LiveWallpaperTimePhase.Night &&
        LiveWallpaperLighting.Resolve(2, 12) == LiveWallpaperTimePhase.Sunset &&
        LiveWallpaperLighting.Resolve(3, 12) == LiveWallpaperTimePhase.Night,
        "The live wallpaper time-of-day mode must honor system-time boundaries and overrides.");
+Assert(LiveWallpaperInteraction.NextFeaturedCharacter(0) == 1 &&
+       LiveWallpaperInteraction.NextFeaturedCharacter(1) == 2 &&
+       LiveWallpaperInteraction.NextFeaturedCharacter(2) == 0 &&
+       LiveWallpaperInteraction.NextFeaturedCharacter(3) == 0 &&
+       LiveWallpaperInteraction.NextScene(0) == 1 &&
+       LiveWallpaperInteraction.NextScene(1) == 0 &&
+       LiveWallpaperInteraction.NextScene(99) == 0,
+       "Wallpaper tap actions must cycle characters and scenery predictably.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");

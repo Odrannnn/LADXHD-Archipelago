@@ -22,6 +22,7 @@ namespace ProjectZ.Android
         private const string FeaturedCharacterKey = "featured_character";
         private const string SceneKey = "scene";
         private const string TimeOfDayKey = "time_of_day";
+        private const string TapActionKey = "tap_action";
         private const string FrameRateKey = "frame_rate";
 
         public static bool IsAnimated(Context context) =>
@@ -79,6 +80,17 @@ namespace ProjectZ.Android
         public static void SetTimeOfDay(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutInt(TimeOfDayKey, Math.Clamp(value, 0, 3))?.Apply();
+
+        public static int GetTapAction(Context context)
+        {
+            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.GetInt(TapActionKey, 0) ?? 0;
+            return Math.Clamp(value, 0, 2);
+        }
+
+        public static void SetTapAction(Context context, int value) =>
+            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.Edit()?.PutInt(TapActionKey, Math.Clamp(value, 0, 2))?.Apply();
 
         public static void SetFrameRate(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
@@ -260,6 +272,27 @@ namespace ProjectZ.Android
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             timeParams.SetMargins(0, 0, 0, Dp(12));
             layout.AddView(timeOfDay, timeParams);
+
+            var tapLabel = new TextView(this)
+            {
+                Text = "Wallpaper tap action",
+                TextSize = 17f
+            };
+            layout.AddView(tapLabel);
+            var tapAction = new Spinner(this);
+            var tapAdapter = new ArrayAdapter<string>(this,
+                global::Android.Resource.Layout.SimpleSpinnerItem,
+                ["Show ripple", "Cycle featured character", "Switch scenery"]);
+            tapAdapter.SetDropDownViewResource(
+                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
+            tapAction.Adapter = tapAdapter;
+            tapAction.SetSelection(LadxhdWallpaperPreferences.GetTapAction(this));
+            tapAction.ItemSelected += (_, args) =>
+                LadxhdWallpaperPreferences.SetTapAction(this, args.Position);
+            var tapParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            tapParams.SetMargins(0, 0, 0, Dp(12));
+            layout.AddView(tapAction, tapParams);
 
             var rateLabel = new TextView(this) { Text = "Animation frame rate", TextSize = 17f };
             layout.AddView(rateLabel);
@@ -481,6 +514,19 @@ namespace ProjectZ.Android
                 if (e?.Action == MotionEventActions.Down)
                 {
                     _scene.OnTouch(e.GetX(), e.GetY(), SystemClock.ElapsedRealtime() - _startedAt);
+                    switch (LadxhdWallpaperPreferences.GetTapAction(_service))
+                    {
+                        case 1:
+                            LadxhdWallpaperPreferences.SetFeaturedCharacter(_service,
+                                LiveWallpaperInteraction.NextFeaturedCharacter(
+                                    LadxhdWallpaperPreferences.GetFeaturedCharacter(_service)));
+                            break;
+                        case 2:
+                            LadxhdWallpaperPreferences.SetScene(_service,
+                                LiveWallpaperInteraction.NextScene(
+                                    LadxhdWallpaperPreferences.GetScene(_service)));
+                            break;
+                    }
                     ScheduleFrame(immediate: true);
                 }
                 base.OnTouchEvent(e);
