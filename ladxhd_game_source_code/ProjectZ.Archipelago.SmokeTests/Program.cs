@@ -219,6 +219,31 @@ Assert(Math.Abs(mabeRouteStart.MapX - 23.5f) < 0.001f &&
        Math.Abs(forestJump.MapX - 18.5f) < 0.001f &&
        eggStairs.Direction == 0 && Math.Abs(eggStairs.MapY - 17.5f) < 0.001f,
        "Wallpaper Link routes must stay map-aligned, reverse direction, and jump marked gaps.");
+Assert(LiveWallpaperMapViewport.TryCreate(
+           1080, 2400, 128, 1, 0.5f, out var linkPlacementViewport),
+       "The Link placement regression fixture must produce a map viewport.");
+var linkPlacementState = new LiveWallpaperSimulatedLinkState(
+    23.5f, 77.5f, 0f, 3, LiveWallpaperLinkRouteAction.Walk, default);
+var linkPlacement = LiveWallpaperLinkPlacement.Resolve(
+    linkPlacementViewport, linkPlacementState);
+var nextTilePlacement = LiveWallpaperLinkPlacement.Resolve(
+    linkPlacementViewport,
+    new LiveWallpaperSimulatedLinkState(
+        24.5f, 77.5f, 0f, 3, LiveWallpaperLinkRouteAction.Walk, default));
+var expectedEntityX = linkPlacementViewport.Left +
+                      (linkPlacementState.MapX - linkPlacementViewport.OriginX) *
+                      linkPlacementViewport.TileSize;
+var expectedEntityY = linkPlacementViewport.Top +
+                      (linkPlacementState.MapY - linkPlacementViewport.OriginY) *
+                      linkPlacementViewport.TileSize;
+Assert(Math.Abs(linkPlacement.Scale * 16f - linkPlacementViewport.TileSize) < 0.001f &&
+       Math.Abs(linkPlacement.AnchorX -
+                (expectedEntityX - 7f * linkPlacement.Scale)) < 0.001f &&
+       Math.Abs(linkPlacement.AnchorY -
+                (expectedEntityY - 16f * linkPlacement.Scale)) < 0.001f &&
+       Math.Abs(nextTilePlacement.AnchorX - linkPlacement.AnchorX -
+                linkPlacementViewport.TileSize) < 0.001f,
+       "Wallpaper Link must use the map scale and ObjLink's real sprite offset.");
 var wallpaperLinkSimulation = new LiveWallpaperLinkSimulation();
 var simulatedWalkStart = wallpaperLinkSimulation.Update(
     3, new LiveWallpaperLinkState(true, true, 0.20f), 0, animated: true);

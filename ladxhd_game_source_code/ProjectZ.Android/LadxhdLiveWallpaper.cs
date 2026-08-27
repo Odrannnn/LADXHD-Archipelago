@@ -1038,13 +1038,9 @@ namespace ProjectZ.Android
             asset ??= _linkStanding[direction] ?? _linkWalking[direction];
             if (asset == null)
                 return;
-            var scale = Math.Max(2f, unit * 2.2f);
-            var centerX = viewport.Left +
-                          (simulated.MapX - viewport.OriginX) * viewport.TileSize;
-            var bottomY = viewport.Top +
-                          (simulated.MapY - viewport.OriginY) * viewport.TileSize -
-                          simulated.Height * viewport.TileSize / 16f;
-            DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY, scale,
+            var placement = LiveWallpaperLinkPlacement.Resolve(viewport, simulated);
+            DrawSpriteAt(canvas, asset, elapsed,
+                placement.AnchorX, placement.AnchorY, placement.Scale,
                 engineDriven: true, animated: animated);
         }
 
