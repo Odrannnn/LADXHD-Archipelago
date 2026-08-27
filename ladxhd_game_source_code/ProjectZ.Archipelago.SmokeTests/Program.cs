@@ -207,23 +207,23 @@ Assert(walkingStart.Visible && walkingStart.Walking && walkingStart.Journey == 0
 var mabeRouteStart = LiveWallpaperLinkRoute.Resolve(1, 0f, true);
 var mabeRouteReturn = LiveWallpaperLinkRoute.Resolve(1, 0.75f, true);
 var standingRoute = LiveWallpaperLinkRoute.Resolve(1, 0.5f, false);
-var forestJump = LiveWallpaperLinkRoute.Resolve(3, 0.375f, true);
+var forestJump = LiveWallpaperLinkRoute.Resolve(3, 5f / 12f, true);
 var eggStairs = LiveWallpaperLinkRoute.Resolve(7, 0.25f, true);
 Assert(Math.Abs(mabeRouteStart.MapX - 23.5f) < 0.001f &&
-       Math.Abs(mabeRouteStart.MapY - 81.5f) < 0.001f &&
+       Math.Abs(mabeRouteStart.MapY - 77.5f) < 0.001f &&
        mabeRouteStart.Direction == 3 &&
        mabeRouteReturn.Direction == 2 &&
        standingRoute.Action == LiveWallpaperLinkRouteAction.Stand &&
        forestJump.Action == LiveWallpaperLinkRouteAction.FeatherJump &&
        forestJump.JumpHeight > 0.99f &&
-       Math.Abs(forestJump.MapX - 18f) < 0.001f &&
-       eggStairs.Direction == 1 && Math.Abs(eggStairs.MapY - 17.5f) < 0.001f,
+       Math.Abs(forestJump.MapX - 18.5f) < 0.001f &&
+       eggStairs.Direction == 0 && Math.Abs(eggStairs.MapY - 17.5f) < 0.001f,
        "Wallpaper Link routes must stay map-aligned, reverse direction, and jump marked gaps.");
 var wallpaperLinkSimulation = new LiveWallpaperLinkSimulation();
 var simulatedWalkStart = wallpaperLinkSimulation.Update(
     3, new LiveWallpaperLinkState(true, true, 0.20f), 0, animated: true);
 var simulatedFeather = wallpaperLinkSimulation.Update(
-    3, new LiveWallpaperLinkState(true, true, 0.30f), 17, animated: true);
+    3, new LiveWallpaperLinkState(true, true, 0.35f), 17, animated: true);
 Assert(simulatedWalkStart.Input.Move == Microsoft.Xna.Framework.Vector2.Zero &&
        simulatedFeather.Input.Move.X > 0 && simulatedFeather.Input.FeatherPressed &&
        simulatedFeather.Height > 0 && !wallpaperLinkSimulation.Body.IsGrounded &&

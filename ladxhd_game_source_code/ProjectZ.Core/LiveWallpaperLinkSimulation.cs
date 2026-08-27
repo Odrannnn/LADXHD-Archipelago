@@ -53,8 +53,11 @@ namespace ProjectZ
         private int _scene = -1;
         private long? _lastElapsed;
         private LiveWallpaperLinkRouteAction _lastAction;
+        private int _lastRouteDirection;
         private Vector2 _detourMove;
         private Vector2 _blockedMove;
+        private Vector2 _committedJumpMove;
+        private float _committedJumpRemaining;
 
         public LiveWallpaperLinkSimulation()
         {
@@ -89,8 +92,11 @@ namespace ProjectZ
                 _body.Velocity = Vector3.Zero;
                 _body.IsGrounded = _position.Z <= 0;
                 _lastAction = route.Action;
+                _lastRouteDirection = route.Direction;
                 _detourMove = Vector2.Zero;
                 _blockedMove = Vector2.Zero;
+                _committedJumpMove = Vector2.Zero;
+                _committedJumpRemaining = 0;
             }
 
             var frameScale = Math.Clamp(elapsedDelta / (1000f / 60f), 0f, 6f);
@@ -100,7 +106,8 @@ namespace ProjectZ
                 : Vector2.Zero;
             var featherPressed = animated &&
                 route.Action == LiveWallpaperLinkRouteAction.FeatherJump &&
-                _lastAction != LiveWallpaperLinkRouteAction.FeatherJump;
+                (_lastAction != LiveWallpaperLinkRouteAction.FeatherJump ||
+                 route.Direction != _lastRouteDirection);
             var inputMove = desiredMove;
 
             if (!reset && frameScale > 0)
@@ -109,15 +116,36 @@ namespace ProjectZ
                 {
                     _body.IsGrounded = false;
                     _body.Velocity.Z = 2.35f;
+                    _committedJumpMove = DirectionToVector(route.Direction);
+                    _committedJumpRemaining = TileSize * 2f;
+                    if (_committedJumpMove.X != 0)
+                        _position.Y = target.Y;
+                    else
+                        _position.X = target.X;
                 }
 
-                inputMove = ResolveSteeredMove(map, desiredMove, frameScale);
+                if (_committedJumpRemaining > 0)
+                    inputMove = _committedJumpMove;
+                else if (route.Action == LiveWallpaperLinkRouteAction.FeatherJump &&
+                         _committedJumpMove != Vector2.Zero &&
+                         Vector2.Dot(target - _position.Position, _committedJumpMove) < 0)
+                    inputMove = Vector2.Zero;
+                else
+                    inputMove = ResolveSteeredMove(map, desiredMove, frameScale);
                 _body.VelocityTarget = inputMove * WalkSpeedPerFrame;
 
                 var movement = _body.VelocityTarget * frameScale;
-                if (movement.LengthSquared() > difference.LengthSquared())
+                if (_committedJumpRemaining <= 0 &&
+                    movement.LengthSquared() > difference.LengthSquared())
                     movement = difference;
+                var beforeMove = _position.Position;
                 ApplyMapConstrainedMovement(map, movement);
+                if (_committedJumpRemaining > 0)
+                {
+                    var distanceMoved = (_position.Position - beforeMove).Length();
+                    _committedJumpRemaining = Math.Max(
+                        0, _committedJumpRemaining - distanceMoved);
+                }
 
                 if (!_body.IsGrounded)
                 {
@@ -134,6 +162,10 @@ namespace ProjectZ
 
             var input = new LiveWallpaperLinkInput(inputMove, featherPressed);
             _lastAction = route.Action;
+            _lastRouteDirection = route.Direction;
+            if (route.Action != LiveWallpaperLinkRouteAction.FeatherJump &&
+                _committedJumpRemaining <= 0)
+                _committedJumpMove = Vector2.Zero;
             return new LiveWallpaperSimulatedLinkState(
                 _position.X / TileSize, _position.Y / TileSize, _position.Z,
                 ResolveDirection(input.Move, route.Direction), route.Action, input);
@@ -223,6 +255,14 @@ namespace ProjectZ
                 return move.X < 0 ? 2 : 3;
             return move.Y < 0 ? 1 : 0;
         }
+
+        private static Vector2 DirectionToVector(int direction) => direction switch
+        {
+            0 => Vector2.UnitY,
+            1 => -Vector2.UnitY,
+            2 => -Vector2.UnitX,
+            _ => Vector2.UnitX
+        };
 
         private void ApplyMapConstrainedMovement(
             LiveWallpaperMap map, Vector2 movement)

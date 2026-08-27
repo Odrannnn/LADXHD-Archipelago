@@ -55,21 +55,22 @@ namespace ProjectZ
         }
 
         private static readonly Segment[] MabeRoute =
-            [new Segment(23.5f, 81.5f, 29.5f, 81.5f)];
+            [new Segment(23.5f, 77.5f, 29.5f, 77.5f)];
         private static readonly Segment[] ToronboRoute =
-            [new Segment(10.5f, 115.5f, 18.5f, 115.5f)];
+            [new Segment(15.5f, 118f, 19.5f, 118f)];
         private static readonly Segment[] ForestRoute =
         [
-            new Segment(14.5f, 36.5f, 17f, 36.5f),
-            new Segment(17f, 36.5f, 19f, 36.5f,
+            new Segment(14.5f, 38f, 17.5f, 38f),
+            new Segment(17.5f, 38f, 17.5f, 37f),
+            new Segment(17.5f, 37f, 19.5f, 37f,
                 LiveWallpaperLinkRouteAction.FeatherJump)
         ];
         private static readonly Segment[] CastleRoute =
-            [new Segment(94.5f, 46.5f, 100.5f, 46.5f)];
+            [new Segment(95.5f, 48f, 97.5f, 48f)];
         private static readonly Segment[] AnimalVillageRoute =
-            [new Segment(129.5f, 104.5f, 138.5f, 104.5f)];
+            [new Segment(130f, 105f, 137.5f, 105f)];
         private static readonly Segment[] EggRoute =
-            [new Segment(66.5f, 22.5f, 66.5f, 12.5f)];
+            [new Segment(66.5f, 16.5f, 66.5f, 18.5f)];
 
         public static LiveWallpaperLinkRouteState Resolve(
             int scene, float journey, bool walking)
