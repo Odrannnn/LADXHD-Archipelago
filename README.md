@@ -27,9 +27,9 @@ ZIP.
   in-app setup screen that can choose seeds and edit installed room connections without a companion.
 - A persistent in-game Magpie overlay with item, check, slot-setting, and position autotracking.
 - An optional Android live wallpaper with a pixel-art Koholint scene, animated Link, selectable
-  island characters, wildlife, and an installed Mabe Village map scene from locally prepared
-  assets, plus local-time lighting, parallax, configurable tap actions, and battery-friendly frame
-  rates.
+  island characters, wildlife, and rotating Mabe Village, Toronbo Shores, and Mysterious Forest
+  scenes from locally prepared assets, plus local-time lighting, parallax, configurable tap
+  actions, and battery-friendly frame rates.
 - A phone-native, transactional game-data builder: select the original v1.0.0 ZIP on first launch,
   then let the app verify, patch, stage, and activate the Android assets locally.
 - A separate Android identity, `com.zelda.ladxhd.archipelago`, so this build can coexist with the

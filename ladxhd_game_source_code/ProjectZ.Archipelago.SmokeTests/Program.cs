@@ -103,9 +103,26 @@ Assert(LiveWallpaperInteraction.NextFeaturedCharacter(0) == 1 &&
        LiveWallpaperInteraction.NextFeaturedCharacter(2) == 0 &&
        LiveWallpaperInteraction.NextFeaturedCharacter(3) == 0 &&
        LiveWallpaperInteraction.NextScene(0) == 1 &&
-       LiveWallpaperInteraction.NextScene(1) == 0 &&
+       LiveWallpaperInteraction.NextScene(1) == 2 &&
+       LiveWallpaperInteraction.NextScene(2) == 3 &&
+       LiveWallpaperInteraction.NextScene(3) == 0 &&
        LiveWallpaperInteraction.NextScene(99) == 0,
        "Wallpaper tap actions must cycle characters and scenery predictably.");
+Assert(LiveWallpaperSceneSelection.Resolve(4, 0, true) == 1 &&
+       LiveWallpaperSceneSelection.Resolve(4, 44_999, true) == 1 &&
+       LiveWallpaperSceneSelection.Resolve(4, 45_000, true) == 2 &&
+       LiveWallpaperSceneSelection.Resolve(4, 90_000, true) == 3 &&
+       LiveWallpaperSceneSelection.Resolve(4, 135_000, true) == 1 &&
+       LiveWallpaperSceneSelection.Resolve(2, 0, true) == 2 &&
+       LiveWallpaperSceneSelection.Resolve(2, 0, false) == 0 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(1, out var mabeX, out var mabeY) &&
+       mabeX == 20 && mabeY == 72 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(2, out var shoreX, out var shoreY) &&
+       shoreX == 10 && shoreY == 112 &&
+       LiveWallpaperSceneSelection.TryGetTileOrigin(3, out var forestX, out var forestY) &&
+       forestX == 10 && forestY == 32 &&
+       !LiveWallpaperSceneSelection.TryGetTileOrigin(0, out _, out _),
+       "Installed wallpaper scenes must resolve stable overworld crops and rotation intervals.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");

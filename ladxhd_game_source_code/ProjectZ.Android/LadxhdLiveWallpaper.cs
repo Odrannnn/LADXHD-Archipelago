@@ -63,12 +63,12 @@ namespace ProjectZ.Android
         {
             var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.GetInt(SceneKey, 0) ?? 0;
-            return Math.Clamp(value, 0, 1);
+            return Math.Clamp(value, 0, 4);
         }
 
         public static void SetScene(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.Edit()?.PutInt(SceneKey, Math.Clamp(value, 0, 1))?.Apply();
+                ?.Edit()?.PutInt(SceneKey, Math.Clamp(value, 0, 4))?.Apply();
 
         public static int GetTimeOfDay(Context context)
         {
@@ -240,7 +240,8 @@ namespace ProjectZ.Android
             var scene = new Spinner(this) { Enabled = assetReady };
             var sceneAdapter = new ArrayAdapter<string>(this,
                 global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Stylized Koholint coast", "Installed Mabe Village map"]);
+                ["Stylized Koholint coast", "Installed Mabe Village", "Installed Toronbo Shores",
+                 "Installed Mysterious Forest", "Rotate installed locations"]);
             sceneAdapter.SetDropDownViewResource(
                 global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
             scene.Adapter = sceneAdapter;
@@ -398,7 +399,7 @@ namespace ProjectZ.Android
             }
         }
 
-        public static bool TryResolveMabeMap(
+        public static bool TryResolveOverworldMap(
             Context context,
             out LiveWallpaperMap map,
             out string tilesetPath,
@@ -626,7 +627,7 @@ namespace ProjectZ.Android
         private SpriteAsset _rooster;
         private SpriteAsset _butterfly;
         private SpriteAsset _owl;
-        private MapAsset _mabeMap;
+        private MapAsset _overworldMap;
         private float _touchX;
         private float _touchY;
         private long _touchAt = long.MinValue;
@@ -646,7 +647,7 @@ namespace ProjectZ.Android
                 ["stand_3", "stand_2", "stand_0", "spawn"]);
             _butterfly = LoadSprite(context, "NPCs/butterfly.ani", ["idle"]);
             _owl = LoadSprite(context, "NPCs/owl.ani", ["fly", "hover", "idle"]);
-            _mabeMap = LoadMabeMap(context);
+            _overworldMap = LoadOverworldMap(context);
         }
 
         public void OnTouch(float x, float y, long elapsed)
@@ -677,9 +678,10 @@ namespace ProjectZ.Android
             DrawSky(canvas, width, height, time, xOffset, unit, phase);
             if (showIslandLife)
                 DrawOwl(canvas, width, height, time, unit, animated);
-            var useMabeMap = scene == 1 && _mabeMap != null;
-            var groundY = useMabeMap
-                ? DrawMabeMap(canvas, width, height)
+            var resolvedScene = LiveWallpaperSceneSelection.Resolve(
+                scene, elapsed, _overworldMap != null);
+            var groundY = resolvedScene > 0
+                ? DrawInstalledMap(canvas, width, height, resolvedScene)
                 : DrawIsland(canvas, width, height, time, xOffset, unit);
             if (showIslandLife)
             {
@@ -795,16 +797,17 @@ namespace ProjectZ.Android
             return height * 0.78f;
         }
 
-        private float DrawMabeMap(Canvas canvas, int width, int height)
+        private float DrawInstalledMap(Canvas canvas, int width, int height, int scene)
         {
-            const int originTileX = 20;
-            const int originTileY = 72;
             const int columns = 10;
             const int rows = 8;
             const int tileSize = 16;
             const int atlasStride = tileSize + 2;
-            var map = _mabeMap.Map;
-            var tileset = _mabeMap.Bitmap;
+            if (!LiveWallpaperSceneSelection.TryGetTileOrigin(
+                    scene, out var originTileX, out var originTileY))
+                return height * 0.78f;
+            var map = _overworldMap.Map;
+            var tileset = _overworldMap.Bitmap;
             var destinationTileSize = MathF.Ceiling(width / (float)columns);
             var top = height - rows * destinationTileSize;
             var tilesPerRow = tileset.Width / atlasStride;
@@ -1012,9 +1015,9 @@ namespace ProjectZ.Android
             }
         }
 
-        private MapAsset LoadMabeMap(Context context)
+        private MapAsset LoadOverworldMap(Context context)
         {
-            if (!LadxhdWallpaperAssets.TryResolveMabeMap(
+            if (!LadxhdWallpaperAssets.TryResolveOverworldMap(
                     context, out var map, out var tilesetPath, out _))
                 return null;
             try
