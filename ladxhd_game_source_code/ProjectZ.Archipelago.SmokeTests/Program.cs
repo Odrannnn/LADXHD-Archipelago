@@ -123,6 +123,21 @@ Assert(LiveWallpaperSceneSelection.Resolve(4, 0, true) == 1 &&
        forestX == 10 && forestY == 32 &&
        !LiveWallpaperSceneSelection.TryGetTileOrigin(0, out _, out _),
        "Installed wallpaper scenes must resolve stable overworld crops and rotation intervals.");
+var walkingStart = LiveWallpaperLinkActivity.Resolve(0, 0, true);
+var walkingMiddle = LiveWallpaperLinkActivity.Resolve(0, 7_000, true);
+var resting = LiveWallpaperLinkActivity.Resolve(1, 9_000, true);
+var alternatingRest = LiveWallpaperLinkActivity.Resolve(2, 12_000, true);
+var alternatingFinish = LiveWallpaperLinkActivity.Resolve(2, 19_000, true);
+var animationDisabled = LiveWallpaperLinkActivity.Resolve(0, 7_000, false);
+var hidden = LiveWallpaperLinkActivity.Resolve(3, 0, true);
+Assert(walkingStart.Visible && walkingStart.Walking && walkingStart.Journey == 0f &&
+       walkingMiddle.Walking && Math.Abs(walkingMiddle.Journey - 0.5f) < 0.001f &&
+       resting.Visible && !resting.Walking && resting.Journey == 0.5f &&
+       alternatingRest.Visible && !alternatingRest.Walking && alternatingRest.Journey == 0.5f &&
+       alternatingFinish.Walking && Math.Abs(alternatingFinish.Journey - 0.75f) < 0.001f &&
+       animationDisabled.Visible && !animationDisabled.Walking &&
+       !hidden.Visible,
+       "Installed Link wallpaper activity must resolve walking, resting, and hidden states.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");

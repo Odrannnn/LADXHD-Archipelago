@@ -23,6 +23,7 @@ namespace ProjectZ.Android
         private const string SceneKey = "scene";
         private const string TimeOfDayKey = "time_of_day";
         private const string TapActionKey = "tap_action";
+        private const string LinkActivityKey = "link_activity";
         private const string FrameRateKey = "frame_rate";
 
         public static bool IsAnimated(Context context) =>
@@ -91,6 +92,17 @@ namespace ProjectZ.Android
         public static void SetTapAction(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutInt(TapActionKey, Math.Clamp(value, 0, 2))?.Apply();
+
+        public static int GetLinkActivity(Context context)
+        {
+            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.GetInt(LinkActivityKey, 0) ?? 0;
+            return Math.Clamp(value, 0, 3);
+        }
+
+        public static void SetLinkActivity(Context context, int value) =>
+            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.Edit()?.PutInt(LinkActivityKey, Math.Clamp(value, 0, 3))?.Apply();
 
         public static void SetFrameRate(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
@@ -229,6 +241,28 @@ namespace ProjectZ.Android
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             characterParams.SetMargins(0, 0, 0, Dp(12));
             layout.AddView(character, characterParams);
+
+            var linkLabel = new TextView(this)
+            {
+                Text = "Link activity",
+                TextSize = 17f,
+                Enabled = assetReady
+            };
+            layout.AddView(linkLabel);
+            var linkActivity = new Spinner(this) { Enabled = assetReady };
+            var linkAdapter = new ArrayAdapter<string>(this,
+                global::Android.Resource.Layout.SimpleSpinnerItem,
+                ["Walk across scene", "Stand in scene", "Alternate travel and rest", "Hide Link"]);
+            linkAdapter.SetDropDownViewResource(
+                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
+            linkActivity.Adapter = linkAdapter;
+            linkActivity.SetSelection(LadxhdWallpaperPreferences.GetLinkActivity(this));
+            linkActivity.ItemSelected += (_, args) =>
+                LadxhdWallpaperPreferences.SetLinkActivity(this, args.Position);
+            var linkParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            linkParams.SetMargins(0, 0, 0, Dp(12));
+            layout.AddView(linkActivity, linkParams);
 
             var sceneLabel = new TextView(this)
             {
@@ -560,7 +594,8 @@ namespace ProjectZ.Android
                             LadxhdWallpaperPreferences.ShowIslandLife(_service),
                             LadxhdWallpaperPreferences.GetFeaturedCharacter(_service),
                             LadxhdWallpaperPreferences.GetScene(_service),
-                            LadxhdWallpaperPreferences.GetTimeOfDay(_service));
+                            LadxhdWallpaperPreferences.GetTimeOfDay(_service),
+                            LadxhdWallpaperPreferences.GetLinkActivity(_service));
                     }
                 }
                 finally
@@ -621,7 +656,8 @@ namespace ProjectZ.Android
         private readonly List<(float X, float Y, float Phase)> _stars = [];
         private readonly Dictionary<string, Bitmap> _spriteSheets =
             new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
-        private SpriteAsset _link;
+        private SpriteAsset _linkWalking;
+        private SpriteAsset _linkStanding;
         private SpriteAsset _marin;
         private SpriteAsset _bowWow;
         private SpriteAsset _rooster;
@@ -637,8 +673,10 @@ namespace ProjectZ.Android
             for (var index = 0; index < 42; index++)
                 _stars.Add(((float)_random.NextDouble(), (float)_random.NextDouble() * 0.48f,
                     (float)_random.NextDouble() * MathF.PI * 2f));
-            _link = LoadSprite(context, "link0.ani",
-                ["walk_2", "walk_0", "walk_1", "walk_3", "stand_2", "stand_0"]);
+            _linkWalking = LoadSprite(context, "link0.ani",
+                ["walk_2", "walk_0", "walk_1", "walk_3"]);
+            _linkStanding = LoadSprite(context, "link0.ani",
+                ["stand_2", "stand_0", "stand_1", "stand_3"]);
             _marin = LoadSprite(context, "NPCs/marin.ani",
                 ["sing", "idle", "stand_0", "stand_2"]);
             _bowWow = LoadSprite(context, "NPCs/BowWow.ani",
@@ -665,7 +703,8 @@ namespace ProjectZ.Android
             bool showIslandLife,
             int featuredCharacter,
             int scene,
-            int timeOfDay)
+            int timeOfDay,
+            int linkActivity)
         {
             var width = canvas.Width;
             var height = canvas.Height;
@@ -689,7 +728,7 @@ namespace ProjectZ.Android
                     featuredCharacter);
                 DrawButterflies(canvas, width, groundY, time, unit, animated);
             }
-            DrawLink(canvas, width, groundY, time, unit, animated);
+            DrawLink(canvas, width, groundY, elapsed, unit, animated, linkActivity);
             DrawLightingOverlay(canvas, width, height, phase);
             DrawTouchEffect(canvas, time, unit, animated);
         }
@@ -844,16 +883,22 @@ namespace ProjectZ.Android
         }
 
         private void DrawLink(
-            Canvas canvas, int width, float groundY, long elapsed, float unit, bool animated)
+            Canvas canvas, int width, float groundY, long elapsed, float unit, bool animated,
+            int activity)
         {
-            if (_link == null)
+            var state = LiveWallpaperLinkActivity.Resolve(activity, elapsed, animated);
+            if (!state.Visible)
+                return;
+            var asset = state.Walking
+                ? _linkWalking ?? _linkStanding
+                : _linkStanding ?? _linkWalking;
+            if (asset == null)
                 return;
             var scale = Math.Max(2f, unit * 2.2f);
-            var frame = _link.Animation.GetFrame(elapsed);
+            var frame = asset.Animation.GetFrame(elapsed);
             var spriteWidth = frame.Width * scale;
-            var journey = animated ? (elapsed % 14000L) / 14000f : 0.5f;
-            var centerX = -spriteWidth * 0.5f + journey * (width + spriteWidth);
-            DrawSpriteAt(canvas, _link, elapsed, centerX, groundY, scale);
+            var centerX = -spriteWidth * 0.5f + state.Journey * (width + spriteWidth);
+            DrawSpriteAt(canvas, asset, elapsed, centerX, groundY, scale);
         }
 
         private void DrawFeaturedCharacter(
