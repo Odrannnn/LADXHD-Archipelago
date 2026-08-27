@@ -81,7 +81,7 @@ visible, supports launcher-page parallax and touch effects, and does not start g
 saves, or an Archipelago connection. When locally prepared game data is available it reads Link,
 Marin, BowWow, the rooster, butterflies, and the owl directly from the installed animation and
 sprite sheets. The location scenes likewise read selected crops from the installed overworld map
-and tileset at runtime.
+and tileset at runtime. Automatic location rotation fades between regions every 45 seconds.
 The public assetless APK instead shows the scenery by itself until the user completes the normal
 v1.0.0 ZIP setup; none of those assets are embedded in the APK.
 

@@ -123,6 +123,14 @@ Assert(LiveWallpaperSceneSelection.Resolve(4, 0, true) == 1 &&
        forestX == 10 && forestY == 32 &&
        !LiveWallpaperSceneSelection.TryGetTileOrigin(0, out _, out _),
        "Installed wallpaper scenes must resolve stable overworld crops and rotation intervals.");
+Assert(LiveWallpaperSceneSelection.GetRotationTransitionOpacity(1, 0) == 0f &&
+       LiveWallpaperSceneSelection.GetRotationTransitionOpacity(4, 0) == 1f &&
+       Math.Abs(LiveWallpaperSceneSelection.GetRotationTransitionOpacity(4, 600) - 0.5f) < 0.001f &&
+       LiveWallpaperSceneSelection.GetRotationTransitionOpacity(4, 1_200) == 0f &&
+       LiveWallpaperSceneSelection.GetRotationTransitionOpacity(4, 43_800) == 0f &&
+       Math.Abs(LiveWallpaperSceneSelection.GetRotationTransitionOpacity(4, 44_400) - 0.5f) < 0.001f &&
+       LiveWallpaperSceneSelection.GetRotationTransitionOpacity(4, 45_000) == 1f,
+       "Automatic installed wallpaper scenes must fade around each location boundary.");
 var walkingStart = LiveWallpaperLinkActivity.Resolve(0, 0, true);
 var walkingMiddle = LiveWallpaperLinkActivity.Resolve(0, 7_000, true);
 var resting = LiveWallpaperLinkActivity.Resolve(1, 9_000, true);

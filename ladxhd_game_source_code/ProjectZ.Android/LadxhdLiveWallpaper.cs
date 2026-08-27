@@ -732,6 +732,7 @@ namespace ProjectZ.Android
             }
             DrawLink(canvas, width, groundY, elapsed, unit, animated, linkActivity);
             DrawLightingOverlay(canvas, width, height, phase);
+            DrawSceneTransition(canvas, width, height, scene, elapsed);
             DrawTouchEffect(canvas, time, unit, animated);
         }
 
@@ -802,6 +803,16 @@ namespace ProjectZ.Android
             _paint.Color = phase == LiveWallpaperTimePhase.Night
                 ? Color.Argb(82, 7, 16, 50)
                 : Color.Argb(22, 116, 45, 59);
+            canvas.DrawRect(0, 0, width, height, _paint);
+        }
+
+        private void DrawSceneTransition(
+            Canvas canvas, int width, int height, int scene, long elapsed)
+        {
+            var opacity = LiveWallpaperSceneSelection.GetRotationTransitionOpacity(scene, elapsed);
+            if (opacity <= 0f)
+                return;
+            _paint.Color = Color.Argb((int)(255f * opacity), 4, 8, 18);
             canvas.DrawRect(0, 0, width, height, _paint);
         }
 
