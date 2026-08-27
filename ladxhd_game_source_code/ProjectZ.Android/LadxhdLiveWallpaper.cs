@@ -649,6 +649,7 @@ namespace ProjectZ.Android
         Name = "com.zelda.ladxhd.archipelago.LadxhdWallpaperService",
         Label = "@string/wallpaper_name",
         Permission = "android.permission.BIND_WALLPAPER",
+        Process = ":wallpaper",
         Exported = true)]
     [IntentFilter(new[] { "android.service.wallpaper.WallpaperService" })]
     [MetaData("android.service.wallpaper", Resource = "@xml/ladxhd_wallpaper")]
