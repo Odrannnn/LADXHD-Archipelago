@@ -21,7 +21,8 @@ namespace ProjectZ
             string tilesetPath, int width, int height, int depth, int[,,] tiles,
             List<CollisionRectangle>[,] collisionGrid,
             int collisionCount,
-            int hazardCount)
+            int hazardCount,
+            int npcWallCount)
         {
             TilesetPath = tilesetPath;
             Width = width;
@@ -31,6 +32,7 @@ namespace ProjectZ
             _collisionGrid = collisionGrid;
             CollisionCount = collisionCount;
             HazardCount = hazardCount;
+            NpcWallCount = npcWallCount;
         }
 
         public string TilesetPath { get; }
@@ -40,6 +42,7 @@ namespace ProjectZ
         public int DrawableDepth => Math.Max(1, Depth - 1);
         public int CollisionCount { get; }
         public int HazardCount { get; }
+        public int NpcWallCount { get; }
 
         public int GetTile(int x, int y, int layer)
         {
@@ -79,7 +82,8 @@ namespace ProjectZ
                         continue;
                     foreach (var entry in entries)
                     {
-                        if ((!entry.IsHole || includeHoles) && entry.Intersects(
+                        if (entry.Kind != CollisionKind.NpcWall &&
+                            (entry.Kind != CollisionKind.Hole || includeHoles) && entry.Intersects(
                                 x, y, width, height))
                             return true;
                     }
@@ -87,6 +91,9 @@ namespace ProjectZ
             }
             return false;
         }
+
+        public bool IntersectsNpcWall(float x, float y, float width, float height) =>
+            IntersectsKind(x, y, width, height, CollisionKind.NpcWall);
 
         public static bool TryLoad(TextReader reader, out LiveWallpaperMap map)
         {
@@ -131,12 +138,13 @@ namespace ProjectZ
             }
 
             if (!TryLoadCollisionObjects(reader, width, height,
-                    out var collisionGrid, out var collisionCount, out var hazardCount))
+                    out var collisionGrid, out var collisionCount, out var hazardCount,
+                    out var npcWallCount))
                 return false;
 
             map = new LiveWallpaperMap(
                 tilesetPath, width, height, depth, tiles,
-                collisionGrid, collisionCount, hazardCount);
+                collisionGrid, collisionCount, hazardCount, npcWallCount);
             return true;
         }
 
@@ -146,11 +154,13 @@ namespace ProjectZ
             int height,
             out List<CollisionRectangle>[,] collisionGrid,
             out int collisionCount,
-            out int hazardCount)
+            out int hazardCount,
+            out int npcWallCount)
         {
             collisionGrid = null;
             collisionCount = 0;
             hazardCount = 0;
+            npcWallCount = 0;
             var templateCountLine = reader.ReadLine();
             if (templateCountLine == null)
                 return true;
@@ -186,7 +196,8 @@ namespace ProjectZ
 
                 AddObjectCollision(
                     collisionGrid, width, height, templates[templateIndex], parts,
-                    positionX, positionY, ref collisionCount, ref hazardCount);
+                    positionX, positionY, ref collisionCount, ref hazardCount,
+                    ref npcWallCount);
             }
             return true;
         }
@@ -200,7 +211,8 @@ namespace ProjectZ
             int positionX,
             int positionY,
             ref int collisionCount,
-            ref int hazardCount)
+            ref int hazardCount,
+            ref int npcWallCount)
         {
             if (template is "hole" or "fullHole")
             {
@@ -211,9 +223,25 @@ namespace ProjectZ
                 var offsetY = GetOptionalInt(parts, 7, fullTile ? 0 : 1);
                 AddCollision(grid, mapWidth, mapHeight,
                     new CollisionRectangle(positionX + offsetX, positionY + offsetY,
-                        width, height, true), ref collisionCount, ref hazardCount);
+                        width, height, CollisionKind.Hole), ref collisionCount,
+                    ref hazardCount, ref npcWallCount);
                 return;
             }
+
+            if (template == "enemyWall")
+            {
+                AddCollision(grid, mapWidth, mapHeight,
+                    new CollisionRectangle(
+                        positionX, positionY, 16, 16, CollisionKind.NpcWall),
+                    ref collisionCount, ref hazardCount, ref npcWallCount);
+                return;
+            }
+
+            if (TryAddFenceCollision(
+                    grid, mapWidth, mapHeight, template, parts,
+                    positionX, positionY, ref collisionCount, ref hazardCount,
+                    ref npcWallCount))
+                return;
 
             LocalRectangle[] rectangles = template switch
             {
@@ -246,6 +274,25 @@ namespace ProjectZ
                 "oneWayBridge0" => [new LocalRectangle(0, 0, 1, 16)],
                 "oneWayFlatTop" => [new LocalRectangle(0, 0, 16, 1)],
                 "oneWayFlatTop-14" => [new LocalRectangle(1, 0, 14, 1)],
+                "tree0" or "treeWoods" or "tree1" or "tree2" or "tree3" or
+                    "tree4" or "tree5" or "tree9" =>
+                    [new LocalRectangle(0, 4, 32, 28)],
+                "treeWoods2" => [new LocalRectangle(0, 4, 32, 27)],
+                "stree" => [new LocalRectangle(0, 16, 16, 16)],
+                "phonehouse" or "seashell_house" =>
+                    [new LocalRectangle(0, 4, 48, 12)],
+                "strandplant" or "gravejardfence" =>
+                    [new LocalRectangle(0, 4, 15, 12)],
+                "bush" or "bushForest" => [new LocalRectangle(0, 1, 16, 14)],
+                "stone" or "stoneWoods" or "stoneSkull" or "pot" or "pot2" =>
+                    [new LocalRectangle(0, 1, 16, 13)],
+                "signpost" or "signpostWoods" =>
+                    [new LocalRectangle(0, 4, 16, 12)],
+                "gravestone" => [new LocalRectangle(0, 4, 16, 12)],
+                "moveStone" or "moveStoneCave" or "moveStoneFrogHouse" or "moveStoneD3" =>
+                    [new LocalRectangle(0, 0, 16, 16)],
+                "mountainStone" => [new LocalRectangle(0, 2, 16, 12)],
+                "cactus" => [new LocalRectangle(3, 3, 10, 12)],
                 _ => null
             };
             if (rectangles == null)
@@ -255,9 +302,56 @@ namespace ProjectZ
                 AddCollision(grid, mapWidth, mapHeight,
                     new CollisionRectangle(
                         positionX + rectangle.X, positionY + rectangle.Y,
-                        rectangle.Width, rectangle.Height, false),
-                    ref collisionCount, ref hazardCount);
+                        rectangle.Width, rectangle.Height, CollisionKind.Normal),
+                    ref collisionCount, ref hazardCount, ref npcWallCount);
             }
+        }
+
+        private static bool TryAddFenceCollision(
+            List<CollisionRectangle>[,] grid,
+            int mapWidth,
+            int mapHeight,
+            string template,
+            string[] parts,
+            int positionX,
+            int positionY,
+            ref int collisionCount,
+            ref int hazardCount,
+            ref int npcWallCount)
+        {
+            var defaultPlacement = template switch
+            {
+                "fence" => 15,
+                "fenceUL" => 14,
+                "fenceU" => 12,
+                "fenceUR" => 13,
+                "fenceL" => 10,
+                "fenceR" => 5,
+                "fenceDL" => 11,
+                "fenceD" => 3,
+                "fenceDR" => 7,
+                "fenceTR" => 4,
+                "fenceTL" => 8,
+                "fenceBR" => 1,
+                "fenceBL" => 2,
+                _ => -1
+            };
+            if (defaultPlacement < 0)
+                return false;
+            var placement = Math.Clamp(
+                GetOptionalInt(parts, 3, defaultPlacement), 0, 15);
+            for (var index = 0; index < 4; index++)
+            {
+                if ((placement & (1 << (3 - index))) == 0)
+                    continue;
+                AddCollision(grid, mapWidth, mapHeight,
+                    new CollisionRectangle(
+                        positionX + 1 + index % 2 * 8,
+                        positionY + index / 2 * 8,
+                        6, 6, CollisionKind.Normal),
+                    ref collisionCount, ref hazardCount, ref npcWallCount);
+            }
+            return true;
         }
 
         private static void AddCollision(
@@ -266,7 +360,8 @@ namespace ProjectZ
             int mapHeight,
             CollisionRectangle rectangle,
             ref int collisionCount,
-            ref int hazardCount)
+            ref int hazardCount,
+            ref int npcWallCount)
         {
             if (rectangle.Width <= 0 || rectangle.Height <= 0 ||
                 rectangle.X + rectangle.Width <= 0 || rectangle.Y + rectangle.Height <= 0 ||
@@ -286,10 +381,49 @@ namespace ProjectZ
                     grid[x, y].Add(rectangle);
                 }
             }
-            if (rectangle.IsHole)
-                hazardCount++;
-            else
-                collisionCount++;
+            switch (rectangle.Kind)
+            {
+                case CollisionKind.Hole:
+                    hazardCount++;
+                    break;
+                case CollisionKind.NpcWall:
+                    npcWallCount++;
+                    break;
+                default:
+                    collisionCount++;
+                    break;
+            }
+        }
+
+        private bool IntersectsKind(
+            float x, float y, float width, float height, CollisionKind kind)
+        {
+            if (width <= 0 || height <= 0 || _collisionGrid == null)
+                return false;
+            if (x < 0 || y < 0 || x + width > Width * TileSize ||
+                y + height > Height * TileSize)
+                return true;
+            var startX = Math.Clamp((int)MathF.Floor(x / TileSize), 0, Width - 1);
+            var startY = Math.Clamp((int)MathF.Floor(y / TileSize), 0, Height - 1);
+            var endX = Math.Clamp((int)MathF.Floor((x + width - 0.001f) / TileSize),
+                0, Width - 1);
+            var endY = Math.Clamp((int)MathF.Floor((y + height - 0.001f) / TileSize),
+                0, Height - 1);
+            for (var tileY = startY; tileY <= endY; tileY++)
+            {
+                for (var tileX = startX; tileX <= endX; tileX++)
+                {
+                    var entries = _collisionGrid[tileX, tileY];
+                    if (entries == null)
+                        continue;
+                    foreach (var entry in entries)
+                    {
+                        if (entry.Kind == kind && entry.Intersects(x, y, width, height))
+                            return true;
+                    }
+                }
+            }
+            return false;
         }
 
         private static int GetOptionalPositiveInt(
@@ -326,24 +460,32 @@ namespace ProjectZ
 
         private readonly struct CollisionRectangle
         {
-            public CollisionRectangle(int x, int y, int width, int height, bool isHole)
+            public CollisionRectangle(
+                int x, int y, int width, int height, CollisionKind kind)
             {
                 X = x;
                 Y = y;
                 Width = width;
                 Height = height;
-                IsHole = isHole;
+                Kind = kind;
             }
 
             public int X { get; }
             public int Y { get; }
             public int Width { get; }
             public int Height { get; }
-            public bool IsHole { get; }
+            public CollisionKind Kind { get; }
 
             public bool Intersects(float x, float y, float width, float height) =>
                 x < X + Width && x + width > X &&
                 y < Y + Height && y + height > Y;
+        }
+
+        private enum CollisionKind
+        {
+            Normal,
+            Hole,
+            NpcWall
         }
 
         private static bool TryReadInt(TextReader reader, out int value) =>

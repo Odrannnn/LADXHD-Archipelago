@@ -104,17 +104,24 @@ Assert(!LiveWallpaperMap.TryLoad(
            new StringReader("3\n0\n0\n../outside.png\n1\n1\n1\n0,\n"), out _),
        "The live wallpaper must reject unsafe installed tileset paths.");
 const string wallpaperCollisionMapData =
-    "3\n0\n0\noverworld.png\n4\n2\n1\n" +
-    ",,,,\n,,,,\n" +
-    "2\nc1\nhole\n2\n0;16;0;;;\n1;32;0;;;;;;\n";
+    "3\n0\n0\noverworld.png\n6\n3\n1\n" +
+    ",,,,,,\n,,,,,,\n,,,,,,\n" +
+    "6\nc1\nhole\ntree0\nfence\nenemyWall\nbush\n6\n" +
+    "0;16;0;;;\n1;32;0;;;;;;\n2;48;0;;;;;;\n" +
+    "3;0;16;15\n4;80;16;;;;\n5;32;16;;;;;;\n";
 Assert(LiveWallpaperMap.TryLoad(
            new StringReader(wallpaperCollisionMapData), out var wallpaperCollisionMap) &&
-       wallpaperCollisionMap.CollisionCount == 1 &&
+       wallpaperCollisionMap.CollisionCount == 7 &&
        wallpaperCollisionMap.HazardCount == 1 &&
+       wallpaperCollisionMap.NpcWallCount == 1 &&
        wallpaperCollisionMap.IntersectsCollision(18, 2, 8, 8, includeHoles: false) &&
        !wallpaperCollisionMap.IntersectsCollision(33, 1, 8, 8, includeHoles: false) &&
-       wallpaperCollisionMap.IntersectsCollision(33, 1, 8, 8, includeHoles: true),
-       "The live wallpaper must parse solid and hole object records from installed maps.");
+       wallpaperCollisionMap.IntersectsCollision(33, 1, 8, 8, includeHoles: true) &&
+       wallpaperCollisionMap.IntersectsCollision(50, 5, 8, 8, includeHoles: false) &&
+       wallpaperCollisionMap.IntersectsCollision(1, 16, 4, 4, includeHoles: false) &&
+       !wallpaperCollisionMap.IntersectsCollision(81, 17, 4, 4, includeHoles: true) &&
+       wallpaperCollisionMap.IntersectsNpcWall(81, 17, 4, 4),
+       "The live wallpaper must parse scenery, fence, solid, hole, and NPC-wall records from installed maps.");
 const string wallpaperAtlasData = "1\n1\nnote:262,185,7,12,0,0\n" +
                                   "bowwow chain:310,91,6,6,3,6\n";
 Assert(LiveWallpaperAtlas.TryLoad(
@@ -257,6 +264,14 @@ Assert(simulatedRooster.HorizontalOffset > -14f && simulatedRooster.FacingRight 
 var simulatedBowWow = wallpaperFollowerSimulation.Update(1, 100f, 2_000, animated: true);
 Assert(simulatedBowWow.HorizontalOffset <= 46f,
        "Wallpaper BowWow must remain constrained by the in-game chain radius.");
+var constrainedBowWowSimulation = new LiveWallpaperFollowerSimulation();
+constrainedBowWowSimulation.Update(
+    1, 0, 0, true, wallpaperCollisionMap, 72, 26);
+var constrainedBowWow = constrainedBowWowSimulation.Update(
+    1, 30, 17, true, wallpaperCollisionMap, 72, 26);
+Assert(Math.Abs(constrainedBowWow.HorizontalOffset) < 0.001f &&
+       constrainedBowWowSimulation.Body.Width == 14,
+       "Wallpaper BowWow must use its gameplay body width and respect installed NPC walls.");
 Assert(LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 15) == 66 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 30) == 33 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 999) == 33 &&

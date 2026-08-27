@@ -45,7 +45,11 @@ namespace ProjectZ
         public BodyComponent Body => _body;
 
         public LiveWallpaperFollowerState Update(
-            int character, float targetOffset, long elapsedMilliseconds, bool animated)
+            int character, float targetOffset, long elapsedMilliseconds, bool animated,
+            LiveWallpaperMap map = null,
+            float anchorMapX = 0,
+            float anchorMapY = 0,
+            float mapOffsetScale = 1)
         {
             var elapsedDelta = _lastElapsed.HasValue
                 ? elapsedMilliseconds - _lastElapsed.Value
@@ -56,6 +60,8 @@ namespace ProjectZ
 
             if (reset)
             {
+                _body.OffsetX = character == 1 ? -7 : -4;
+                _body.Width = character == 1 ? 14 : 8;
                 var initialOffset = character == 1
                     ? Math.Clamp(targetOffset, -46f, 46f)
                     : targetOffset;
@@ -88,7 +94,18 @@ namespace ProjectZ
                 var movement = _body.VelocityTarget.X * frameScale;
                 if (Math.Abs(movement) > distance)
                     movement = difference;
-                _position.X += movement;
+                var nextOffset = _position.X + movement;
+                var blockedByNpcWall = character == 1 && map != null &&
+                    map.IntersectsNpcWall(
+                        anchorMapX + nextOffset * Math.Max(0.01f, mapOffsetScale) +
+                            _body.OffsetX,
+                        anchorMapY + _body.OffsetY,
+                        _body.Width,
+                        _body.Height);
+                if (!blockedByNpcWall)
+                    _position.X = nextOffset;
+                else
+                    _body.VelocityTarget.X = 0;
                 if (Math.Abs(_body.VelocityTarget.X) > 0.01f)
                     _facingRight = _body.VelocityTarget.X > 0;
 

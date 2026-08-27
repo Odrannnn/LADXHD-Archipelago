@@ -935,7 +935,7 @@ namespace ProjectZ.Android
                 DrawOwl(canvas, width, height, time, unit, animated);
             if (showIslandLife)
             {
-                DrawFeaturedCharacter(canvas, width, groundY, time, xOffset, unit,
+                DrawFeaturedCharacter(canvas, width, groundY, viewport, time, xOffset, unit,
                     animated, featuredCharacter, resolvedScene, characterPosition);
                 if (wildlife.ShowButterflies)
                     DrawButterflies(canvas, width, groundY, time, unit, animated);
@@ -1052,6 +1052,7 @@ namespace ProjectZ.Android
             Canvas canvas,
             int width,
             float groundY,
+            LiveWallpaperMapViewport viewport,
             long elapsed,
             float xOffset,
             float unit,
@@ -1071,8 +1072,14 @@ namespace ProjectZ.Android
                 2 => 14f,
                 _ => 0f
             };
+            var anchorMapX = (viewport.OriginX +
+                              (baseX - viewport.Left) / viewport.TileSize) * 16f;
+            var anchorMapY = (viewport.OriginY +
+                              (groundY - viewport.Top) / viewport.TileSize) * 16f;
+            var mapOffsetScale = unit * 16f / viewport.TileSize;
             var follower = _followerSimulation.Update(
-                selection, motion.HorizontalOffset * movementRadius, elapsed, animated);
+                selection, motion.HorizontalOffset * movementRadius, elapsed, animated,
+                _overworldMap?.Map, anchorMapX, anchorMapY, mapOffsetScale);
             var centerX = baseX + follower.HorizontalOffset * unit;
             var bottomY = groundY - follower.Height * unit;
             var asset = selection switch
