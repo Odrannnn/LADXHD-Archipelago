@@ -72,6 +72,11 @@ Assert(LiveWallpaperAnimation.TryGetSpriteRelativeCandidates(
 Assert(!LiveWallpaperAnimation.TryGetSpriteRelativeCandidates(
            "../link0.png", out _),
        "The live wallpaper must reject sprite paths that escape the game-data root.");
+Assert(LiveWallpaperAnimation.TryNormalizeRelativePath(
+           "NPCs\\butterfly.ani", out var wallpaperNpcPath) &&
+       wallpaperNpcPath == "NPCs/butterfly.ani" &&
+       !LiveWallpaperAnimation.TryNormalizeRelativePath("/Data/Animations/owl.ani", out _),
+       "The live wallpaper must normalize safe nested animation paths and reject rooted paths.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");

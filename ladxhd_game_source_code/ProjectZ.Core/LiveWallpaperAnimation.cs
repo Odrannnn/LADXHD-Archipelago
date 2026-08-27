@@ -64,18 +64,33 @@ namespace ProjectZ
             out string[] candidates)
         {
             candidates = [];
-            if (string.IsNullOrWhiteSpace(spritePath))
+            if (!TryNormalizeRelativePath(spritePath, out var normalized))
                 return false;
 
-            var normalized = spritePath.Trim().Replace('\\', '/');
-            if (normalized.StartsWith('/') || normalized.Contains(':'))
+            candidates = [normalized, "Map Objects/" + normalized];
+            return true;
+        }
+
+        public static bool TryNormalizeRelativePath(string path, out string normalized)
+        {
+            normalized = null;
+            if (string.IsNullOrWhiteSpace(path))
                 return false;
+
+            normalized = path.Trim().Replace('\\', '/');
+            if (normalized.StartsWith('/') || normalized.Contains(':'))
+            {
+                normalized = null;
+                return false;
+            }
             var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
             if (segments.Length == 0 || segments.Any(segment => segment is "." or ".."))
+            {
+                normalized = null;
                 return false;
+            }
 
             normalized = string.Join('/', segments);
-            candidates = [normalized, "Map Objects/" + normalized];
             return true;
         }
 

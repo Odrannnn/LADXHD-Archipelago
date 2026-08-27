@@ -18,6 +18,8 @@ namespace ProjectZ.Android
     {
         private const string PreferencesName = "ladxhd_live_wallpaper";
         private const string AnimateKey = "animate";
+        private const string IslandLifeKey = "island_life";
+        private const string FeaturedCharacterKey = "featured_character";
         private const string FrameRateKey = "frame_rate";
 
         public static bool IsAnimated(Context context) =>
@@ -34,6 +36,25 @@ namespace ProjectZ.Android
         public static void SetAnimated(Context context, bool value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutBoolean(AnimateKey, value)?.Apply();
+
+        public static bool ShowIslandLife(Context context) =>
+            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.GetBoolean(IslandLifeKey, true) ?? true;
+
+        public static void SetShowIslandLife(Context context, bool value) =>
+            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.Edit()?.PutBoolean(IslandLifeKey, value)?.Apply();
+
+        public static int GetFeaturedCharacter(Context context)
+        {
+            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.GetInt(FeaturedCharacterKey, 0) ?? 0;
+            return Math.Clamp(value, 0, 3);
+        }
+
+        public static void SetFeaturedCharacter(Context context, int value) =>
+            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.Edit()?.PutInt(FeaturedCharacterKey, Math.Clamp(value, 0, 3))?.Apply();
 
         public static void SetFrameRate(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
@@ -107,7 +128,7 @@ namespace ProjectZ.Android
 
             var explanation = new TextView(this)
             {
-                Text = "A silent, battery-aware Koholint scene. It uses Link's animation from your locally generated game data without starting gameplay, saves, or Archipelago networking.",
+                Text = "A silent, battery-aware Koholint scene. It uses Link, island characters, and wildlife animations from your locally generated game data without starting gameplay, saves, or Archipelago networking.",
                 TextSize = 17f
             };
             var textParams = new LinearLayout.LayoutParams(
@@ -120,8 +141,8 @@ namespace ProjectZ.Android
             var status = new TextView(this)
             {
                 Text = assetReady
-                    ? "Game data ready: the wallpaper will use the LADXHD Link sprite."
-                    : $"Game data unavailable: {reason} The scenery will still render, but Link will appear after setup.",
+                    ? "Game data ready: the wallpaper will use installed LADXHD character and wildlife sprites."
+                    : $"Game data unavailable: {reason} The scenery will still render, but game characters will appear after setup.",
                 TextSize = 15f
             };
             layout.AddView(status);
@@ -137,6 +158,41 @@ namespace ProjectZ.Android
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             animateParams.SetMargins(0, Dp(20), 0, Dp(12));
             layout.AddView(animate, animateParams);
+
+            var islandLife = new global::Android.Widget.Switch(this)
+            {
+                Text = "Show featured character and Koholint wildlife",
+                Checked = LadxhdWallpaperPreferences.ShowIslandLife(this),
+                Enabled = assetReady
+            };
+            islandLife.CheckedChange += (_, args) =>
+                LadxhdWallpaperPreferences.SetShowIslandLife(this, args.IsChecked);
+            var islandLifeParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            islandLifeParams.SetMargins(0, 0, 0, Dp(12));
+            layout.AddView(islandLife, islandLifeParams);
+
+            var characterLabel = new TextView(this)
+            {
+                Text = "Featured island character",
+                TextSize = 17f,
+                Enabled = assetReady
+            };
+            layout.AddView(characterLabel);
+            var character = new Spinner(this) { Enabled = assetReady };
+            var characterAdapter = new ArrayAdapter<string>(this,
+                global::Android.Resource.Layout.SimpleSpinnerItem,
+                ["Marin", "BowWow", "Rooster", "Rotate automatically"]);
+            characterAdapter.SetDropDownViewResource(
+                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
+            character.Adapter = characterAdapter;
+            character.SetSelection(LadxhdWallpaperPreferences.GetFeaturedCharacter(this));
+            character.ItemSelected += (_, args) =>
+                LadxhdWallpaperPreferences.SetFeaturedCharacter(this, args.Position);
+            var characterParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            characterParams.SetMargins(0, 0, 0, Dp(12));
+            layout.AddView(character, characterParams);
 
             var rateLabel = new TextView(this) { Text = "Animation frame rate", TextSize = 17f };
             layout.AddView(rateLabel);
@@ -170,11 +226,21 @@ namespace ProjectZ.Android
 
     internal static class LadxhdWallpaperAssets
     {
-        private static readonly string[] PreferredAnimations =
+        private static readonly string[] PreferredLinkAnimations =
             ["walk_2", "walk_0", "walk_1", "walk_3", "stand_2", "stand_0"];
 
         public static bool TryResolve(
             Context context,
+            out LiveWallpaperAnimation animation,
+            out string spritePath,
+            out string reason) =>
+            TryResolve(context, "link0.ani", PreferredLinkAnimations,
+                out animation, out spritePath, out reason);
+
+        public static bool TryResolve(
+            Context context,
+            string relativeAnimationPath,
+            IEnumerable<string> preferredAnimations,
             out LiveWallpaperAnimation animation,
             out string spritePath,
             out string reason)
@@ -188,14 +254,24 @@ namespace ProjectZ.Android
             try
             {
                 var dataRoot = FilePath.GetFullPath(FilePath.Combine(root, "Data"));
-                var animationPath = FilePath.Combine(dataRoot, "Animations", "link0.ani");
+                if (!LiveWallpaperAnimation.TryNormalizeRelativePath(
+                        relativeAnimationPath, out var normalizedAnimationPath))
+                    throw new InvalidDataException("The wallpaper animation path is invalid.");
+                var animationsRoot = FilePath.GetFullPath(
+                    FilePath.Combine(dataRoot, "Animations"));
+                var animationPath = FilePath.GetFullPath(FilePath.Combine(animationsRoot,
+                    normalizedAnimationPath.Replace('/', FilePath.DirectorySeparatorChar)));
+                var animationRootPrefix = animationsRoot.TrimEnd(FilePath.DirectorySeparatorChar) +
+                                          FilePath.DirectorySeparatorChar;
+                if (!animationPath.StartsWith(animationRootPrefix, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("The wallpaper animation path is invalid.");
                 using var reader = File.OpenText(animationPath);
-                if (!LiveWallpaperAnimation.TryLoad(reader, PreferredAnimations, out animation))
-                    throw new InvalidDataException("Link's wallpaper animation is unavailable.");
+                if (!LiveWallpaperAnimation.TryLoad(reader, preferredAnimations, out animation))
+                    throw new InvalidDataException("The requested wallpaper animation is unavailable.");
 
                 if (!LiveWallpaperAnimation.TryGetSpriteRelativeCandidates(
                         animation.SpritePath, out var relativeCandidates))
-                    throw new InvalidDataException("Link's wallpaper sprite path is invalid.");
+                    throw new InvalidDataException("The wallpaper sprite path is invalid.");
                 foreach (var relativeCandidate in relativeCandidates)
                 {
                     var candidate = FilePath.Combine(dataRoot,
@@ -211,7 +287,7 @@ namespace ProjectZ.Android
                     }
                 }
 
-                throw new FileNotFoundException("Link's wallpaper sprite is unavailable.");
+                throw new FileNotFoundException("The wallpaper sprite is unavailable.");
             }
             catch (Exception exception)
             {
@@ -324,7 +400,9 @@ namespace ProjectZ.Android
                     {
                         var elapsed = SystemClock.ElapsedRealtime() - _startedAt;
                         _scene.Draw(canvas, elapsed, _xOffset,
-                            LadxhdWallpaperPreferences.IsAnimated(_service));
+                            LadxhdWallpaperPreferences.IsAnimated(_service),
+                            LadxhdWallpaperPreferences.ShowIslandLife(_service),
+                            LadxhdWallpaperPreferences.GetFeaturedCharacter(_service));
                     }
                 }
                 finally
@@ -355,13 +433,30 @@ namespace ProjectZ.Android
 
     internal sealed class LadxhdWallpaperScene : IDisposable
     {
+        private sealed class SpriteAsset
+        {
+            public SpriteAsset(Bitmap bitmap, LiveWallpaperAnimation animation)
+            {
+                Bitmap = bitmap;
+                Animation = animation;
+            }
+
+            public Bitmap Bitmap { get; }
+            public LiveWallpaperAnimation Animation { get; }
+        }
+
         private readonly Paint _paint = new Paint { AntiAlias = false, FilterBitmap = false };
         private readonly Paint _smoothPaint = new Paint { AntiAlias = true };
         private readonly Random _random = new Random(0x4C415844);
         private readonly List<(float X, float Y, float Phase)> _stars = [];
-        private Bitmap _linkBitmap;
-        private LiveWallpaperAnimation _linkAnimation;
-        private string _assetError;
+        private readonly Dictionary<string, Bitmap> _spriteSheets =
+            new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
+        private SpriteAsset _link;
+        private SpriteAsset _marin;
+        private SpriteAsset _bowWow;
+        private SpriteAsset _rooster;
+        private SpriteAsset _butterfly;
+        private SpriteAsset _owl;
         private float _touchX;
         private float _touchY;
         private long _touchAt = long.MinValue;
@@ -371,7 +466,16 @@ namespace ProjectZ.Android
             for (var index = 0; index < 42; index++)
                 _stars.Add(((float)_random.NextDouble(), (float)_random.NextDouble() * 0.48f,
                     (float)_random.NextDouble() * MathF.PI * 2f));
-            LoadLinkAnimation(context);
+            _link = LoadSprite(context, "link0.ani",
+                ["walk_2", "walk_0", "walk_1", "walk_3", "stand_2", "stand_0"]);
+            _marin = LoadSprite(context, "NPCs/marin.ani",
+                ["sing", "idle", "stand_0", "stand_2"]);
+            _bowWow = LoadSprite(context, "NPCs/BowWow.ani",
+                ["walk_2", "walk_0", "walk_1", "walk_3"]);
+            _rooster = LoadSprite(context, "NPCs/cock.ani",
+                ["stand_3", "stand_2", "stand_0", "spawn"]);
+            _butterfly = LoadSprite(context, "NPCs/butterfly.ani", ["idle"]);
+            _owl = LoadSprite(context, "NPCs/owl.ani", ["fly", "hover", "idle"]);
         }
 
         public void OnTouch(float x, float y, long elapsed)
@@ -381,7 +485,13 @@ namespace ProjectZ.Android
             _touchAt = elapsed;
         }
 
-        public void Draw(Canvas canvas, long elapsed, float xOffset, bool animated)
+        public void Draw(
+            Canvas canvas,
+            long elapsed,
+            float xOffset,
+            bool animated,
+            bool showIslandLife,
+            int featuredCharacter)
         {
             var width = canvas.Width;
             var height = canvas.Height;
@@ -391,7 +501,15 @@ namespace ProjectZ.Android
             var unit = Math.Max(1f, Math.Min(width, height) / 240f);
 
             DrawSky(canvas, width, height, time, xOffset, unit);
+            if (showIslandLife)
+                DrawOwl(canvas, width, height, time, unit, animated);
             DrawIsland(canvas, width, height, time, xOffset, unit);
+            if (showIslandLife)
+            {
+                DrawFeaturedCharacter(canvas, width, height, time, xOffset, unit,
+                    featuredCharacter);
+                DrawButterflies(canvas, width, height, time, unit, animated);
+            }
             DrawLink(canvas, width, height, time, unit, animated);
             DrawTouchEffect(canvas, time, unit, animated);
         }
@@ -470,29 +588,102 @@ namespace ProjectZ.Android
         private void DrawLink(
             Canvas canvas, int width, int height, long elapsed, float unit, bool animated)
         {
-            if (_linkBitmap == null || _linkAnimation == null)
+            if (_link == null)
                 return;
-            var frame = _linkAnimation.GetFrame(elapsed);
-            if (frame.X < 0 || frame.Y < 0 || frame.X + frame.Width > _linkBitmap.Width ||
-                frame.Y + frame.Height > _linkBitmap.Height)
+            var scale = Math.Max(2f, unit * 2.2f);
+            var frame = _link.Animation.GetFrame(elapsed);
+            var spriteWidth = frame.Width * scale;
+            var journey = animated ? (elapsed % 14000L) / 14000f : 0.5f;
+            var centerX = -spriteWidth * 0.5f + journey * (width + spriteWidth);
+            DrawSpriteAt(canvas, _link, elapsed, centerX, height * 0.78f, scale);
+        }
+
+        private void DrawFeaturedCharacter(
+            Canvas canvas,
+            int width,
+            int height,
+            long elapsed,
+            float xOffset,
+            float unit,
+            int featuredCharacter)
+        {
+            var selection = Math.Clamp(featuredCharacter, 0, 3);
+            if (selection == 3)
+                selection = (int)((elapsed / 30000L) % 3L);
+            var asset = selection switch
+            {
+                1 => _bowWow,
+                2 => _rooster,
+                _ => _marin
+            };
+            if (asset == null)
+                return;
+            var centerX = width * 0.78f - (xOffset - 0.5f) * 20f * unit;
+            var scale = selection == 0 ? 2.05f : 1.9f;
+            DrawSpriteAt(canvas, asset, elapsed, centerX, height * 0.78f,
+                Math.Max(2f, unit * scale));
+        }
+
+        private void DrawButterflies(
+            Canvas canvas, int width, int height, long elapsed, float unit, bool animated)
+        {
+            if (_butterfly == null)
+                return;
+            for (var index = 0; index < 3; index++)
+            {
+                var phase = index * 2.1f;
+                var motion = animated ? elapsed / 850f + phase : phase;
+                var centerX = width * (0.28f + index * 0.17f) + MathF.Sin(motion) * 12f * unit;
+                var centerY = height * (0.72f - index * 0.025f) + MathF.Cos(motion * 1.3f) * 7f * unit;
+                DrawSpriteAt(canvas, _butterfly, elapsed + index * 90L,
+                    centerX, centerY, Math.Max(1.5f, unit * 1.35f));
+            }
+        }
+
+        private void DrawOwl(
+            Canvas canvas, int width, int height, long elapsed, float unit, bool animated)
+        {
+            if (_owl == null)
+                return;
+            var frame = _owl.Animation.GetFrame(elapsed);
+            var scale = Math.Max(1.5f, unit * 1.4f);
+            var spriteWidth = frame.Width * scale;
+            var journey = animated ? (elapsed % 22000L) / 22000f : 0.68f;
+            var centerX = width + spriteWidth * 0.5f - journey * (width + spriteWidth);
+            var centerY = height * 0.29f + MathF.Sin(elapsed / 750f) * 8f * unit;
+            DrawSpriteAt(canvas, _owl, elapsed, centerX, centerY, scale);
+        }
+
+        private void DrawSpriteAt(
+            Canvas canvas,
+            SpriteAsset asset,
+            long elapsed,
+            float centerX,
+            float bottomY,
+            float scale)
+        {
+            if (asset?.Bitmap == null || asset.Animation == null)
+                return;
+            var frame = asset.Animation.GetFrame(elapsed);
+            if (frame.X < 0 || frame.Y < 0 ||
+                frame.X + frame.Width > asset.Bitmap.Width ||
+                frame.Y + frame.Height > asset.Bitmap.Height)
                 return;
 
-            var scale = Math.Max(2f, unit * 2.2f);
             var spriteWidth = frame.Width * scale;
             var spriteHeight = frame.Height * scale;
-            var journey = animated ? (elapsed % 14000L) / 14000f : 0.5f;
-            var x = -spriteWidth + journey * (width + spriteWidth * 2f);
-            var y = height * 0.78f - spriteHeight - frame.OffsetY * scale;
             var source = new Rect(frame.X, frame.Y, frame.X + frame.Width, frame.Y + frame.Height);
             var destination = new RectF(
-                x - frame.OffsetX * scale, y,
-                x - frame.OffsetX * scale + spriteWidth, y + spriteHeight);
+                centerX - spriteWidth * 0.5f - frame.OffsetX * scale,
+                bottomY - spriteHeight - frame.OffsetY * scale,
+                centerX + spriteWidth * 0.5f - frame.OffsetX * scale,
+                bottomY - frame.OffsetY * scale);
             var save = canvas.Save();
             if (frame.MirroredHorizontally)
                 canvas.Scale(-1f, 1f, destination.CenterX(), destination.CenterY());
             if (frame.MirroredVertically)
                 canvas.Scale(1f, -1f, destination.CenterX(), destination.CenterY());
-            canvas.DrawBitmap(_linkBitmap, source, destination, _paint);
+            canvas.DrawBitmap(asset.Bitmap, source, destination, _paint);
             canvas.RestoreToCount(save);
         }
 
@@ -540,22 +731,28 @@ namespace ProjectZ.Android
                 x + 6f * scale, groundY - 50f * scale, _paint);
         }
 
-        private void LoadLinkAnimation(Context context)
+        private SpriteAsset LoadSprite(
+            Context context,
+            string relativeAnimationPath,
+            IEnumerable<string> preferredAnimations)
         {
-            if (!LadxhdWallpaperAssets.TryResolve(
-                    context, out _linkAnimation, out var spritePath, out _assetError))
-                return;
+            if (!LadxhdWallpaperAssets.TryResolve(context, relativeAnimationPath,
+                    preferredAnimations, out var animation, out var spritePath, out _))
+                return null;
             try
             {
-                _linkBitmap = BitmapFactory.DecodeFile(spritePath) ??
-                    throw new InvalidDataException("Link's wallpaper sprite could not be decoded.");
+                if (!_spriteSheets.TryGetValue(spritePath, out var bitmap))
+                {
+                    bitmap = BitmapFactory.DecodeFile(spritePath) ??
+                             throw new InvalidDataException(
+                                 "The wallpaper sprite sheet could not be decoded.");
+                    _spriteSheets.Add(spritePath, bitmap);
+                }
+                return new SpriteAsset(bitmap, animation);
             }
-            catch (Exception exception)
+            catch
             {
-                _linkAnimation = null;
-                _linkBitmap?.Dispose();
-                _linkBitmap = null;
-                _assetError = exception.Message;
+                return null;
             }
         }
 
@@ -567,7 +764,9 @@ namespace ProjectZ.Android
 
         public void Dispose()
         {
-            _linkBitmap?.Dispose();
+            foreach (var bitmap in _spriteSheets.Values)
+                bitmap.Dispose();
+            _spriteSheets.Clear();
             _paint.Dispose();
             _smoothPaint.Dispose();
         }
