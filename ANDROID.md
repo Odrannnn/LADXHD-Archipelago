@@ -73,6 +73,11 @@ keep all wildlife visible, choose whether taps do nothing, cycle the featured ch
 locations, and select the battery-friendly 15 FPS mode or smoother 30 FPS mode. Tap **Preview
 and set wallpaper** to open Android's system wallpaper picker.
 
+When animation is enabled, Marin uses her singing animation with the original musical-note sprite,
+BowWow wanders and hops against his original chain links, and the rooster flutters around its
+anchor with the original feather particles. Turning animation off holds each character still and
+removes those ambient effects.
+
 The **Mabe Sunset**, **Forest Night**, and **Island Journey** quick presets configure those controls
 together. Selecting a preset refreshes the settings screen with its individual values, which can
 then be adjusted normally.

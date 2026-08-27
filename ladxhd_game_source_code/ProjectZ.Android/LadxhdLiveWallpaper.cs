@@ -594,6 +594,55 @@ namespace ProjectZ.Android
                 return false;
             }
         }
+
+        public static bool TryResolveAtlasSprite(
+            Context context,
+            string atlasName,
+            string spriteId,
+            out LiveWallpaperAtlasEntry entry,
+            out string spritePath,
+            out string reason)
+        {
+            entry = default;
+            spritePath = null;
+            reason = null;
+            if (!AndroidAssetInstallation.TryGetActiveRoot(context, out var root, out reason))
+                return false;
+
+            try
+            {
+                if (!LiveWallpaperAnimation.TryNormalizeRelativePath(
+                        atlasName, out var normalizedAtlasName) ||
+                    normalizedAtlasName.Contains(".", StringComparison.Ordinal))
+                    throw new InvalidDataException("The wallpaper atlas name is invalid.");
+                var objectsRoot = FilePath.GetFullPath(
+                    FilePath.Combine(root, "Data", "Map Objects"));
+                var atlasPath = FilePath.GetFullPath(FilePath.Combine(
+                    objectsRoot, normalizedAtlasName + ".atlas"));
+                var candidateSpritePath = FilePath.GetFullPath(FilePath.Combine(
+                    objectsRoot, normalizedAtlasName + ".png"));
+                var rootPrefix = objectsRoot.TrimEnd(FilePath.DirectorySeparatorChar) +
+                                 FilePath.DirectorySeparatorChar;
+                if (!atlasPath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase) ||
+                    !candidateSpritePath.StartsWith(rootPrefix,
+                        StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("The wallpaper atlas path is invalid.");
+                using var reader = File.OpenText(atlasPath);
+                if (!LiveWallpaperAtlas.TryLoad(reader, spriteId, out entry))
+                    throw new InvalidDataException("The requested wallpaper atlas sprite is unavailable.");
+                if (!File.Exists(candidateSpritePath))
+                    throw new FileNotFoundException("The wallpaper atlas image is unavailable.");
+                spritePath = candidateSpritePath;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                entry = default;
+                spritePath = null;
+                reason = exception.Message;
+                return false;
+            }
+        }
     }
 
     [Service(
@@ -773,6 +822,18 @@ namespace ProjectZ.Android
             public LiveWallpaperMap Map { get; }
         }
 
+        private sealed class AtlasSpriteAsset
+        {
+            public AtlasSpriteAsset(Bitmap bitmap, LiveWallpaperAtlasEntry entry)
+            {
+                Bitmap = bitmap;
+                Entry = entry;
+            }
+
+            public Bitmap Bitmap { get; }
+            public LiveWallpaperAtlasEntry Entry { get; }
+        }
+
         // Keep bitmap opacity independent from the translucent lighting/fade overlays. Android
         // Paint retains its alpha between frames, so sharing one Paint can make all game art dark.
         private readonly Paint _bitmapPaint = new Paint
@@ -792,10 +853,17 @@ namespace ProjectZ.Android
         private SpriteAsset _linkWalking;
         private SpriteAsset _linkStanding;
         private SpriteAsset _marin;
-        private SpriteAsset _bowWow;
-        private SpriteAsset _rooster;
+        private SpriteAsset _bowWowLeft;
+        private SpriteAsset _bowWowRight;
+        private SpriteAsset _roosterLeft;
+        private SpriteAsset _roosterRight;
         private SpriteAsset _butterfly;
         private SpriteAsset _owl;
+        private AtlasSpriteAsset _marinNote;
+        private AtlasSpriteAsset _bowWowChain;
+        private AtlasSpriteAsset _roosterParticleLarge;
+        private AtlasSpriteAsset _roosterParticleMedium;
+        private AtlasSpriteAsset _roosterParticleSmall;
         private MapAsset _overworldMap;
 
         public LadxhdWallpaperScene(Context context)
@@ -804,14 +872,18 @@ namespace ProjectZ.Android
                 ["walk_2", "walk_0", "walk_1", "walk_3"]);
             _linkStanding = LoadSprite(context, "link0.ani",
                 ["stand_2", "stand_0", "stand_1", "stand_3"]);
-            _marin = LoadSprite(context, "NPCs/marin.ani",
-                ["sing", "idle", "stand_0", "stand_2"]);
-            _bowWow = LoadSprite(context, "NPCs/BowWow.ani",
-                ["walk_2", "walk_0", "walk_1", "walk_3"]);
-            _rooster = LoadSprite(context, "NPCs/cock.ani",
-                ["stand_3", "stand_2", "stand_0", "spawn"]);
+            _marin = LoadSprite(context, "NPCs/marin.ani", ["sing"]);
+            _bowWowLeft = LoadSprite(context, "NPCs/BowWow.ani", ["walk_2"]);
+            _bowWowRight = LoadSprite(context, "NPCs/BowWow.ani", ["walk_3"]);
+            _roosterLeft = LoadSprite(context, "NPCs/cock.ani", ["stand_2"]);
+            _roosterRight = LoadSprite(context, "NPCs/cock.ani", ["stand_3"]);
             _butterfly = LoadSprite(context, "NPCs/butterfly.ani", ["idle"]);
             _owl = LoadSprite(context, "NPCs/owl.ani", ["fly", "hover", "idle"]);
+            _marinNote = LoadAtlasSprite(context, "npcs", "note");
+            _bowWowChain = LoadAtlasSprite(context, "npcs", "bowwow chain");
+            _roosterParticleLarge = LoadAtlasSprite(context, "npcs", "cock_particle_0");
+            _roosterParticleMedium = LoadAtlasSprite(context, "npcs", "cock_particle_1");
+            _roosterParticleSmall = LoadAtlasSprite(context, "npcs", "cock_particle_2");
             _overworldMap = LoadOverworldMap(context);
         }
 
@@ -852,7 +924,7 @@ namespace ProjectZ.Android
             if (showIslandLife)
             {
                 DrawFeaturedCharacter(canvas, width, groundY, time, xOffset, unit,
-                    featuredCharacter, resolvedScene, characterPosition);
+                    animated, featuredCharacter, resolvedScene, characterPosition);
                 if (wildlife.ShowButterflies)
                     DrawButterflies(canvas, width, groundY, time, unit, animated);
             }
@@ -952,25 +1024,94 @@ namespace ProjectZ.Android
             long elapsed,
             float xOffset,
             float unit,
+            bool animated,
             int featuredCharacter,
             int scene,
             int characterPosition)
         {
             var selection = LiveWallpaperCharacterSelection.Resolve(
                 featuredCharacter, scene, elapsed);
+            var motion = LiveWallpaperCharacterMotion.Resolve(selection, elapsed, animated);
+            var baseX = width * LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(
+                characterPosition, scene) - (xOffset - 0.5f) * 20f * unit;
+            var movementRadius = selection switch
+            {
+                1 => 18f,
+                2 => 14f,
+                _ => 0f
+            };
+            var centerX = baseX + motion.HorizontalOffset * movementRadius * unit;
+            var lift = selection == 2 ? 13f : selection == 1 ? 5f : 0f;
+            var bottomY = groundY - motion.Lift * lift * unit;
             var asset = selection switch
             {
-                1 => _bowWow,
-                2 => _rooster,
+                1 => motion.FacingRight ? _bowWowRight : _bowWowLeft,
+                2 => motion.FacingRight ? _roosterRight : _roosterLeft,
                 _ => _marin
             };
             if (asset == null)
                 return;
-            var centerX = width * LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(
-                characterPosition, scene) - (xOffset - 0.5f) * 20f * unit;
+            if (selection == 1)
+                DrawBowWowChain(canvas, baseX, groundY, centerX, bottomY, unit);
+            else if (selection == 2 && motion.Lift > 0.35f)
+                DrawRoosterParticles(canvas, centerX, bottomY, elapsed, unit);
             var scale = selection == 0 ? 2.05f : 1.9f;
-            DrawSpriteAt(canvas, asset, elapsed, centerX, groundY,
+            DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY,
                 Math.Max(2f, unit * scale));
+            if (selection == 0 && motion.ShowNotes)
+                DrawMarinNotes(canvas, centerX, groundY, elapsed, unit);
+        }
+
+        private void DrawMarinNotes(
+            Canvas canvas, float centerX, float groundY, long elapsed, float unit)
+        {
+            if (_marinNote == null)
+                return;
+            for (var index = 0; index < 3; index++)
+            {
+                var phase = ((elapsed + index * 900L) % 2_700L) / 2_700f;
+                var noteX = centerX + (8f + index * 4f) * unit +
+                            MathF.Sin(phase * MathF.PI * 2f) * 4f * unit;
+                var noteY = groundY - (20f + phase * 22f) * unit;
+                DrawAtlasSpriteAt(canvas, _marinNote, noteX, noteY,
+                    Math.Max(1.5f, unit * 1.25f));
+            }
+        }
+
+        private void DrawBowWowChain(
+            Canvas canvas,
+            float anchorX,
+            float anchorY,
+            float bowWowX,
+            float bowWowY,
+            float unit)
+        {
+            if (_bowWowChain == null)
+                return;
+            for (var index = 1; index <= 5; index++)
+            {
+                var progress = index / 6f;
+                var linkX = anchorX + (bowWowX - anchorX) * progress;
+                var linkY = anchorY + (bowWowY - anchorY) * progress +
+                            MathF.Sin(progress * MathF.PI) * 2.5f * unit;
+                DrawAtlasSpriteAt(canvas, _bowWowChain, linkX, linkY,
+                    Math.Max(1.5f, unit * 1.15f));
+            }
+        }
+
+        private void DrawRoosterParticles(
+            Canvas canvas, float centerX, float bottomY, long elapsed, float unit)
+        {
+            var sway = MathF.Sin(elapsed / 230f) * 2f * unit;
+            DrawAtlasSpriteAt(canvas, _roosterParticleLarge,
+                centerX - 9f * unit + sway, bottomY - 5f * unit,
+                Math.Max(1.5f, unit));
+            DrawAtlasSpriteAt(canvas, _roosterParticleMedium,
+                centerX + 8f * unit - sway, bottomY - 10f * unit,
+                Math.Max(1.5f, unit));
+            DrawAtlasSpriteAt(canvas, _roosterParticleSmall,
+                centerX - 3f * unit - sway, bottomY - 15f * unit,
+                Math.Max(1.5f, unit));
         }
 
         private void DrawButterflies(
@@ -1037,6 +1178,32 @@ namespace ProjectZ.Android
             canvas.RestoreToCount(save);
         }
 
+        private void DrawAtlasSpriteAt(
+            Canvas canvas,
+            AtlasSpriteAsset asset,
+            float centerX,
+            float bottomY,
+            float scale)
+        {
+            if (asset?.Bitmap == null)
+                return;
+            var entry = asset.Entry;
+            if (entry.X < 0 || entry.Y < 0 || entry.Width <= 0 || entry.Height <= 0 ||
+                entry.X + entry.Width > asset.Bitmap.Width ||
+                entry.Y + entry.Height > asset.Bitmap.Height)
+                return;
+            var source = new Rect(
+                entry.X, entry.Y, entry.X + entry.Width, entry.Y + entry.Height);
+            var width = entry.Width * scale;
+            var height = entry.Height * scale;
+            var destination = new RectF(
+                centerX - width * 0.5f,
+                bottomY - height,
+                centerX + width * 0.5f,
+                bottomY);
+            canvas.DrawBitmap(asset.Bitmap, source, destination, _bitmapPaint);
+        }
+
         private SpriteAsset LoadSprite(
             Context context,
             string relativeAnimationPath,
@@ -1055,6 +1222,29 @@ namespace ProjectZ.Android
                     _spriteSheets.Add(spritePath, bitmap);
                 }
                 return new SpriteAsset(bitmap, animation);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private AtlasSpriteAsset LoadAtlasSprite(
+            Context context, string atlasName, string spriteId)
+        {
+            if (!LadxhdWallpaperAssets.TryResolveAtlasSprite(
+                    context, atlasName, spriteId, out var entry, out var spritePath, out _))
+                return null;
+            try
+            {
+                if (!_spriteSheets.TryGetValue(spritePath, out var bitmap))
+                {
+                    bitmap = BitmapFactory.DecodeFile(spritePath) ??
+                             throw new InvalidDataException(
+                                 "The wallpaper atlas image could not be decoded.");
+                    _spriteSheets.Add(spritePath, bitmap);
+                }
+                return new AtlasSpriteAsset(bitmap, entry);
             }
             catch
             {

@@ -30,6 +30,7 @@ ZIP.
   tiles and animation sheets, with animated Link, selectable fixed, rotating, or location-matched
   island characters, wildlife, and smoothly rotating Mabe Village, Toronbo Shores, Mysterious
   Forest, Kanalet Castle, Animal Village, and Wind Fish's Egg scenes, plus
+  authentic Marin singing notes, tethered BowWow wandering, hopping rooster behavior,
   regional character anchors with manual placement overrides, selectable Link activity,
   local-time lighting, and Mabe Sunset, Forest Night, and Island Journey quick presets,
   naturally scheduled wildlife, parallax, configurable tap actions, adaptive static rendering,

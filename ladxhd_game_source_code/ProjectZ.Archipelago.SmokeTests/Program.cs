@@ -89,6 +89,17 @@ Assert(LiveWallpaperMap.TryLoad(new StringReader(wallpaperMapData), out var wall
 Assert(!LiveWallpaperMap.TryLoad(
            new StringReader("3\n0\n0\n../outside.png\n1\n1\n1\n0,\n"), out _),
        "The live wallpaper must reject unsafe installed tileset paths.");
+const string wallpaperAtlasData = "1\n1\nnote:262,185,7,12,0,0\n" +
+                                  "bowwow chain:310,91,6,6,3,6\n";
+Assert(LiveWallpaperAtlas.TryLoad(
+           new StringReader(wallpaperAtlasData), "bowwow chain", out var chainEntry) &&
+       chainEntry.X == 310 && chainEntry.Y == 91 &&
+       chainEntry.Width == 6 && chainEntry.Height == 6 &&
+       Math.Abs(chainEntry.OriginX - 3f) < 0.001f &&
+       Math.Abs(chainEntry.OriginY - 6f) < 0.001f &&
+       !LiveWallpaperAtlas.TryLoad(
+           new StringReader("1\n1\nnote:1,2,-3,4,0,0\n"), "note", out _),
+       "The live wallpaper must parse installed atlas entries and reject invalid bounds.");
 Assert(LiveWallpaperLighting.Resolve(0, 4) == LiveWallpaperTimePhase.Night &&
        LiveWallpaperLighting.Resolve(0, 5) == LiveWallpaperTimePhase.Sunset &&
        LiveWallpaperLighting.Resolve(0, 7) == LiveWallpaperTimePhase.Day &&
@@ -188,6 +199,15 @@ Assert(LiveWallpaperCharacterSelection.Resolve(0, 3, 90_000) == 0 &&
        LiveWallpaperCharacterSelection.Resolve(4, 7, 0) == 2 &&
        LiveWallpaperCharacterSelection.Resolve(4, 0, 30_000) == 1,
        "Wallpaper featured characters must honor fixed, rotating, and scene-matched modes.");
+var marinMotion = LiveWallpaperCharacterMotion.Resolve(0, 2_000, true);
+var staticMarinMotion = LiveWallpaperCharacterMotion.Resolve(0, 2_000, false);
+var bowWowMotion = LiveWallpaperCharacterMotion.Resolve(1, 750, true);
+var roosterMotion = LiveWallpaperCharacterMotion.Resolve(2, 1_300, true);
+Assert(marinMotion.ShowNotes && marinMotion.HorizontalOffset == 0f &&
+       !staticMarinMotion.ShowNotes && staticMarinMotion.Lift == 0f &&
+       bowWowMotion.HorizontalOffset > 0.7f && bowWowMotion.Lift > 0.99f &&
+       roosterMotion.HorizontalOffset > 0.99f && roosterMotion.Lift > 0.99f,
+       "Wallpaper characters must sing, wander, and hop with deterministic motion.");
 var defaultLayout = LiveWallpaperSceneLayouts.Resolve(0);
 var mabeLayout = LiveWallpaperSceneLayouts.Resolve(1);
 var shoreLayout = LiveWallpaperSceneLayouts.Resolve(2);
