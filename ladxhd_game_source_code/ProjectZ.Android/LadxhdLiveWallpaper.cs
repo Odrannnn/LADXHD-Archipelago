@@ -765,7 +765,20 @@ namespace ProjectZ.Android
             public LiveWallpaperMap Map { get; }
         }
 
-        private readonly Paint _paint = new Paint { AntiAlias = false, FilterBitmap = false };
+        // Keep bitmap opacity independent from the translucent lighting/fade overlays. Android
+        // Paint retains its alpha between frames, so sharing one Paint can make all game art dark.
+        private readonly Paint _bitmapPaint = new Paint
+        {
+            AntiAlias = false,
+            FilterBitmap = false,
+            Color = Color.White,
+            Alpha = 255
+        };
+        private readonly Paint _overlayPaint = new Paint
+        {
+            AntiAlias = false,
+            FilterBitmap = false
+        };
         private readonly Dictionary<string, Bitmap> _spriteSheets =
             new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
         private SpriteAsset _linkWalking;
@@ -817,6 +830,10 @@ namespace ProjectZ.Android
             var wildlife = LiveWallpaperWildlife.Resolve(wildlifeSchedule, phase);
             canvas.DrawColor(Color.Black);
 
+            // Defensively restore fully opaque bitmap rendering at the start of every frame.
+            _bitmapPaint.Color = Color.White;
+            _bitmapPaint.Alpha = 255;
+
             var resolvedScene = LiveWallpaperSceneSelection.Resolve(
                 scene, elapsed, _overworldMap != null);
             if (resolvedScene <= 0)
@@ -841,10 +858,10 @@ namespace ProjectZ.Android
         {
             if (phase == LiveWallpaperTimePhase.Day)
                 return;
-            _paint.Color = phase == LiveWallpaperTimePhase.Night
+            _overlayPaint.Color = phase == LiveWallpaperTimePhase.Night
                 ? Color.Argb(82, 7, 16, 50)
                 : Color.Argb(22, 116, 45, 59);
-            canvas.DrawRect(0, 0, width, height, _paint);
+            canvas.DrawRect(0, 0, width, height, _overlayPaint);
         }
 
         private void DrawSceneTransition(
@@ -853,8 +870,8 @@ namespace ProjectZ.Android
             var opacity = LiveWallpaperSceneSelection.GetRotationTransitionOpacity(scene, elapsed);
             if (opacity <= 0f)
                 return;
-            _paint.Color = Color.Argb((int)(255f * opacity), 4, 8, 18);
-            canvas.DrawRect(0, 0, width, height, _paint);
+            _overlayPaint.Color = Color.Argb((int)(255f * opacity), 4, 8, 18);
+            canvas.DrawRect(0, 0, width, height, _overlayPaint);
         }
 
         private float DrawInstalledMap(
@@ -893,7 +910,7 @@ namespace ProjectZ.Android
                             viewport.Top + y * viewport.TileSize,
                             viewport.Left + (x + 1) * viewport.TileSize,
                             viewport.Top + (y + 1) * viewport.TileSize);
-                        canvas.DrawBitmap(tileset, source, destination, _paint);
+                        canvas.DrawBitmap(tileset, source, destination, _bitmapPaint);
                     }
                 }
             }
@@ -1008,7 +1025,7 @@ namespace ProjectZ.Android
                 canvas.Scale(-1f, 1f, destination.CenterX(), destination.CenterY());
             if (frame.MirroredVertically)
                 canvas.Scale(1f, -1f, destination.CenterX(), destination.CenterY());
-            canvas.DrawBitmap(asset.Bitmap, source, destination, _paint);
+            canvas.DrawBitmap(asset.Bitmap, source, destination, _bitmapPaint);
             canvas.RestoreToCount(save);
         }
 
@@ -1064,7 +1081,8 @@ namespace ProjectZ.Android
             foreach (var bitmap in _spriteSheets.Values)
                 bitmap.Dispose();
             _spriteSheets.Clear();
-            _paint.Dispose();
+            _bitmapPaint.Dispose();
+            _overlayPaint.Dispose();
         }
     }
 }
