@@ -54,12 +54,12 @@ namespace ProjectZ.Android
         {
             var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.GetInt(FeaturedCharacterKey, 0) ?? 0;
-            return Math.Clamp(value, 0, 3);
+            return Math.Clamp(value, 0, 4);
         }
 
         public static void SetFeaturedCharacter(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.Edit()?.PutInt(FeaturedCharacterKey, Math.Clamp(value, 0, 3))?.Apply();
+                ?.Edit()?.PutInt(FeaturedCharacterKey, Math.Clamp(value, 0, 4))?.Apply();
 
         public static int GetScene(Context context)
         {
@@ -264,7 +264,7 @@ namespace ProjectZ.Android
             var character = new Spinner(this) { Enabled = assetReady };
             var characterAdapter = new ArrayAdapter<string>(this,
                 global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Marin", "BowWow", "Rooster", "Rotate automatically"]);
+                ["Marin", "BowWow", "Rooster", "Rotate automatically", "Match location"]);
             characterAdapter.SetDropDownViewResource(
                 global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
             character.Adapter = characterAdapter;
@@ -764,7 +764,7 @@ namespace ProjectZ.Android
             if (showIslandLife)
             {
                 DrawFeaturedCharacter(canvas, width, groundY, time, xOffset, unit,
-                    featuredCharacter);
+                    featuredCharacter, resolvedScene);
                 if (wildlife.ShowButterflies)
                     DrawButterflies(canvas, width, groundY, time, unit, animated);
             }
@@ -959,11 +959,11 @@ namespace ProjectZ.Android
             long elapsed,
             float xOffset,
             float unit,
-            int featuredCharacter)
+            int featuredCharacter,
+            int scene)
         {
-            var selection = Math.Clamp(featuredCharacter, 0, 3);
-            if (selection == 3)
-                selection = (int)((elapsed / 30000L) % 3L);
+            var selection = LiveWallpaperCharacterSelection.Resolve(
+                featuredCharacter, scene, elapsed);
             var asset = selection switch
             {
                 1 => _bowWow,

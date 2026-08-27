@@ -27,8 +27,9 @@ ZIP.
   in-app setup screen that can choose seeds and edit installed room connections without a companion.
 - A persistent in-game Magpie overlay with item, check, slot-setting, and position autotracking.
 - An optional Android live wallpaper with a pixel-art Koholint scene, animated Link, selectable
-  island characters, wildlife, and smoothly rotating Mabe Village, Toronbo Shores, and Mysterious Forest
-  scenes from locally prepared assets, plus selectable Link activity, local-time lighting,
+  fixed, rotating, or location-matched island characters, wildlife, and smoothly rotating Mabe
+  Village, Toronbo Shores, and Mysterious Forest scenes from locally prepared assets, plus
+  selectable Link activity, local-time lighting,
   naturally scheduled wildlife, parallax, configurable tap actions, adaptive static rendering,
   and battery-friendly frame rates.
 - A phone-native, transactional game-data builder: select the original v1.0.0 ZIP on first launch,

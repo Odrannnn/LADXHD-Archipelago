@@ -160,6 +160,17 @@ Assert(dayWildlife.ShowButterflies && !dayWildlife.ShowOwl &&
        !nightWildlife.ShowButterflies && nightWildlife.ShowOwl &&
        allWildlife.ShowButterflies && allWildlife.ShowOwl,
        "Wallpaper wildlife must follow daylight unless the always-show override is selected.");
+Assert(LiveWallpaperCharacterSelection.Resolve(0, 3, 90_000) == 0 &&
+       LiveWallpaperCharacterSelection.Resolve(1, 1, 0) == 1 &&
+       LiveWallpaperCharacterSelection.Resolve(2, 1, 0) == 2 &&
+       LiveWallpaperCharacterSelection.Resolve(3, 0, 0) == 0 &&
+       LiveWallpaperCharacterSelection.Resolve(3, 0, 30_000) == 1 &&
+       LiveWallpaperCharacterSelection.Resolve(3, 0, 60_000) == 2 &&
+       LiveWallpaperCharacterSelection.Resolve(4, 1, 60_000) == 0 &&
+       LiveWallpaperCharacterSelection.Resolve(4, 2, 0) == 2 &&
+       LiveWallpaperCharacterSelection.Resolve(4, 3, 0) == 1 &&
+       LiveWallpaperCharacterSelection.Resolve(4, 0, 30_000) == 1,
+       "Wallpaper featured characters must honor fixed, rotating, and scene-matched modes.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");
