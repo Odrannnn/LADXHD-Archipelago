@@ -869,6 +869,7 @@ namespace ProjectZ.Android
         private AtlasSpriteAsset _roosterParticleMedium;
         private AtlasSpriteAsset _roosterParticleSmall;
         private MapAsset _overworldMap;
+        private readonly LiveWallpaperLinkSimulation _linkSimulation = new();
 
         public LadxhdWallpaperScene(Context context)
         {
@@ -1025,11 +1026,11 @@ namespace ProjectZ.Android
             var state = LiveWallpaperLinkActivity.Resolve(activity, elapsed, animated);
             if (!state.Visible)
                 return;
-            var route = LiveWallpaperLinkRoute.Resolve(scene, state.Journey, state.Walking);
-            var direction = route.Direction;
-            var asset = route.Action == LiveWallpaperLinkRouteAction.FeatherJump
+            var simulated = _linkSimulation.Update(scene, state, elapsed, animated);
+            var direction = simulated.Direction;
+            var asset = simulated.Action == LiveWallpaperLinkRouteAction.FeatherJump
                 ? _linkJumping[direction]
-                : route.Action == LiveWallpaperLinkRouteAction.Walk
+                : simulated.Action == LiveWallpaperLinkRouteAction.Walk
                     ? _linkWalking[direction]
                     : _linkStanding[direction];
             asset ??= _linkStanding[direction] ?? _linkWalking[direction];
@@ -1037,11 +1038,12 @@ namespace ProjectZ.Android
                 return;
             var scale = Math.Max(2f, unit * 2.2f);
             var centerX = viewport.Left +
-                          (route.MapX - viewport.OriginX) * viewport.TileSize;
+                          (simulated.MapX - viewport.OriginX) * viewport.TileSize;
             var bottomY = viewport.Top +
-                          (route.MapY - viewport.OriginY) * viewport.TileSize -
-                          route.JumpHeight * viewport.TileSize * 1.15f;
-            DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY, scale, animated);
+                          (simulated.MapY - viewport.OriginY) * viewport.TileSize -
+                          simulated.Height * viewport.TileSize / 16f;
+            DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY, scale,
+                engineDriven: true, animated: animated);
         }
 
         private void DrawFeaturedCharacter(
@@ -1084,7 +1086,7 @@ namespace ProjectZ.Android
                 DrawRoosterParticles(canvas, centerX, bottomY, elapsed, unit);
             var scale = selection == 0 ? 2.05f : 1.9f;
             DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY,
-                Math.Max(2f, unit * scale), animated);
+                Math.Max(2f, unit * scale), engineDriven: true, animated: animated);
             if (selection == 0 && motion.ShowNotes)
                 DrawMarinNotes(canvas, centerX, groundY, elapsed, unit);
         }
@@ -1179,12 +1181,13 @@ namespace ProjectZ.Android
             float centerX,
             float bottomY,
             float scale,
-            bool engineDriven = false)
+            bool engineDriven = false,
+            bool animated = true)
         {
             if (asset?.Bitmap == null || asset.Animation == null)
                 return;
             var frame = engineDriven
-                ? asset.EngineAnimation.Advance(elapsed, animated: true)
+                ? asset.EngineAnimation.Advance(elapsed, animated)
                 : asset.Animation.GetFrame(elapsed);
             if (frame.X < 0 || frame.Y < 0 ||
                 frame.X + frame.Width > asset.Bitmap.Width ||

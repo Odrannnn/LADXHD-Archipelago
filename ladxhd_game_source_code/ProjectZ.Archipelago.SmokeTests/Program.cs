@@ -200,6 +200,16 @@ Assert(Math.Abs(mabeRouteStart.MapX - 23.5f) < 0.001f &&
        Math.Abs(forestJump.MapX - 18f) < 0.001f &&
        eggStairs.Direction == 1 && Math.Abs(eggStairs.MapY - 17.5f) < 0.001f,
        "Wallpaper Link routes must stay map-aligned, reverse direction, and jump marked gaps.");
+var wallpaperLinkSimulation = new LiveWallpaperLinkSimulation();
+var simulatedWalkStart = wallpaperLinkSimulation.Update(
+    3, new LiveWallpaperLinkState(true, true, 0.20f), 0, animated: true);
+var simulatedFeather = wallpaperLinkSimulation.Update(
+    3, new LiveWallpaperLinkState(true, true, 0.30f), 17, animated: true);
+Assert(simulatedWalkStart.Input.Move == Microsoft.Xna.Framework.Vector2.Zero &&
+       simulatedFeather.Input.Move.X > 0 && simulatedFeather.Input.FeatherPressed &&
+       simulatedFeather.Height > 0 && !wallpaperLinkSimulation.Body.IsGrounded &&
+       wallpaperLinkSimulation.Body.Velocity.Z > 0,
+       "Wallpaper Link must translate the scripted route into real body movement and feather input.");
 Assert(LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 15) == 66 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 30) == 33 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 999) == 33 &&
