@@ -171,6 +171,21 @@ Assert(walkingStart.Visible && walkingStart.Walking && walkingStart.Journey == 0
        animationDisabled.Visible && !animationDisabled.Walking &&
        !hidden.Visible,
        "Installed Link wallpaper activity must resolve walking, resting, and hidden states.");
+var mabeRouteStart = LiveWallpaperLinkRoute.Resolve(1, 0f, true);
+var mabeRouteReturn = LiveWallpaperLinkRoute.Resolve(1, 0.75f, true);
+var standingRoute = LiveWallpaperLinkRoute.Resolve(1, 0.5f, false);
+var forestJump = LiveWallpaperLinkRoute.Resolve(3, 0.375f, true);
+var eggStairs = LiveWallpaperLinkRoute.Resolve(7, 0.25f, true);
+Assert(Math.Abs(mabeRouteStart.MapX - 23.5f) < 0.001f &&
+       Math.Abs(mabeRouteStart.MapY - 81.5f) < 0.001f &&
+       mabeRouteStart.Direction == 3 &&
+       mabeRouteReturn.Direction == 2 &&
+       standingRoute.Action == LiveWallpaperLinkRouteAction.Stand &&
+       forestJump.Action == LiveWallpaperLinkRouteAction.FeatherJump &&
+       forestJump.JumpHeight > 0.99f &&
+       Math.Abs(forestJump.MapX - 18f) < 0.001f &&
+       eggStairs.Direction == 1 && Math.Abs(eggStairs.MapY - 17.5f) < 0.001f,
+       "Wallpaper Link routes must stay map-aligned, reverse direction, and jump marked gaps.");
 Assert(LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 15) == 66 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 30) == 33 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 999) == 33 &&

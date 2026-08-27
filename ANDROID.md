@@ -92,6 +92,9 @@ gameplay, audio, saves, or an Archipelago connection. It reads Link, Marin, BowW
 butterflies, the owl, the overworld map, and its tileset directly from the locally prepared files.
 The selected map region expands with real adjacent tiles to cover portrait and landscape screens;
 no substitute coast, sky, clouds, palms, stars, waves, or synthetic touch artwork is drawn.
+Link follows a location-specific route in overworld tile coordinates instead of crossing walls or
+pits in screen space. The forest route marks its narrow gap explicitly, uses the original
+directional feather-jump animation for that segment, and lands Link back on the safe route.
 Automatic location rotation fades between regions every 45 seconds. The public assetless APK
 remains blank until the user completes the normal v1.0.0 ZIP setup; none of the game assets are
 embedded in the APK.

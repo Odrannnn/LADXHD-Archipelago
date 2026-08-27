@@ -31,7 +31,8 @@ ZIP.
   island characters, wildlife, and smoothly rotating Mabe Village, Toronbo Shores, Mysterious
   Forest, Kanalet Castle, Animal Village, and Wind Fish's Egg scenes, plus
   authentic Marin singing notes, tethered BowWow wandering, hopping rooster behavior,
-  regional character anchors with manual placement overrides, selectable Link activity,
+  regional character anchors with manual placement overrides, map-safe Link routes with an
+  authentic feather jump across the forest gap, selectable Link activity,
   local-time lighting, and Mabe Sunset, Forest Night, and Island Journey quick presets,
   naturally scheduled wildlife, parallax, configurable tap actions, adaptive static rendering,
   and battery-friendly frame rates.

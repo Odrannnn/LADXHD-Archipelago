@@ -850,8 +850,9 @@ namespace ProjectZ.Android
         };
         private readonly Dictionary<string, Bitmap> _spriteSheets =
             new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
-        private SpriteAsset _linkWalking;
-        private SpriteAsset _linkStanding;
+        private readonly SpriteAsset[] _linkWalking = new SpriteAsset[4];
+        private readonly SpriteAsset[] _linkStanding = new SpriteAsset[4];
+        private readonly SpriteAsset[] _linkJumping = new SpriteAsset[4];
         private SpriteAsset _marin;
         private SpriteAsset _bowWowLeft;
         private SpriteAsset _bowWowRight;
@@ -868,10 +869,15 @@ namespace ProjectZ.Android
 
         public LadxhdWallpaperScene(Context context)
         {
-            _linkWalking = LoadSprite(context, "link0.ani",
-                ["walk_2", "walk_0", "walk_1", "walk_3"]);
-            _linkStanding = LoadSprite(context, "link0.ani",
-                ["stand_2", "stand_0", "stand_1", "stand_3"]);
+            for (var direction = 0; direction < 4; direction++)
+            {
+                _linkWalking[direction] = LoadSprite(
+                    context, "link0.ani", [$"walk_{direction}"]);
+                _linkStanding[direction] = LoadSprite(
+                    context, "link0.ani", [$"stand_{direction}"]);
+                _linkJumping[direction] = LoadSprite(
+                    context, "link0.ani", [$"jump_{direction}"]);
+            }
             _marin = LoadSprite(context, "NPCs/marin.ani", ["sing"]);
             _bowWowLeft = LoadSprite(context, "NPCs/BowWow.ani", ["walk_2"]);
             _bowWowRight = LoadSprite(context, "NPCs/BowWow.ani", ["walk_3"]);
@@ -918,7 +924,8 @@ namespace ProjectZ.Android
                 scene, elapsed, _overworldMap != null);
             if (resolvedScene <= 0)
                 return;
-            var groundY = DrawInstalledMap(canvas, width, height, resolvedScene, xOffset);
+            var groundY = DrawInstalledMap(
+                canvas, width, height, resolvedScene, xOffset, out var viewport);
             if (showIslandLife && wildlife.ShowOwl)
                 DrawOwl(canvas, width, height, time, unit, animated);
             if (showIslandLife)
@@ -928,7 +935,7 @@ namespace ProjectZ.Android
                 if (wildlife.ShowButterflies)
                     DrawButterflies(canvas, width, groundY, time, unit, animated);
             }
-            DrawLink(canvas, width, groundY, elapsed, unit, animated, linkActivity);
+            DrawLink(canvas, viewport, resolvedScene, elapsed, unit, animated, linkActivity);
             DrawLightingOverlay(canvas, width, height, phase);
             DrawSceneTransition(canvas, width, height, scene, elapsed);
         }
@@ -955,14 +962,19 @@ namespace ProjectZ.Android
         }
 
         private float DrawInstalledMap(
-            Canvas canvas, int width, int height, int scene, float xOffset)
+            Canvas canvas,
+            int width,
+            int height,
+            int scene,
+            float xOffset,
+            out LiveWallpaperMapViewport viewport)
         {
             const int tileSize = 16;
             const int atlasStride = tileSize + 2;
             var map = _overworldMap.Map;
             var tileset = _overworldMap.Bitmap;
             if (!LiveWallpaperMapViewport.TryCreate(
-                    width, height, map.Height, scene, xOffset, out var viewport))
+                    width, height, map.Height, scene, xOffset, out viewport))
                 return height * 0.72f;
             var tilesPerRow = tileset.Width / atlasStride;
             if (tilesPerRow <= 0)
@@ -999,22 +1011,34 @@ namespace ProjectZ.Android
         }
 
         private void DrawLink(
-            Canvas canvas, int width, float groundY, long elapsed, float unit, bool animated,
+            Canvas canvas,
+            LiveWallpaperMapViewport viewport,
+            int scene,
+            long elapsed,
+            float unit,
+            bool animated,
             int activity)
         {
             var state = LiveWallpaperLinkActivity.Resolve(activity, elapsed, animated);
             if (!state.Visible)
                 return;
-            var asset = state.Walking
-                ? _linkWalking ?? _linkStanding
-                : _linkStanding ?? _linkWalking;
+            var route = LiveWallpaperLinkRoute.Resolve(scene, state.Journey, state.Walking);
+            var direction = route.Direction;
+            var asset = route.Action == LiveWallpaperLinkRouteAction.FeatherJump
+                ? _linkJumping[direction]
+                : route.Action == LiveWallpaperLinkRouteAction.Walk
+                    ? _linkWalking[direction]
+                    : _linkStanding[direction];
+            asset ??= _linkStanding[direction] ?? _linkWalking[direction];
             if (asset == null)
                 return;
             var scale = Math.Max(2f, unit * 2.2f);
-            var frame = asset.Animation.GetFrame(elapsed);
-            var spriteWidth = frame.Width * scale;
-            var centerX = -spriteWidth * 0.5f + state.Journey * (width + spriteWidth);
-            DrawSpriteAt(canvas, asset, elapsed, centerX, groundY, scale);
+            var centerX = viewport.Left +
+                          (route.MapX - viewport.OriginX) * viewport.TileSize;
+            var bottomY = viewport.Top +
+                          (route.MapY - viewport.OriginY) * viewport.TileSize -
+                          route.JumpHeight * viewport.TileSize * 1.15f;
+            DrawSpriteAt(canvas, asset, elapsed, centerX, bottomY, scale);
         }
 
         private void DrawFeaturedCharacter(
