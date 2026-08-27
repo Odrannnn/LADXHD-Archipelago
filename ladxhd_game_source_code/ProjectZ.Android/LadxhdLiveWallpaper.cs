@@ -21,6 +21,7 @@ namespace ProjectZ.Android
         private const string IslandLifeKey = "island_life";
         private const string FeaturedCharacterKey = "featured_character";
         private const string SceneKey = "scene";
+        private const string TimeOfDayKey = "time_of_day";
         private const string FrameRateKey = "frame_rate";
 
         public static bool IsAnimated(Context context) =>
@@ -67,6 +68,17 @@ namespace ProjectZ.Android
         public static void SetScene(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutInt(SceneKey, Math.Clamp(value, 0, 1))?.Apply();
+
+        public static int GetTimeOfDay(Context context)
+        {
+            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.GetInt(TimeOfDayKey, 0) ?? 0;
+            return Math.Clamp(value, 0, 3);
+        }
+
+        public static void SetTimeOfDay(Context context, int value) =>
+            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+                ?.Edit()?.PutInt(TimeOfDayKey, Math.Clamp(value, 0, 3))?.Apply();
 
         public static void SetFrameRate(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
@@ -227,6 +239,27 @@ namespace ProjectZ.Android
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             sceneParams.SetMargins(0, 0, 0, Dp(12));
             layout.AddView(scene, sceneParams);
+
+            var timeLabel = new TextView(this)
+            {
+                Text = "Time of day",
+                TextSize = 17f
+            };
+            layout.AddView(timeLabel);
+            var timeOfDay = new Spinner(this);
+            var timeAdapter = new ArrayAdapter<string>(this,
+                global::Android.Resource.Layout.SimpleSpinnerItem,
+                ["Follow system time", "Day", "Sunset", "Night"]);
+            timeAdapter.SetDropDownViewResource(
+                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
+            timeOfDay.Adapter = timeAdapter;
+            timeOfDay.SetSelection(LadxhdWallpaperPreferences.GetTimeOfDay(this));
+            timeOfDay.ItemSelected += (_, args) =>
+                LadxhdWallpaperPreferences.SetTimeOfDay(this, args.Position);
+            var timeParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            timeParams.SetMargins(0, 0, 0, Dp(12));
+            layout.AddView(timeOfDay, timeParams);
 
             var rateLabel = new TextView(this) { Text = "Animation frame rate", TextSize = 17f };
             layout.AddView(rateLabel);
@@ -479,7 +512,8 @@ namespace ProjectZ.Android
                             LadxhdWallpaperPreferences.IsAnimated(_service),
                             LadxhdWallpaperPreferences.ShowIslandLife(_service),
                             LadxhdWallpaperPreferences.GetFeaturedCharacter(_service),
-                            LadxhdWallpaperPreferences.GetScene(_service));
+                            LadxhdWallpaperPreferences.GetScene(_service),
+                            LadxhdWallpaperPreferences.GetTimeOfDay(_service));
                     }
                 }
                 finally
@@ -583,7 +617,8 @@ namespace ProjectZ.Android
             bool animated,
             bool showIslandLife,
             int featuredCharacter,
-            int scene)
+            int scene,
+            int timeOfDay)
         {
             var width = canvas.Width;
             var height = canvas.Height;
@@ -591,8 +626,9 @@ namespace ProjectZ.Android
                 return;
             var time = animated ? elapsed : 0L;
             var unit = Math.Max(1f, Math.Min(width, height) / 240f);
+            var phase = LiveWallpaperLighting.Resolve(timeOfDay, DateTime.Now.Hour);
 
-            DrawSky(canvas, width, height, time, xOffset, unit);
+            DrawSky(canvas, width, height, time, xOffset, unit, phase);
             if (showIslandLife)
                 DrawOwl(canvas, width, height, time, unit, animated);
             var useMabeMap = scene == 1 && _mabeMap != null;
@@ -606,28 +642,48 @@ namespace ProjectZ.Android
                 DrawButterflies(canvas, width, groundY, time, unit, animated);
             }
             DrawLink(canvas, width, groundY, time, unit, animated);
+            DrawLightingOverlay(canvas, width, height, phase);
             DrawTouchEffect(canvas, time, unit, animated);
         }
 
-        private void DrawSky(Canvas canvas, int width, int height, long elapsed, float xOffset, float unit)
+        private void DrawSky(
+            Canvas canvas, int width, int height, long elapsed, float xOffset, float unit,
+            LiveWallpaperTimePhase phase)
         {
             var horizon = height * 0.58f;
-            Fill(canvas, Color.Rgb(28, 35, 74), 0, 0, width, horizon * 0.45f);
-            Fill(canvas, Color.Rgb(79, 78, 122), 0, horizon * 0.45f, width, horizon * 0.72f);
-            Fill(canvas, Color.Rgb(231, 126, 103), 0, horizon * 0.72f, width, horizon);
-
-            var starPulse = elapsed / 700f;
-            foreach (var star in _stars)
+            var sky = phase switch
             {
-                var alpha = 120 + (int)(100 * (MathF.Sin(starPulse + star.Phase) * 0.5f + 0.5f));
-                _paint.Color = Color.Argb(alpha, 255, 244, 196);
-                var size = unit * (star.Phase > MathF.PI ? 1.5f : 1f);
-                canvas.DrawRect(star.X * width, star.Y * height, star.X * width + size,
-                    star.Y * height + size, _paint);
+                LiveWallpaperTimePhase.Day =>
+                    (Color.Rgb(77, 154, 211), Color.Rgb(136, 199, 229), Color.Rgb(238, 220, 159)),
+                LiveWallpaperTimePhase.Night =>
+                    (Color.Rgb(9, 14, 36), Color.Rgb(25, 32, 67), Color.Rgb(57, 61, 94)),
+                _ =>
+                    (Color.Rgb(28, 35, 74), Color.Rgb(79, 78, 122), Color.Rgb(231, 126, 103))
+            };
+            Fill(canvas, sky.Item1, 0, 0, width, horizon * 0.45f);
+            Fill(canvas, sky.Item2, 0, horizon * 0.45f, width, horizon * 0.72f);
+            Fill(canvas, sky.Item3, 0, horizon * 0.72f, width, horizon);
+
+            if (phase != LiveWallpaperTimePhase.Day)
+            {
+                var starPulse = elapsed / 700f;
+                var phaseAlpha = phase == LiveWallpaperTimePhase.Night ? 1f : 0.55f;
+                foreach (var star in _stars)
+                {
+                    var alpha = (int)((120 + 100 *
+                        (MathF.Sin(starPulse + star.Phase) * 0.5f + 0.5f)) * phaseAlpha);
+                    _paint.Color = Color.Argb(alpha, 255, 244, 196);
+                    var size = unit * (star.Phase > MathF.PI ? 1.5f : 1f);
+                    canvas.DrawRect(star.X * width, star.Y * height, star.X * width + size,
+                        star.Y * height + size, _paint);
+                }
             }
 
-            _smoothPaint.Color = Color.Rgb(255, 211, 119);
-            canvas.DrawCircle(width * 0.74f, horizon * 0.66f, 22f * unit, _smoothPaint);
+            _smoothPaint.Color = phase == LiveWallpaperTimePhase.Night
+                ? Color.Rgb(218, 224, 224)
+                : Color.Rgb(255, 211, 119);
+            var celestialY = phase == LiveWallpaperTimePhase.Day ? horizon * 0.38f : horizon * 0.66f;
+            canvas.DrawCircle(width * 0.74f, celestialY, 22f * unit, _smoothPaint);
 
             var cloudTravel = (elapsed / 50f) % (width + 160f * unit);
             DrawCloud(canvas, width * 0.2f + cloudTravel * 0.18f - 60f * unit - xOffset * 20f * unit,
@@ -647,6 +703,17 @@ namespace ProjectZ.Android
             mountains.LineTo(width + 60f * unit, horizon);
             mountains.Close();
             canvas.DrawPath(mountains, _paint);
+        }
+
+        private void DrawLightingOverlay(
+            Canvas canvas, int width, int height, LiveWallpaperTimePhase phase)
+        {
+            if (phase == LiveWallpaperTimePhase.Day)
+                return;
+            _paint.Color = phase == LiveWallpaperTimePhase.Night
+                ? Color.Argb(82, 7, 16, 50)
+                : Color.Argb(22, 116, 45, 59);
+            canvas.DrawRect(0, 0, width, height, _paint);
         }
 
         private float DrawIsland(

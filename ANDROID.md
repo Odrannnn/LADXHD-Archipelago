@@ -64,7 +64,8 @@ or sharing a `.apladxhd` from another app remains available as an alternative.
 
 Open **Settings → Live wallpaper** in LADXHD Archipelago. Choose whether the scene should animate,
 whether Koholint wildlife should appear, select Marin, BowWow, the rooster, or automatic character
-rotation, choose the stylized coast or the installed Mabe Village map, and select the
+rotation, choose the stylized coast or the installed Mabe Village map, follow the phone's local
+time or force day, sunset, or night lighting, and select the
 battery-friendly 15 FPS mode or smoother 30 FPS mode. Tap **Preview and set wallpaper** to open
 Android's system wallpaper picker.
 

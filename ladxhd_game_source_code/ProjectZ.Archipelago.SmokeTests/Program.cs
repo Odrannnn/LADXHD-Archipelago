@@ -89,6 +89,15 @@ Assert(LiveWallpaperMap.TryLoad(new StringReader(wallpaperMapData), out var wall
 Assert(!LiveWallpaperMap.TryLoad(
            new StringReader("3\n0\n0\n../outside.png\n1\n1\n1\n0,\n"), out _),
        "The live wallpaper must reject unsafe installed tileset paths.");
+Assert(LiveWallpaperLighting.Resolve(0, 4) == LiveWallpaperTimePhase.Night &&
+       LiveWallpaperLighting.Resolve(0, 5) == LiveWallpaperTimePhase.Sunset &&
+       LiveWallpaperLighting.Resolve(0, 7) == LiveWallpaperTimePhase.Day &&
+       LiveWallpaperLighting.Resolve(0, 18) == LiveWallpaperTimePhase.Sunset &&
+       LiveWallpaperLighting.Resolve(0, 21) == LiveWallpaperTimePhase.Night &&
+       LiveWallpaperLighting.Resolve(1, 0) == LiveWallpaperTimePhase.Day &&
+       LiveWallpaperLighting.Resolve(2, 12) == LiveWallpaperTimePhase.Sunset &&
+       LiveWallpaperLighting.Resolve(3, 12) == LiveWallpaperTimePhase.Night,
+       "The live wallpaper time-of-day mode must honor system-time boundaries and overrides.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");
