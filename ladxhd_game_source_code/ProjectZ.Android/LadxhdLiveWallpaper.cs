@@ -131,6 +131,25 @@ namespace ProjectZ.Android
         public static void SetFrameRate(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutInt(FrameRateKey, value <= 15 ? 15 : 30)?.Apply();
+
+        public static bool ApplyPreset(Context context, int preset)
+        {
+            if (!LiveWallpaperPresets.TryResolve(preset, out var value))
+                return false;
+            var editor = context.GetSharedPreferences(
+                PreferencesName, FileCreationMode.Private)?.Edit();
+            if (editor == null)
+                return false;
+            editor.PutBoolean(AnimateKey, true);
+            editor.PutBoolean(IslandLifeKey, true);
+            editor.PutInt(SceneKey, value.Scene);
+            editor.PutInt(TimeOfDayKey, value.TimeOfDay);
+            editor.PutInt(FeaturedCharacterKey, value.FeaturedCharacter);
+            editor.PutInt(CharacterPositionKey, value.CharacterPosition);
+            editor.PutInt(LinkActivityKey, value.LinkActivity);
+            editor.PutInt(WildlifeScheduleKey, value.WildlifeSchedule);
+            return editor.Commit();
+        }
     }
 
     internal static class LadxhdWallpaperLauncher
@@ -218,6 +237,33 @@ namespace ProjectZ.Android
                 TextSize = 15f
             };
             layout.AddView(status);
+
+            var presetLabel = new TextView(this)
+            {
+                Text = "Quick preset",
+                TextSize = 17f,
+                Enabled = assetReady
+            };
+            var presetLabelParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            presetLabelParams.SetMargins(0, Dp(20), 0, 0);
+            layout.AddView(presetLabel, presetLabelParams);
+            var preset = new Spinner(this) { Enabled = assetReady };
+            var presetAdapter = new ArrayAdapter<string>(this,
+                global::Android.Resource.Layout.SimpleSpinnerItem,
+                ["Custom", "Mabe Sunset", "Forest Night", "Island Journey"]);
+            presetAdapter.SetDropDownViewResource(
+                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
+            preset.Adapter = presetAdapter;
+            preset.ItemSelected += (_, args) =>
+            {
+                if (args.Position > 0 && LadxhdWallpaperPreferences.ApplyPreset(this, args.Position))
+                    Recreate();
+            };
+            var presetParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            presetParams.SetMargins(0, 0, 0, Dp(12));
+            layout.AddView(preset, presetParams);
 
             var animate = new global::Android.Widget.Switch(this)
             {

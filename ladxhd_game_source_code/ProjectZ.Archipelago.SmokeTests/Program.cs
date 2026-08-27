@@ -186,6 +186,17 @@ Assert(Math.Abs(coastLayout.FeaturedXRatio - 0.78f) < 0.001f &&
        Math.Abs(LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(2, 2) - 0.5f) < 0.001f &&
        Math.Abs(LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(3, 2) - 0.76f) < 0.001f,
        "Wallpaper scene layouts must expose stable regional and user-overridden anchors.");
+Assert(LiveWallpaperPresets.TryResolve(1, out var mabePreset) &&
+       mabePreset.Scene == 1 && mabePreset.TimeOfDay == 2 &&
+       mabePreset.FeaturedCharacter == 4 && mabePreset.LinkActivity == 1 &&
+       LiveWallpaperPresets.TryResolve(2, out var forestPreset) &&
+       forestPreset.Scene == 3 && forestPreset.TimeOfDay == 3 &&
+       LiveWallpaperPresets.TryResolve(3, out var journeyPreset) &&
+       journeyPreset.Scene == 4 && journeyPreset.TimeOfDay == 0 &&
+       journeyPreset.LinkActivity == 2 &&
+       !LiveWallpaperPresets.TryResolve(0, out _) &&
+       !LiveWallpaperPresets.TryResolve(99, out _),
+       "Wallpaper presets must resolve only the documented Mabe, forest, and journey profiles.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");

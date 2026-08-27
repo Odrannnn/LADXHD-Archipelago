@@ -30,7 +30,7 @@ ZIP.
   fixed, rotating, or location-matched island characters, wildlife, and smoothly rotating Mabe
   Village, Toronbo Shores, and Mysterious Forest scenes from locally prepared assets, plus
   regional character anchors with manual placement overrides, selectable Link activity,
-  local-time lighting,
+  local-time lighting, and Mabe Sunset, Forest Night, and Island Journey quick presets,
   naturally scheduled wildlife, parallax, configurable tap actions, adaptive static rendering,
   and battery-friendly frame rates.
 - A phone-native, transactional game-data builder: select the original v1.0.0 ZIP on first launch,
