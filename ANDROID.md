@@ -60,6 +60,18 @@ without importing the seed again. The player slot comes from the `.apladxhd`; cr
 are not enough because the native client needs that player's generated location mapping. Opening
 or sharing a `.apladxhd` from another app remains available as an alternative.
 
+### Using the live wallpaper
+
+Open **Settings → Live wallpaper** in LADXHD Archipelago. Choose whether the scene should animate
+and select the battery-friendly 15 FPS mode or smoother 30 FPS mode, then tap **Preview and set
+wallpaper** to open Android's system wallpaper picker.
+
+The wallpaper is a lightweight, standalone Koholint-inspired scene. It pauses when it is not
+visible, supports launcher-page parallax and touch effects, and does not start gameplay, audio,
+saves, or an Archipelago connection. When locally prepared game data is available it uses Link's
+installed animation and sprite; the public assetless APK instead shows the scenery by itself until
+the user completes the normal v1.0.0 ZIP setup.
+
 ----
 
 ## Using the legacy desktop patcher

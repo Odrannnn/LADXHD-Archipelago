@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<string name="app_name">LADXHD Archipelago</string>
+	<string name="wallpaper_name">LADXHD Island</string>
+	<string name="wallpaper_description">An animated, battery-aware Koholint scene using your locally installed LADXHD assets.</string>
+	<string name="wallpaper_settings_name">LADXHD Live Wallpaper</string>
 </resources>

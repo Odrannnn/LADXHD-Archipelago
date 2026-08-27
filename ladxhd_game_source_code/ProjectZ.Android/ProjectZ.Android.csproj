@@ -54,12 +54,19 @@
     <AndroidResource Include="Resources\values\strings.xml" />
     <AndroidResource Include="Resources\values\styles.xml" />
     <AndroidResource Include="Resources\layout\splash_layout.xml" />
+    <AndroidResource Include="Resources\xml\ladxhd_wallpaper.xml" />
   </ItemGroup>
 
   <!-- Include ProjectZ.Core which is the game data. -->
   <ItemGroup>
     <ProjectReference Include="..\ProjectZ.Core\ProjectZ.Core.csproj" />
     <PackageReference Include="MonoGame.Framework.Android" Version="3.8.5.1" />
+    <!-- .NET Android 9 generates an invalid Java constructor for subclasses of the
+         non-static WallpaperService.Engine inner class. This tiny activation stub
+         supplies the required owner.super() call while all behavior stays managed. -->
+    <AndroidJavaSource Remove="Java\com\zelda\ladxhd\archipelago\LadxhdWallpaperEngine.java" />
+    <AndroidJavaSource Include="Java\com\zelda\ladxhd\archipelago\LadxhdWallpaperEngine.java"
+                       Bind="False" />
   </ItemGroup>
 
   <!-- Only redistribution-safe migration inputs are bundled. The original game data is

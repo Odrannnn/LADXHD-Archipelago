@@ -114,6 +114,12 @@ namespace ProjectZ
         void Show();
     }
 
+    public interface ILiveWallpaperService
+    {
+        bool IsAvailable { get; }
+        void Show();
+    }
+
     public readonly struct PlatformTouch
     {
         public PlatformTouch(int id, Vector2 position, PlatformTouchState state)
@@ -308,6 +314,12 @@ namespace ProjectZ
     }
 
     public sealed class UnavailableMagpieTrackerService : IMagpieTrackerService
+    {
+        public bool IsAvailable => false;
+        public void Show() { }
+    }
+
+    public sealed class UnavailableLiveWallpaperService : ILiveWallpaperService
     {
         public bool IsAvailable => false;
         public void Show() { }

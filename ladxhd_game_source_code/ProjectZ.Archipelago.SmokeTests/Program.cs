@@ -1,3 +1,4 @@
+using ProjectZ;
 using ProjectZ.InGame.Archipelago;
 using ProjectZ.InGame.Assets;
 using ProjectZ.InGame.Controls;
@@ -40,6 +41,37 @@ static async Task<string> ReceiveWebSocketText(ClientWebSocket socket)
             return Encoding.UTF8.GetString(stream.ToArray());
     }
 }
+
+const string wallpaperAnimationData = """
+1
+link0.png
+stand_0;;0;0;0;1;250;0;0;16;24;0;0;0;0;8;8;false;false
+walk_2;;0;0;0;2;100;16;0;16;24;-1;2;0;0;8;8;false;true;200;32;0;16;24;1;3;0;0;8;8;true;false
+""";
+Assert(LiveWallpaperAnimation.TryLoad(
+           new StringReader(wallpaperAnimationData), ["missing", "walk_2", "stand_0"],
+           out var wallpaperAnimation) &&
+       wallpaperAnimation.SpritePath == "link0.png" &&
+       wallpaperAnimation.AnimationId == "walk_2" &&
+       wallpaperAnimation.Frames.Count == 2,
+       "The live wallpaper must select and parse Link's preferred LADXHD animation safely.");
+var wallpaperFirstFrame = wallpaperAnimation.GetFrame(99);
+var wallpaperSecondFrame = wallpaperAnimation.GetFrame(100);
+var wallpaperLoopedFrame = wallpaperAnimation.GetFrame(300);
+Assert(wallpaperFirstFrame.X == 16 && wallpaperFirstFrame.MirroredHorizontally &&
+       wallpaperSecondFrame.X == 32 && wallpaperSecondFrame.MirroredVertically &&
+       wallpaperLoopedFrame.X == 16,
+       "The live wallpaper animation must honor frame durations, mirroring, and looping.");
+Assert(!LiveWallpaperAnimation.TryLoad(
+           new StringReader("1\nlink0.png\nwalk_2;;0;0;0;99\n"), ["walk_2"], out _),
+       "The live wallpaper must reject malformed or excessive animation frame data.");
+Assert(LiveWallpaperAnimation.TryGetSpriteRelativeCandidates(
+           "link0.png", out var wallpaperSpriteCandidates) &&
+       wallpaperSpriteCandidates.SequenceEqual(["link0.png", "Map Objects/link0.png"]),
+       "The live wallpaper must find Link's sprite in the Map Objects asset folder.");
+Assert(!LiveWallpaperAnimation.TryGetSpriteRelativeCandidates(
+           "../link0.png", out _),
+       "The live wallpaper must reject sprite paths that escape the game-data root.");
 
 Assert(ArchipelagoItemMapper.TryMap("Progressive Sword", 0, 0, 0, out var sword1) &&
        sword1.GameItemName == "sword1", "First progressive sword mapping failed.");

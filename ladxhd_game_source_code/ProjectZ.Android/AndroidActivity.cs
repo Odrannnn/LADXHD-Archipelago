@@ -135,6 +135,7 @@ namespace ProjectZ.Android
             game.Services.AddService(typeof(IFileDialogService), new UnavailableFileDialogService());
             game.Services.AddService(typeof(IDiagnosticsSettingsService), new AndroidDiagnosticsSettingsService(this));
             game.Services.AddService(typeof(IArchipelagoSetupService), new AndroidArchipelagoSetupService(this));
+            game.Services.AddService(typeof(ILiveWallpaperService), new AndroidLiveWallpaperService(this));
             _magpieTrackerService = new AndroidMagpieTrackerService(this, gameRoot);
             game.Services.AddService(typeof(IMagpieTrackerService), _magpieTrackerService);
 

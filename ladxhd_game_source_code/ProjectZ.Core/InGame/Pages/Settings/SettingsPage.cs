@@ -53,6 +53,10 @@ namespace ProjectZ.InGame.Pages
                 entries.Add(("Archipelago",
                     "Import a randomizer or update an installed seed's server, port, and password.",
                     null, false, Game1.ArchipelagoSetupService.Show));
+            if (Game1.LiveWallpaperService.IsAvailable)
+                entries.Add(("Live wallpaper",
+                    "Preview, configure, and set the animated LADXHD wallpaper.",
+                    null, false, Game1.LiveWallpaperService.Show));
             if (Game1.DiagnosticsSettingsService.IsAvailable)
                 entries.Add(("Diagnostics",
                     "Choose whether anonymous crash and randomizer diagnostics are shared.",
