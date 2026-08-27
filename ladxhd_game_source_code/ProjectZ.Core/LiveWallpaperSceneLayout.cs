@@ -19,7 +19,7 @@ namespace ProjectZ
             1 => new LiveWallpaperSceneLayout(5.6f, 0.72f),
             2 => new LiveWallpaperSceneLayout(6.0f, 0.82f),
             3 => new LiveWallpaperSceneLayout(5.35f, 0.66f),
-            _ => new LiveWallpaperSceneLayout(0f, 0.78f)
+            _ => new LiveWallpaperSceneLayout(5.6f, 0.72f)
         };
 
         public static float ResolveFeaturedXRatio(int position, int scene) => position switch

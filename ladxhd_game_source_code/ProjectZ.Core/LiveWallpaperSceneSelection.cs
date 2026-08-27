@@ -10,12 +10,14 @@ namespace ProjectZ
 
         public static int Resolve(int selection, long elapsedMilliseconds, bool installedMapAvailable)
         {
-            if (!installedMapAvailable || selection <= 0)
+            if (!installedMapAvailable)
                 return 0;
+            if (selection <= 0)
+                return 1;
             if (selection <= InstalledSceneCount)
                 return selection;
             if (selection != InstalledSceneCount + 1)
-                return 0;
+                return 1;
 
             var interval = Math.Max(0L, elapsedMilliseconds) / RotationIntervalMilliseconds;
             return 1 + (int)(interval % InstalledSceneCount);

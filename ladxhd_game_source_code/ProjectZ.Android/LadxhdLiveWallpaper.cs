@@ -10,7 +10,6 @@ using Android.Service.Wallpaper;
 using Android.Views;
 using Android.Widget;
 using FilePath = System.IO.Path;
-using GraphicsPath = Android.Graphics.Path;
 
 namespace ProjectZ.Android
 {
@@ -65,13 +64,13 @@ namespace ProjectZ.Android
         public static int GetScene(Context context)
         {
             var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.GetInt(SceneKey, 0) ?? 0;
-            return Math.Clamp(value, 0, 4);
+                ?.GetInt(SceneKey, 1) ?? 1;
+            return value <= 0 ? 1 : Math.Clamp(value, 1, 4);
         }
 
         public static void SetScene(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.Edit()?.PutInt(SceneKey, Math.Clamp(value, 0, 4))?.Apply();
+                ?.Edit()?.PutInt(SceneKey, Math.Clamp(value, 1, 4))?.Apply();
 
         public static int GetTimeOfDay(Context context)
         {
@@ -233,7 +232,7 @@ namespace ProjectZ.Android
             {
                 Text = assetReady
                     ? "Game data ready: the wallpaper will use installed LADXHD character and wildlife sprites."
-                    : $"Game data unavailable: {reason} The scenery will still render, but game characters will appear after setup.",
+                    : $"Game data unavailable: {reason} The wallpaper remains blank until the original game data is prepared locally.",
                 TextSize = 15f
             };
             layout.AddView(status);
@@ -267,7 +266,7 @@ namespace ProjectZ.Android
 
             var animate = new global::Android.Widget.Switch(this)
             {
-                Text = "Animate Link, water, clouds, and touch effects",
+                Text = "Animate Link, island characters, and wildlife",
                 Checked = LadxhdWallpaperPreferences.IsAnimated(this)
             };
             animate.CheckedChange += (_, args) =>
@@ -344,7 +343,7 @@ namespace ProjectZ.Android
             var characterPosition = new Spinner(this) { Enabled = assetReady };
             var positionAdapter = new ArrayAdapter<string>(this,
                 global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Match scenery", "Left", "Center", "Right"]);
+                ["Match location", "Left", "Center", "Right"]);
             positionAdapter.SetDropDownViewResource(
                 global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
             characterPosition.Adapter = positionAdapter;
@@ -380,7 +379,7 @@ namespace ProjectZ.Android
 
             var sceneLabel = new TextView(this)
             {
-                Text = "Wallpaper scenery",
+                Text = "Wallpaper location",
                 TextSize = 17f,
                 Enabled = assetReady
             };
@@ -388,14 +387,13 @@ namespace ProjectZ.Android
             var scene = new Spinner(this) { Enabled = assetReady };
             var sceneAdapter = new ArrayAdapter<string>(this,
                 global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Stylized Koholint coast", "Installed Mabe Village", "Installed Toronbo Shores",
-                 "Installed Mysterious Forest", "Rotate installed locations"]);
+                ["Mabe Village", "Toronbo Shores", "Mysterious Forest", "Rotate locations"]);
             sceneAdapter.SetDropDownViewResource(
                 global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
             scene.Adapter = sceneAdapter;
-            scene.SetSelection(LadxhdWallpaperPreferences.GetScene(this));
+            scene.SetSelection(LadxhdWallpaperPreferences.GetScene(this) - 1);
             scene.ItemSelected += (_, args) =>
-                LadxhdWallpaperPreferences.SetScene(this, args.Position);
+                LadxhdWallpaperPreferences.SetScene(this, args.Position + 1);
             var sceneParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             sceneParams.SetMargins(0, 0, 0, Dp(12));
@@ -431,7 +429,7 @@ namespace ProjectZ.Android
             var tapAction = new Spinner(this);
             var tapAdapter = new ArrayAdapter<string>(this,
                 global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Show ripple", "Cycle featured character", "Switch scenery"]);
+                ["No action", "Cycle featured character", "Switch location"]);
             tapAdapter.SetDropDownViewResource(
                 global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
             tapAction.Adapter = tapAdapter;
@@ -662,7 +660,6 @@ namespace ProjectZ.Android
             {
                 if (e?.Action == MotionEventActions.Down)
                 {
-                    _scene.OnTouch(e.GetX(), e.GetY(), SystemClock.ElapsedRealtime() - _startedAt);
                     switch (LadxhdWallpaperPreferences.GetTapAction(_service))
                     {
                         case 1:
@@ -769,9 +766,6 @@ namespace ProjectZ.Android
         }
 
         private readonly Paint _paint = new Paint { AntiAlias = false, FilterBitmap = false };
-        private readonly Paint _smoothPaint = new Paint { AntiAlias = true };
-        private readonly Random _random = new Random(0x4C415844);
-        private readonly List<(float X, float Y, float Phase)> _stars = [];
         private readonly Dictionary<string, Bitmap> _spriteSheets =
             new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
         private SpriteAsset _linkWalking;
@@ -782,15 +776,9 @@ namespace ProjectZ.Android
         private SpriteAsset _butterfly;
         private SpriteAsset _owl;
         private MapAsset _overworldMap;
-        private float _touchX;
-        private float _touchY;
-        private long _touchAt = long.MinValue;
 
         public LadxhdWallpaperScene(Context context)
         {
-            for (var index = 0; index < 42; index++)
-                _stars.Add(((float)_random.NextDouble(), (float)_random.NextDouble() * 0.48f,
-                    (float)_random.NextDouble() * MathF.PI * 2f));
             _linkWalking = LoadSprite(context, "link0.ani",
                 ["walk_2", "walk_0", "walk_1", "walk_3"]);
             _linkStanding = LoadSprite(context, "link0.ani",
@@ -804,13 +792,6 @@ namespace ProjectZ.Android
             _butterfly = LoadSprite(context, "NPCs/butterfly.ani", ["idle"]);
             _owl = LoadSprite(context, "NPCs/owl.ani", ["fly", "hover", "idle"]);
             _overworldMap = LoadOverworldMap(context);
-        }
-
-        public void OnTouch(float x, float y, long elapsed)
-        {
-            _touchX = x;
-            _touchY = y;
-            _touchAt = elapsed;
         }
 
         public void Draw(
@@ -834,15 +815,15 @@ namespace ProjectZ.Android
             var unit = Math.Max(1f, Math.Min(width, height) / 240f);
             var phase = LiveWallpaperLighting.Resolve(timeOfDay, DateTime.Now.Hour);
             var wildlife = LiveWallpaperWildlife.Resolve(wildlifeSchedule, phase);
+            canvas.DrawColor(Color.Black);
 
-            DrawSky(canvas, width, height, time, xOffset, unit, phase);
-            if (showIslandLife && wildlife.ShowOwl)
-                DrawOwl(canvas, width, height, time, unit, animated);
             var resolvedScene = LiveWallpaperSceneSelection.Resolve(
                 scene, elapsed, _overworldMap != null);
-            var groundY = resolvedScene > 0
-                ? DrawInstalledMap(canvas, width, height, resolvedScene)
-                : DrawIsland(canvas, width, height, time, xOffset, unit);
+            if (resolvedScene <= 0)
+                return;
+            var groundY = DrawInstalledMap(canvas, width, height, resolvedScene, xOffset);
+            if (showIslandLife && wildlife.ShowOwl)
+                DrawOwl(canvas, width, height, time, unit, animated);
             if (showIslandLife)
             {
                 DrawFeaturedCharacter(canvas, width, groundY, time, xOffset, unit,
@@ -853,66 +834,6 @@ namespace ProjectZ.Android
             DrawLink(canvas, width, groundY, elapsed, unit, animated, linkActivity);
             DrawLightingOverlay(canvas, width, height, phase);
             DrawSceneTransition(canvas, width, height, scene, elapsed);
-            DrawTouchEffect(canvas, time, unit, animated);
-        }
-
-        private void DrawSky(
-            Canvas canvas, int width, int height, long elapsed, float xOffset, float unit,
-            LiveWallpaperTimePhase phase)
-        {
-            var horizon = height * 0.58f;
-            var sky = phase switch
-            {
-                LiveWallpaperTimePhase.Day =>
-                    (Color.Rgb(77, 154, 211), Color.Rgb(136, 199, 229), Color.Rgb(238, 220, 159)),
-                LiveWallpaperTimePhase.Night =>
-                    (Color.Rgb(9, 14, 36), Color.Rgb(25, 32, 67), Color.Rgb(57, 61, 94)),
-                _ =>
-                    (Color.Rgb(28, 35, 74), Color.Rgb(79, 78, 122), Color.Rgb(231, 126, 103))
-            };
-            Fill(canvas, sky.Item1, 0, 0, width, horizon * 0.45f);
-            Fill(canvas, sky.Item2, 0, horizon * 0.45f, width, horizon * 0.72f);
-            Fill(canvas, sky.Item3, 0, horizon * 0.72f, width, horizon);
-
-            if (phase != LiveWallpaperTimePhase.Day)
-            {
-                var starPulse = elapsed / 700f;
-                var phaseAlpha = phase == LiveWallpaperTimePhase.Night ? 1f : 0.55f;
-                foreach (var star in _stars)
-                {
-                    var alpha = (int)((120 + 100 *
-                        (MathF.Sin(starPulse + star.Phase) * 0.5f + 0.5f)) * phaseAlpha);
-                    _paint.Color = Color.Argb(alpha, 255, 244, 196);
-                    var size = unit * (star.Phase > MathF.PI ? 1.5f : 1f);
-                    canvas.DrawRect(star.X * width, star.Y * height, star.X * width + size,
-                        star.Y * height + size, _paint);
-                }
-            }
-
-            _smoothPaint.Color = phase == LiveWallpaperTimePhase.Night
-                ? Color.Rgb(218, 224, 224)
-                : Color.Rgb(255, 211, 119);
-            var celestialY = phase == LiveWallpaperTimePhase.Day ? horizon * 0.38f : horizon * 0.66f;
-            canvas.DrawCircle(width * 0.74f, celestialY, 22f * unit, _smoothPaint);
-
-            var cloudTravel = (elapsed / 50f) % (width + 160f * unit);
-            DrawCloud(canvas, width * 0.2f + cloudTravel * 0.18f - 60f * unit - xOffset * 20f * unit,
-                height * 0.18f, 1f * unit);
-            DrawCloud(canvas, width - cloudTravel * 0.12f - xOffset * 35f * unit,
-                height * 0.31f, 0.7f * unit);
-
-            var mountainShift = (xOffset - 0.5f) * 42f * unit;
-            _paint.Color = Color.Rgb(43, 49, 83);
-            var mountains = new GraphicsPath();
-            mountains.MoveTo(-60f * unit - mountainShift, horizon);
-            mountains.LineTo(width * 0.12f - mountainShift, horizon * 0.55f);
-            mountains.LineTo(width * 0.30f - mountainShift, horizon);
-            mountains.LineTo(width * 0.48f - mountainShift, horizon * 0.46f);
-            mountains.LineTo(width * 0.70f - mountainShift, horizon);
-            mountains.LineTo(width * 0.86f - mountainShift, horizon * 0.62f);
-            mountains.LineTo(width + 60f * unit, horizon);
-            mountains.Close();
-            canvas.DrawPath(mountains, _paint);
         }
 
         private void DrawLightingOverlay(
@@ -936,63 +857,28 @@ namespace ProjectZ.Android
             canvas.DrawRect(0, 0, width, height, _paint);
         }
 
-        private float DrawIsland(
-            Canvas canvas, int width, int height, long elapsed, float xOffset, float unit)
+        private float DrawInstalledMap(
+            Canvas canvas, int width, int height, int scene, float xOffset)
         {
-            var waterTop = height * 0.58f;
-            Fill(canvas, Color.Rgb(32, 93, 132), 0, waterTop, width, height);
-            var waveShift = (elapsed / 45f) % (20f * unit);
-            _paint.Color = Color.Argb(120, 143, 225, 218);
-            for (var row = 0; row < 7; row++)
-            {
-                var y = waterTop + (row * 18f + 7f) * unit;
-                for (var x = -40f * unit; x < width + 40f * unit; x += 40f * unit)
-                {
-                    var shifted = x + (row % 2 == 0 ? waveShift : -waveShift);
-                    canvas.DrawRect(shifted, y, shifted + 18f * unit, y + 2f * unit, _paint);
-                }
-            }
-
-            var shoreTop = height * 0.69f;
-            Fill(canvas, Color.Rgb(238, 196, 114), -20f * unit, shoreTop, width + 20f * unit, height);
-            Fill(canvas, Color.Rgb(79, 155, 88), -20f * unit, height * 0.76f, width + 20f * unit, height);
-            _paint.Color = Color.Rgb(111, 184, 102);
-            var grassShift = (xOffset - 0.5f) * 12f * unit;
-            for (var y = height * 0.77f; y < height; y += 12f * unit)
-                for (var x = -12f * unit; x < width + 12f * unit; x += 16f * unit)
-                    canvas.DrawRect(x + grassShift, y, x + grassShift + 5f * unit, y + 3f * unit, _paint);
-
-            DrawPalm(canvas, width * 0.13f - (xOffset - 0.5f) * 28f * unit,
-                height * 0.77f, unit * 1.25f);
-            DrawPalm(canvas, width * 0.88f - (xOffset - 0.5f) * 28f * unit,
-                height * 0.79f, unit * 0.9f);
-            return height * 0.78f;
-        }
-
-        private float DrawInstalledMap(Canvas canvas, int width, int height, int scene)
-        {
-            const int columns = 10;
-            const int rows = 8;
             const int tileSize = 16;
             const int atlasStride = tileSize + 2;
-            if (!LiveWallpaperSceneSelection.TryGetTileOrigin(
-                    scene, out var originTileX, out var originTileY))
-                return height * 0.78f;
             var map = _overworldMap.Map;
             var tileset = _overworldMap.Bitmap;
-            var destinationTileSize = MathF.Ceiling(width / (float)columns);
-            var top = height - rows * destinationTileSize;
+            if (!LiveWallpaperMapViewport.TryCreate(
+                    width, height, map.Height, scene, xOffset, out var viewport))
+                return height * 0.72f;
             var tilesPerRow = tileset.Width / atlasStride;
             if (tilesPerRow <= 0)
-                return height * 0.78f;
+                return viewport.GroundY;
 
             for (var layer = 0; layer < map.DrawableDepth; layer++)
             {
-                for (var y = 0; y < rows; y++)
+                for (var y = 0; y < viewport.Rows; y++)
                 {
-                    for (var x = 0; x < columns; x++)
+                    for (var x = 0; x < viewport.Columns; x++)
                     {
-                        var tile = map.GetTile(originTileX + x, originTileY + y, layer);
+                        var tile = map.GetTile(
+                            viewport.OriginX + x, viewport.OriginY + y, layer);
                         if (tile < 0)
                             continue;
                         var sourceX = tile % tilesPerRow * atlasStride + 1;
@@ -1003,17 +889,16 @@ namespace ProjectZ.Android
                         var source = new Rect(sourceX, sourceY,
                             sourceX + tileSize, sourceY + tileSize);
                         var destination = new RectF(
-                            x * destinationTileSize,
-                            top + y * destinationTileSize,
-                            (x + 1) * destinationTileSize,
-                            top + (y + 1) * destinationTileSize);
+                            viewport.Left + x * viewport.TileSize,
+                            viewport.Top + y * viewport.TileSize,
+                            viewport.Left + (x + 1) * viewport.TileSize,
+                            viewport.Top + (y + 1) * viewport.TileSize);
                         canvas.DrawBitmap(tileset, source, destination, _paint);
                     }
                 }
             }
 
-            return top + destinationTileSize *
-                LiveWallpaperSceneLayouts.Resolve(scene).GroundTileRow;
+            return viewport.GroundY;
         }
 
         private void DrawLink(
@@ -1127,50 +1012,6 @@ namespace ProjectZ.Android
             canvas.RestoreToCount(save);
         }
 
-        private void DrawTouchEffect(Canvas canvas, long elapsed, float unit, bool animated)
-        {
-            if (!animated || _touchAt == long.MinValue)
-                return;
-            var age = elapsed - _touchAt;
-            if (age is < 0 or > 1100)
-                return;
-            var progress = age / 1100f;
-            _smoothPaint.SetStyle(Paint.Style.Stroke);
-            _smoothPaint.StrokeWidth = Math.Max(1f, 2f * unit * (1f - progress));
-            _smoothPaint.Color = Color.Argb((int)(220 * (1f - progress)), 255, 236, 129);
-            canvas.DrawCircle(_touchX, _touchY, (8f + 42f * progress) * unit, _smoothPaint);
-            _smoothPaint.SetStyle(Paint.Style.Fill);
-            for (var index = 0; index < 8; index++)
-            {
-                var angle = index * MathF.PI / 4f + progress;
-                var radius = (10f + progress * 34f) * unit;
-                canvas.DrawCircle(_touchX + MathF.Cos(angle) * radius,
-                    _touchY + MathF.Sin(angle) * radius, 1.5f * unit, _smoothPaint);
-            }
-        }
-
-        private void DrawCloud(Canvas canvas, float x, float y, float scale)
-        {
-            _paint.Color = Color.Argb(165, 255, 224, 211);
-            canvas.DrawRect(x, y + 7f * scale, x + 48f * scale, y + 15f * scale, _paint);
-            canvas.DrawRect(x + 8f * scale, y + 3f * scale, x + 33f * scale, y + 15f * scale, _paint);
-            canvas.DrawRect(x + 17f * scale, y, x + 27f * scale, y + 15f * scale, _paint);
-        }
-
-        private void DrawPalm(Canvas canvas, float x, float groundY, float scale)
-        {
-            _paint.Color = Color.Rgb(113, 72, 51);
-            canvas.DrawRect(x - 3f * scale, groundY - 45f * scale,
-                x + 4f * scale, groundY, _paint);
-            _paint.Color = Color.Rgb(39, 111, 73);
-            canvas.DrawRect(x - 24f * scale, groundY - 52f * scale,
-                x + 26f * scale, groundY - 45f * scale, _paint);
-            canvas.DrawRect(x - 13f * scale, groundY - 62f * scale,
-                x + 15f * scale, groundY - 48f * scale, _paint);
-            canvas.DrawRect(x - 4f * scale, groundY - 68f * scale,
-                x + 6f * scale, groundY - 50f * scale, _paint);
-        }
-
         private SpriteAsset LoadSprite(
             Context context,
             string relativeAnimationPath,
@@ -1218,19 +1059,12 @@ namespace ProjectZ.Android
             }
         }
 
-        private void Fill(Canvas canvas, Color color, float left, float top, float right, float bottom)
-        {
-            _paint.Color = color;
-            canvas.DrawRect(left, top, right, bottom, _paint);
-        }
-
         public void Dispose()
         {
             foreach (var bitmap in _spriteSheets.Values)
                 bitmap.Dispose();
             _spriteSheets.Clear();
             _paint.Dispose();
-            _smoothPaint.Dispose();
         }
     }
 }

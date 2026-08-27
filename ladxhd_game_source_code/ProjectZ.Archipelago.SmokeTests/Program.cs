@@ -105,14 +105,15 @@ Assert(LiveWallpaperInteraction.NextFeaturedCharacter(0) == 1 &&
        LiveWallpaperInteraction.NextScene(0) == 1 &&
        LiveWallpaperInteraction.NextScene(1) == 2 &&
        LiveWallpaperInteraction.NextScene(2) == 3 &&
-       LiveWallpaperInteraction.NextScene(3) == 0 &&
-       LiveWallpaperInteraction.NextScene(99) == 0,
+       LiveWallpaperInteraction.NextScene(3) == 1 &&
+       LiveWallpaperInteraction.NextScene(99) == 1,
        "Wallpaper tap actions must cycle characters and scenery predictably.");
 Assert(LiveWallpaperSceneSelection.Resolve(4, 0, true) == 1 &&
        LiveWallpaperSceneSelection.Resolve(4, 44_999, true) == 1 &&
        LiveWallpaperSceneSelection.Resolve(4, 45_000, true) == 2 &&
        LiveWallpaperSceneSelection.Resolve(4, 90_000, true) == 3 &&
        LiveWallpaperSceneSelection.Resolve(4, 135_000, true) == 1 &&
+       LiveWallpaperSceneSelection.Resolve(0, 0, true) == 1 &&
        LiveWallpaperSceneSelection.Resolve(2, 0, true) == 2 &&
        LiveWallpaperSceneSelection.Resolve(2, 0, false) == 0 &&
        LiveWallpaperSceneSelection.TryGetTileOrigin(1, out var mabeX, out var mabeY) &&
@@ -171,11 +172,11 @@ Assert(LiveWallpaperCharacterSelection.Resolve(0, 3, 90_000) == 0 &&
        LiveWallpaperCharacterSelection.Resolve(4, 3, 0) == 1 &&
        LiveWallpaperCharacterSelection.Resolve(4, 0, 30_000) == 1,
        "Wallpaper featured characters must honor fixed, rotating, and scene-matched modes.");
-var coastLayout = LiveWallpaperSceneLayouts.Resolve(0);
+var defaultLayout = LiveWallpaperSceneLayouts.Resolve(0);
 var mabeLayout = LiveWallpaperSceneLayouts.Resolve(1);
 var shoreLayout = LiveWallpaperSceneLayouts.Resolve(2);
 var forestLayout = LiveWallpaperSceneLayouts.Resolve(3);
-Assert(Math.Abs(coastLayout.FeaturedXRatio - 0.78f) < 0.001f &&
+Assert(Math.Abs(defaultLayout.FeaturedXRatio - 0.72f) < 0.001f &&
        Math.Abs(mabeLayout.GroundTileRow - 5.6f) < 0.001f &&
        Math.Abs(mabeLayout.FeaturedXRatio - 0.72f) < 0.001f &&
        Math.Abs(shoreLayout.GroundTileRow - 6f) < 0.001f &&
@@ -186,6 +187,20 @@ Assert(Math.Abs(coastLayout.FeaturedXRatio - 0.78f) < 0.001f &&
        Math.Abs(LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(2, 2) - 0.5f) < 0.001f &&
        Math.Abs(LiveWallpaperSceneLayouts.ResolveFeaturedXRatio(3, 2) - 0.76f) < 0.001f,
        "Wallpaper scene layouts must expose stable regional and user-overridden anchors.");
+Assert(LiveWallpaperMapViewport.TryCreate(
+           1080, 2400, 128, 1, 0.5f, out var portraitViewport) &&
+       portraitViewport.Columns == 12 && portraitViewport.Rows >= 24 &&
+       portraitViewport.Left <= 0 &&
+       portraitViewport.Left + portraitViewport.Columns * portraitViewport.TileSize >= 1080 &&
+       portraitViewport.Top <= 0 &&
+       portraitViewport.Top + portraitViewport.Rows * portraitViewport.TileSize >= 2400 &&
+       portraitViewport.GroundY > 1500 && portraitViewport.GroundY < 1900 &&
+       LiveWallpaperMapViewport.TryCreate(
+           2400, 1080, 128, 2, 0f, out var landscapeViewport) &&
+       landscapeViewport.Left <= 0 &&
+       landscapeViewport.Left + landscapeViewport.Columns * landscapeViewport.TileSize >= 2400 &&
+       !LiveWallpaperMapViewport.TryCreate(0, 2400, 128, 1, 0.5f, out _),
+       "Installed map viewports must cover portrait and landscape canvases without synthetic art.");
 Assert(LiveWallpaperPresets.TryResolve(1, out var mabePreset) &&
        mabePreset.Scene == 1 && mabePreset.TimeOfDay == 2 &&
        mabePreset.FeaturedCharacter == 4 && mabePreset.LinkActivity == 1 &&

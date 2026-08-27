@@ -26,9 +26,10 @@ ZIP.
 - An Android seed importer that accepts shared files and connection details without ADB, plus an
   in-app setup screen that can choose seeds and edit installed room connections without a companion.
 - A persistent in-game Magpie overlay with item, check, slot-setting, and position autotracking.
-- An optional Android live wallpaper with a pixel-art Koholint scene, animated Link, selectable
-  fixed, rotating, or location-matched island characters, wildlife, and smoothly rotating Mabe
-  Village, Toronbo Shores, and Mysterious Forest scenes from locally prepared assets, plus
+- An optional Android live wallpaper rendered exclusively from locally prepared in-game overworld
+  tiles and animation sheets, with animated Link, selectable fixed, rotating, or location-matched
+  island characters, wildlife, and smoothly rotating Mabe Village, Toronbo Shores, and Mysterious
+  Forest scenes, plus
   regional character anchors with manual placement overrides, selectable Link activity,
   local-time lighting, and Mabe Sunset, Forest Night, and Island Journey quick presets,
   naturally scheduled wildlife, parallax, configurable tap actions, adaptive static rendering,

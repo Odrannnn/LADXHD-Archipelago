@@ -65,11 +65,11 @@ or sharing a `.apladxhd` from another app remains available as an alternative.
 Open **Settings → Live wallpaper** in LADXHD Archipelago. Choose whether the scene should animate,
 whether Koholint wildlife should appear, select Marin, BowWow, the rooster, automatic rotation, or
 characters matched to each location, use automatic regional character placement or force a left,
-center, or right anchor, choose the stylized coast, Mabe Village, Toronbo Shores, Mysterious Forest,
-or rotating installed locations, choose whether Link walks, rests, alternates, or stays hidden, follow the
+center, or right anchor, choose Mabe Village, Toronbo Shores, Mysterious Forest, or rotating
+installed locations, choose whether Link walks, rests, alternates, or stays hidden, follow the
 phone's local time or force day, sunset, or night lighting, use a natural butterfly/owl schedule or
-keep all wildlife visible, choose whether taps show a ripple, cycle the featured character, or
-switch scenery, and select the battery-friendly 15 FPS mode or smoother 30 FPS mode. Tap **Preview
+keep all wildlife visible, choose whether taps do nothing, cycle the featured character, or switch
+locations, and select the battery-friendly 15 FPS mode or smoother 30 FPS mode. Tap **Preview
 and set wallpaper** to open Android's system wallpaper picker.
 
 The **Mabe Sunset**, **Forest Night**, and **Island Journey** quick presets configure those controls
@@ -80,14 +80,15 @@ Turning animation off automatically drops background rendering to one update per
 wallpaper is visible. Touches and launcher-page movement still redraw immediately, and automatic
 location rotation and local-time lighting remain active.
 
-The wallpaper is a lightweight, standalone Koholint-inspired scene. It pauses when it is not
-visible, supports launcher-page parallax and touch effects, and does not start gameplay, audio,
-saves, or an Archipelago connection. When locally prepared game data is available it reads Link,
-Marin, BowWow, the rooster, butterflies, and the owl directly from the installed animation and
-sprite sheets. The location scenes likewise read selected crops from the installed overworld map
-and tileset at runtime. Automatic location rotation fades between regions every 45 seconds.
-The public assetless APK instead shows the scenery by itself until the user completes the normal
-v1.0.0 ZIP setup; none of those assets are embedded in the APK.
+The wallpaper is a lightweight, standalone view of actual LADXHD game data. It pauses when it is
+not visible, supports launcher-page map parallax and configurable tap actions, and does not start
+gameplay, audio, saves, or an Archipelago connection. It reads Link, Marin, BowWow, the rooster,
+butterflies, the owl, the overworld map, and its tileset directly from the locally prepared files.
+The selected map region expands with real adjacent tiles to cover portrait and landscape screens;
+no substitute coast, sky, clouds, palms, stars, waves, or synthetic touch artwork is drawn.
+Automatic location rotation fades between regions every 45 seconds. The public assetless APK
+remains blank until the user completes the normal v1.0.0 ZIP setup; none of the game assets are
+embedded in the APK.
 
 ----
 
