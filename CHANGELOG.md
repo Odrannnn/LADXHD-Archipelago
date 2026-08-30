@@ -1,5 +1,88 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.77**
+### Public lighting, navigation and stability update
+  * Published the accumulated improvements since v2.0.65: installed object shadows, spatial day-cycle lighting, a wider camera and lower-allocation rendering with cached shadow/light updates.
+  * Fixed camera scrolling after rotation, stair activation and route planning after pushing indoor blocks.
+  * Fixed repeated game initialization and BowWow targeting enemies without usable hitboxes, including shield-deflected flame projectiles.
+  * Ran queued map-initialization scripts before resolving a missing named entrance, fixing the crash when leaving Turtle Rock's scripted 2D passage; followers and sprite shadows use Link's resolved arrival position safely.
+  * Increased the Android version code beyond local test builds and supplied a universal four-ABI assetless APK.
+  * No asset-format, save-format, APWorld rule or seed-manifest changes. Install over the existing app; installed assets, saves, settings and Archipelago profiles can be reused.
+
+## **v2.0.76**
+### Normal-game crash fixes
+  * Rebuilt object templates, spawn delegates and constructor metadata together when game content initializes again, avoiding duplicate registrations after Android recreates the game in the same process.
+  * Prevented BowWow from targeting objects without a usable hitbox or hit callback, and returned him to idle if his target disappears during an attack. Preserved fish vulnerability handling.
+  * Added focused repeated-initialization and BowWow target-validation regressions. Existing assets, saves and Archipelago profiles remain unchanged.
+
+## **v2.0.75**
+### Wallpaper indoor navigation
+  * Activated grounded stair entries using the game's inset collision trigger and shared its exact walking-arrival geometry, fixing grid-snapped routes that stopped on stairs without transitioning.
+  * Replanned after block pushes using their actual new positions, keeping vacated tiles clear and moved blocks solid. Completed blocks cannot be repeatedly pushed as though still idle.
+  * Rejected forbidden pushes, blocked push destinations and obstructed route endpoints; block lookups reuse the existing spatial collision grid.
+  * Added focused stair geometry, installed stair-trigger and post-push route regressions. No asset rebuild, save or seed changes.
+
+## **v2.0.74**
+### Wallpaper rotation and tile drawing
+  * Kept the camera's pending scroll target within resized map bounds, preventing an unreachable old target from blocking later scrolling after portrait/landscape rotation.
+  * Reused the same clamp calculation for camera positions and targets; added rotation, next-scroll, fractional-target and small-interior regression cases.
+  * Read tileset bitmap dimensions once per tile-cache refresh instead of querying Android for every tile. Tile rendering, artwork, zoom, movement and frame-rate settings remain unchanged.
+
+## **v2.0.73**
+### Map-object drawing efficiency
+  * Cached decoration sprite keys and immutable atlas dimensions instead of rebuilding strings and querying Android bitmap sizes on every draw.
+  * Rejected off-screen decorations before state and asset lookups, using the same anchor, draw offsets and visibility margin after resolving moved blocks.
+  * Kept painter order, chest frames, cut/lift/fallen-object handling, artwork and gameplay unchanged; added exact anchor, boundary, moved-position and allocation regressions.
+
+## **v2.0.72**
+### Exact shadow-blur efficiency
+  * Reused neighboring alpha samples in the horizontal shadow blur and calculated vertical clamped-row offsets once per row instead of once per pixel.
+  * Kept the original seven-tap weights, summation order, opacity, edge handling and render resolution; added exact pixel/intermediate-buffer comparisons against the previous implementation and allocation coverage.
+  * No asset-format, save, seed, movement, animation-speed or FPS changes.
+
+## **v2.0.71**
+### Shadow pixel-transfer efficiency
+  * Used pooled pixel buffers sized to each shadow update instead of transferring a full-target array for small dirty regions.
+  * Preserved the existing blur, projection, lighting, scrolling cache and installed artwork; added parity coverage for pooled buffers, narrow strips, tiny updates and full refreshes.
+  * No asset-format, save, seed, movement, animation-speed or FPS changes.
+
+## **v2.0.70**
+### Scrolling effect-cache reuse
+  * Reused overlapping blurred-shadow and light-map pixels during exact-pixel camera scrolling, updating newly exposed strips, blur borders and changed silhouettes.
+  * Preserved full refreshes for map, size, scale, static-object and solar-shadow changes, plus large/fractional camera shifts.
+  * Kept the canonical projection, blur, lamps and artwork; added full-redraw parity tests for horizontal, vertical and diagonal scrolling with moving, appearing and disappearing shadows.
+  * No asset-format, save, seed, animation-speed or FPS changes.
+
+## **v2.0.69**
+### Smaller moving-shadow updates
+  * Kept separated moving shadows in small dirty regions instead of blurring and relighting the unchanged space between distant characters.
+  * Merged overlapping regions and bounded the update list with a single-region fallback for crowded scenes; reused the existing shadow projection, blur kernel and lighting composition.
+  * Skipped rasterizing dynamic shadows outside each sampled region and retained full invalidation for camera/map/static-light changes.
+  * Added exact full-redraw parity and allocation regressions for movement, disappearance, overlapping shadows, viewport edges and crowded updates. No asset, save, seed or FPS changes.
+
+## **v2.0.68**
+### Wallpaper rendering efficiency
+  * Reused drawing rectangles for sprites, animated tiles, shadows and lighting instead of allocating them on each draw.
+  * Cached wallpaper settings between preference changes while retaining immediate visible updates, including when animation is disabled.
+  * Cached automatic sun calculations in ten-minute local-clock intervals; phase previews, schedule changes and returning outdoors update immediately without a background timer.
+  * Kept rendering quality, movement, animations, FPS settings and installed assets unchanged. No save, seed or Archipelago changes.
+
+## **v2.0.67**
+### Spatial day-cycle lighting
+  * Replaced the wallpaper's flat time-of-day overlay with a spatial light-map pass: cast shadows attenuate direct sunlight while preserving ambient sky light, and installed lamp textures illuminate shaded areas independently.
+  * Added local-clock sunrise/sunset transitions, changing shadow direction and length, sunrise preview, configurable sunrise/sunset times and an Original map lighting option. Interiors retain their own lighting.
+  * Reused cached shadow/light regions and skipped solar shadow rendering at night. System-bar color hints now sample the scene's actual light map.
+  * Kept wallpaper settings and rendering in the same process so setting changes reach an already running wallpaper without a restart.
+  * No asset-format, save, seed or Archipelago changes; this remains a silent, visibility-paused wallpaper extension.
+
+## **v2.0.66**
+### Wallpaper scene rendering
+  * Added installed object-shadow sprites, the game's shadow projection/blur rules, and elevation-aware character shadows to the lightweight wallpaper renderer.
+  * Added map ambient lighting and lamp/sprite lights using installed light textures and original object definitions, including lit/unlit lamp animations.
+  * Cached static effects and limited moving-shadow blur to changed regions, with regression coverage against full-frame results.
+  * Zoomed out from 10 to 12 visible tiles across the short display dimension while keeping portrait and landscape scale consistent.
+  * No asset-format, save, seed, or Archipelago changes; the update reuses existing installed assets.
+
 ## **v2.0.65**
 ### Live wallpaper exploration and game-object fidelity
   * Published the accumulated live-wallpaper work since v2.0.28: installed-map rendering, world exploration, tap destinations, and optional camera following through supported overworld, house, cave, and dungeon transitions.

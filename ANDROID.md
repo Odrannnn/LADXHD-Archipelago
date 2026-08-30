@@ -83,8 +83,33 @@ redraws for touch or launcher movement. Rendering stops when Android marks the w
 The wallpaper supplies scene-color hints to Android for system-bar contrast; the launcher/system
 decides whether to use them.
 
-Local-time day/sunset/night lighting and the **Mabe Sunset**, **Forest Night**, and **Island Journey**
-presets remain available. The wallpaper is silent and does not start a full hidden game engine,
+**Time of day → Follow system time** now drives spatial outdoor lighting: directional cast shadows
+attenuate direct sunlight, cooler ambient light remains in shaded areas, and installed lamp light
+textures illuminate their surroundings independently. This replaces the old screen-wide color
+overlay. Sunrise and sunset produce longer shadows pointing in opposite directions; midday shadows
+are shorter, and direct sunlight/shadows fade away at night. Use the **Sunrise** and **Sunset** time
+buttons to configure local-clock hours without location access or internet. **Day**, **Sunrise**,
+**Sunset** and **Night** modes hold that phase for preview; **Original map lighting** retains the
+game's fixed shadow/light settings. Houses, caves and dungeons keep their own map lighting.
+
+The sun cycle is an optional wallpaper extension, not an original game mechanic or a 3D relighting
+system. It reuses installed shadow sprites, light textures and the game's projection rules; painted
+highlights in the sprites remain unchanged. Automatic solar parameters update in ten-minute local-clock
+intervals while visible; changing the lighting mode or sunrise/sunset settings takes effect immediately.
+Settings are cached between changes, and sprite/shadow drawing reuses temporary rectangles.
+Light maps remain cached; distant moving shadows update separate small regions with the original
+blur margins, merging overlaps and falling back to one region in crowded scenes. The **Mabe Sunset**, **Forest
+Night**, and **Island Journey** presets remain available. Camera scrolling reuses overlapping blurred
+shadows and lighting where pixel alignment permits, refreshing exposed strips and blur borders;
+map, zoom, static-object and solar-shadow changes still use a full refresh. Shadow pixel transfers
+use pooled buffers sized to each sampled region, retaining the same blur and lighting output.
+The blur reuses neighboring samples and row offsets without changing its filter or resolution.
+Map-object drawing also caches sprite keys and atlas dimensions and rejects off-screen objects
+before unnecessary lookups, preserving placement, draw order and moved/removed object state.
+Pending camera scroll targets are constrained again after rotation or resizing, so an old target
+outside the new viewport bounds cannot prevent later scrolling.
+
+The wallpaper is silent and does not start a full hidden game engine,
 write gameplay saves, grant Archipelago items, or open an Archipelago connection. Its collected
 items, opened chests, and defeated enemies are simulation state only. It uses the locally prepared
 game assets, so normal first-run ZIP setup is required; no original game-data tree is embedded in

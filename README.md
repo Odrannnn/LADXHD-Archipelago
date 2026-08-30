@@ -31,7 +31,9 @@ ZIP.
   supported entrances into houses, caves, and dungeons. Installed NPCs and enemies, sword combat,
   swimming, feather/Pegasus jumps, Hookshot routes, rock lifting, pushable blocks, bush cutting,
   rupee pickups, and chest opening use shared gameplay calculations and original sprites.
-  Smooth camera following, local-time lighting, cached tiles, visibility-based suspension, and
+  A wider, rotation-stable camera, installed object shadows and map lighting, a local-clock sun
+  cycle with directional shadows and separate ambient/sun/lamp illumination,
+  cached tiles and effects, smooth following, visibility-based suspension, and
   selectable 15/30/60 FPS balance animation and battery use. Wallpaper activity is independent of
   saves and Archipelago progress.
 - A phone-native, transactional game-data builder: select the original v1.0.0 ZIP on first launch,
