@@ -10,7 +10,8 @@ namespace ProjectZ
         private LiveWallpaperMapViewport(
             int originX, int originY, int columns, int rows,
             float tileSize, float left, float top, float groundY,
-            float cameraOriginX, float cameraOriginY)
+            float cameraOriginX, float cameraOriginY,
+            int screenWidth, int screenHeight)
         {
             OriginX = originX;
             OriginY = originY;
@@ -22,6 +23,8 @@ namespace ProjectZ
             GroundY = groundY;
             CameraOriginX = cameraOriginX;
             CameraOriginY = cameraOriginY;
+            ScreenWidth = screenWidth;
+            ScreenHeight = screenHeight;
         }
 
         public int OriginX { get; }
@@ -34,6 +37,8 @@ namespace ProjectZ
         public float GroundY { get; }
         public float CameraOriginX { get; }
         public float CameraOriginY { get; }
+        public int ScreenWidth { get; }
+        public int ScreenHeight { get; }
 
         public LiveWallpaperMapViewport WithOrigin(
             int originX, int originY, int mapWidth, int mapHeight) =>
@@ -57,7 +62,7 @@ namespace ProjectZ
                 baseLeft - (cameraX - tileOriginX) * TileSize,
                 baseTop - (cameraY - tileOriginY) * TileSize,
                 baseGroundY - (cameraY - tileOriginY) * TileSize,
-                cameraX, cameraY);
+                cameraX, cameraY, ScreenWidth, ScreenHeight);
         }
 
         public void ClampCameraTarget(int mapWidth, int mapHeight,
@@ -132,25 +137,24 @@ namespace ProjectZ
             if (Columns <= 0 || Rows <= 0 || mapWidth <= 0 || mapHeight <= 0)
                 return false;
 
-            var linkTileX = linkPixelX / 16f;
-            var linkTileY = linkPixelY / 16f;
-            // Columns/Rows include one overscan tile beyond each phone edge.
-            // Keep one visible tile of horizontal notice. Vertically, begin two
-            // visible tiles early so Link remains reachable above the navigation
-            // bar and below the status bar.
-            const float horizontalEdgeInset = 2f;
-            const float verticalEdgeInset = 3f;
+            // Use the same projection as drawing and taps. Centred interiors,
+            // parallax and fractional camera movement do not necessarily leave
+            // one overscan tile at each screen edge.
+            var screenX = Left + (linkPixelX / 16f - OriginX) * TileSize;
+            var screenY = Top + (linkPixelY / 16f - OriginY) * TileSize;
+            var horizontalEdgeInset = TileSize;
+            var verticalEdgeInset = 2f * TileSize;
             if (movementX < -0.1f &&
-                linkTileX <= CameraOriginX + horizontalEdgeInset)
+                screenX <= horizontalEdgeInset)
                 targetOriginX -= 10f;
             else if (movementX > 0.1f &&
-                     linkTileX >= CameraOriginX + Columns - horizontalEdgeInset)
+                     screenX >= ScreenWidth - horizontalEdgeInset)
                 targetOriginX += 10f;
             else if (movementY < -0.1f &&
-                     linkTileY <= CameraOriginY + verticalEdgeInset)
+                     screenY <= verticalEdgeInset)
                 targetOriginY -= 8f;
             else if (movementY > 0.1f &&
-                     linkTileY >= CameraOriginY + Rows - verticalEdgeInset)
+                     screenY >= ScreenHeight - verticalEdgeInset)
                 targetOriginY += 8f;
 
             targetOriginX = Math.Clamp(
@@ -232,7 +236,7 @@ namespace ProjectZ
             viewport = new LiveWallpaperMapViewport(
                 Math.Max(0, sceneX - horizontalSceneMargin), originY, columns, rows,
                 tileSize, left, top, groundY,
-                Math.Max(0, sceneX - horizontalSceneMargin), originY);
+                Math.Max(0, sceneX - horizontalSceneMargin), originY, width, height);
             return true;
         }
 
@@ -274,7 +278,7 @@ namespace ProjectZ
                 left,
                 top,
                 height * 0.5f,
-                cameraX, cameraY);
+                cameraX, cameraY, width, height);
             return true;
         }
     }

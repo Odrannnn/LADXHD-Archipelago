@@ -3056,7 +3056,9 @@ Assert(portraitViewport.TryMoveToAdjacentField(
 var rightExitPixelX =
     (portraitViewport.OriginX + portraitViewport.Columns) * 16f + 8f;
 var viewportCenterPixelY =
-    (portraitViewport.OriginY + portraitViewport.Rows / 2f) * 16f;
+    (portraitViewport.OriginY +
+     (portraitViewport.ScreenHeight * .5f - portraitViewport.Top) /
+     portraitViewport.TileSize) * 16f;
 Assert(portraitViewport.TryFollowLinkThroughExit(
            rightExitPixelX, viewportCenterPixelY, 160, 128,
            out var centeredFollowViewport) &&
@@ -3066,7 +3068,9 @@ Assert(portraitViewport.TryFollowLinkThroughExit(
            (centeredFollowViewport.OriginX + centeredFollowViewport.Columns / 2f)) <= 1f,
        "A followed loading-zone transition must visibly recenter the wallpaper crop on Link.");
 var rightScrollThresholdPixelX =
-    (portraitViewport.CameraOriginX + portraitViewport.Columns - 2f) * 16f;
+    (portraitViewport.OriginX +
+     (portraitViewport.ScreenWidth - portraitViewport.TileSize - portraitViewport.Left) /
+     portraitViewport.TileSize) * 16f;
 var beforeRightScrollThresholdPixelX = rightScrollThresholdPixelX - 2f;
 Assert(!portraitViewport.TryGetEdgeScrollTarget(
            rightScrollThresholdPixelX, viewportCenterPixelY,
@@ -3081,16 +3085,26 @@ Assert(!portraitViewport.TryGetEdgeScrollTarget(
        Math.Abs(edgeTargetY - portraitViewport.CameraOriginY) < 0.001f,
        "The wallpaper camera must begin scrolling one visible tile before Link reaches the phone edge while moving outward.");
 var topScrollThresholdPixelY =
-    (portraitViewport.CameraOriginY + 3f) * 16f;
+    (portraitViewport.OriginY +
+     (2f * portraitViewport.TileSize - portraitViewport.Top) /
+     portraitViewport.TileSize) * 16f;
 var bottomScrollThresholdPixelY =
-    (portraitViewport.CameraOriginY + portraitViewport.Rows - 3f) * 16f;
+    (portraitViewport.OriginY +
+     (portraitViewport.ScreenHeight - 2f * portraitViewport.TileSize - portraitViewport.Top) /
+     portraitViewport.TileSize) * 16f;
+// The inverse drawing projection can round to the representable world point just
+// outside the exact screen-space band. Exercise the first point inside it.
+var topScrollInsidePixelY = MathF.BitDecrement(topScrollThresholdPixelY);
+var bottomScrollInsidePixelY = MathF.BitIncrement(bottomScrollThresholdPixelY);
 var viewportCenterPixelX =
-    (portraitViewport.CameraOriginX + portraitViewport.Columns / 2f) * 16f;
+    (portraitViewport.OriginX +
+     (portraitViewport.ScreenWidth * .5f - portraitViewport.Left) /
+     portraitViewport.TileSize) * 16f;
 Assert(!portraitViewport.TryGetEdgeScrollTarget(
            viewportCenterPixelX, topScrollThresholdPixelY + 2f,
            0f, -1f, 160, 128, out _, out _) &&
        portraitViewport.TryGetEdgeScrollTarget(
-           viewportCenterPixelX, topScrollThresholdPixelY,
+           viewportCenterPixelX, topScrollInsidePixelY,
            0f, -1f, 160, 128, out var topTargetX, out var topTargetY) &&
        Math.Abs(topTargetX - portraitViewport.CameraOriginX) < 0.001f &&
        Math.Abs(topTargetY - portraitViewport.CameraOriginY + 8f) < 0.001f &&
@@ -3098,7 +3112,7 @@ Assert(!portraitViewport.TryGetEdgeScrollTarget(
            viewportCenterPixelX, bottomScrollThresholdPixelY - 2f,
            0f, 1f, 160, 128, out _, out _) &&
        portraitViewport.TryGetEdgeScrollTarget(
-           viewportCenterPixelX, bottomScrollThresholdPixelY,
+           viewportCenterPixelX, bottomScrollInsidePixelY,
            0f, 1f, 160, 128, out var bottomTargetX, out var bottomTargetY) &&
        Math.Abs(bottomTargetX - portraitViewport.CameraOriginX) < 0.001f &&
        Math.Abs(bottomTargetY - portraitViewport.CameraOriginY - 8f) < 0.001f,
