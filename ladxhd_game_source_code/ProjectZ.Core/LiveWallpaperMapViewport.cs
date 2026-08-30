@@ -42,10 +42,9 @@ namespace ProjectZ
         public LiveWallpaperMapViewport WithCameraOrigin(
             float originX, float originY, int mapWidth, int mapHeight)
         {
-            var cameraX = Math.Clamp(
-                originX, 0f, Math.Max(0, mapWidth - Columns));
-            var cameraY = Math.Clamp(
-                originY, 0f, Math.Max(0, mapHeight - Rows));
+            ClampCameraTarget(mapWidth, mapHeight, ref originX, ref originY);
+            var cameraX = originX;
+            var cameraY = originY;
             var tileOriginX = (int)MathF.Floor(cameraX);
             var tileOriginY = (int)MathF.Floor(cameraY);
             // Recover the unshifted drawing anchors so repeated fractional updates
@@ -59,6 +58,13 @@ namespace ProjectZ
                 baseTop - (cameraY - tileOriginY) * TileSize,
                 baseGroundY - (cameraY - tileOriginY) * TileSize,
                 cameraX, cameraY);
+        }
+
+        public void ClampCameraTarget(int mapWidth, int mapHeight,
+            ref float targetX, ref float targetY)
+        {
+            targetX = Math.Clamp(targetX, 0f, Math.Max(0, mapWidth - Columns));
+            targetY = Math.Clamp(targetY, 0f, Math.Max(0, mapHeight - Rows));
         }
 
         public bool TryMoveToAdjacentField(

@@ -1953,6 +1953,11 @@ namespace ProjectZ.Android
                 ? Math.Clamp(elapsed - _cameraLastElapsed.Value, 0L, 100L)
                 : 0L;
             _cameraLastElapsed = elapsed;
+            // A rotated/resized viewport can clamp the camera before it reaches
+            // its old target. Constrain the target too, or atTarget stays false
+            // forever and no later edge can request another scroll.
+            viewport.ClampCameraTarget(_overworldMap.Map.Width, _overworldMap.Map.Height,
+                ref _cameraTargetOriginX, ref _cameraTargetOriginY);
             var atTarget = MathF.Abs(
                                viewport.CameraOriginX - _cameraTargetOriginX) < 0.001f &&
                            MathF.Abs(
