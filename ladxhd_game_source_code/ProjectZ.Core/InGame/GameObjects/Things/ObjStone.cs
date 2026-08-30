@@ -34,7 +34,7 @@ namespace ProjectZ.InGame.GameObjects.Things
         private readonly string _dialogPath;
         private readonly bool _potMessage;
 
-        private int _offsetY = 3;
+        private int _offsetY = GameObjectVisualLayout.StoneVerticalOffset;
         private bool _thrown;
         private bool _isAlive = true;
         private bool _damagePlayer;
@@ -73,7 +73,10 @@ namespace ProjectZ.InGame.GameObjects.Things
 
             var sprite = Resources.GetSprite(spriteId);
 
-            EntityPosition = new CPosition(posX + 8, posY + 16 - _offsetY, 0);
+            var stoneEntityPosition = GameObjectVisualLayout.GetStoneEntityPosition(
+                posX, posY);
+            EntityPosition = new CPosition(
+                stoneEntityPosition.X, stoneEntityPosition.Y, 0);
             EntitySize = new Rectangle(-sprite.SourceRectangle.Width / 2, _offsetY - sprite.SourceRectangle.Height * 2, sprite.SourceRectangle.Width, sprite.SourceRectangle.Height * 2 + 4);
             _spawnPosition = new Point(posX, posY + 2);
 
@@ -107,11 +110,14 @@ namespace ProjectZ.InGame.GameObjects.Things
                 MoveCollision = OnCollision,
                 HoleAbsorb = OnHoleAbsorb,
                 DragAir = 1.0f,
-                Gravity = -0.125f,
+                Gravity = StoneGameplayMotion.Gravity,
                 IgnoreHeight = true
             };
 
-            _sprite = new CSprite(spriteId, EntityPosition, new Vector2(-sprite.SourceRectangle.Width / 2, -sprite.SourceRectangle.Height + _offsetY));
+            _sprite = new CSprite(
+                spriteId, EntityPosition,
+                GameObjectVisualLayout.GetStoneSpriteOffset(
+                    sprite.SourceRectangle.Width, sprite.SourceRectangle.Height));
             var carryRect = new CRectangle(EntityPosition, new Rectangle(-sprite.SourceRectangle.Width / 2, -14 + _offsetY, sprite.SourceRectangle.Width, 14));
 
             if (!string.IsNullOrEmpty(_dialogPath))

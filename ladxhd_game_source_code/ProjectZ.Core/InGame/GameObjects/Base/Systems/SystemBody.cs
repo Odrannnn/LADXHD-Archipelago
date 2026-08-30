@@ -344,24 +344,11 @@ namespace ProjectZ.InGame.GameObjects.Base.Systems
                     if (body.CornerCorrection && Math.Abs(offset.X) >= Math.Abs(offset.Y))
                     {
                         float playerTop     = body.Position.Y + body.OffsetY;
-                        float playerBottom  = playerTop + body.Height;
                         float wallTop       = collidingBox.Y;
                         float wallBottom    = collidingBox.Front;
-
-                        // How many pixels is the player overlapping each corner of the wall?
-                        float overlapTop    = playerBottom - wallTop;   // Player bottom past wall's top edge.
-                        float overlapBottom = wallBottom - playerTop;   // Wall's bottom edge past player top.
-
-                        // Amount to nudge. Note the additiona "0.01 overcorrection" which helps when analog is slightly vertical.
-                        float nudge = 0f;
-
-                        // Grazing the top corner of the wall -> nudge player upward.
-                        if (overlapTop > 0 && overlapTop <= body.CornerCorrectionThreshold && overlapBottom > body.Height)
-                            nudge = -overlapTop - 0.01f;
-
-                        // Grazing the bottom corner of the wall -> nudge player downward.
-                        else if (overlapBottom > 0 && overlapBottom <= body.CornerCorrectionThreshold && overlapTop > body.Height)
-                            nudge = overlapBottom + 0.01f;
+                        float nudge = LinkGameplayMotion.ResolveHorizontalCornerNudge(
+                            playerTop, body.Height, wallTop, wallBottom,
+                            body.CornerCorrectionThreshold);
 
                         if (nudge != 0f)
                         {
@@ -469,24 +456,11 @@ namespace ProjectZ.InGame.GameObjects.Base.Systems
                     if (body.CornerCorrection && Math.Abs(offset.Y) > Math.Abs(offset.X))
                     {
                         float playerLeft   = body.Position.X + body.OffsetX;
-                        float playerRight  = playerLeft + body.Width;
                         float wallLeft     = collidingBox.X;
                         float wallRight    = collidingBox.Right;
-
-                        // How many pixels is the player overlapping each corner of the wall?
-                        float overlapLeft  = playerRight - wallLeft;   // Player right edge past wall's left edge.
-                        float overlapRight = wallRight - playerLeft;   // Wall's right edge past player left.
-
-                        // Amount to nudge. Note the additiona "0.01 overcorrection" which helps when analog is slightly horizontal.
-                        float nudge = 0f;
-
-                        // Grazing the left corner of the wall -> nudge player left.
-                        if (overlapLeft > 0 && overlapLeft <= body.CornerCorrectionThreshold && overlapRight > body.Width)
-                            nudge = -overlapLeft - 0.01f;
-
-                        // Grazing the right corner of the wall -> nudge player right.
-                        else if (overlapRight > 0 && overlapRight <= body.CornerCorrectionThreshold && overlapLeft > body.Width)
-                            nudge = overlapRight + 0.01f;
+                        float nudge = LinkGameplayMotion.ResolveVerticalCornerNudge(
+                            playerLeft, body.Width, wallLeft, wallRight,
+                            body.CornerCorrectionThreshold);
 
                         if (nudge != 0f)
                         {
@@ -629,8 +603,8 @@ namespace ProjectZ.InGame.GameObjects.Base.Systems
                     depthBox, body.CollisionTypes, body.JumpStartHeight + body.MaxJumpHeight);
             }
 
-            body.Velocity.Z += body.Gravity * Game1.TimeMultiplier;
-            body.Velocity.Z = Math.Clamp(body.Velocity.Z, -6, 6);
+            body.Velocity.Z = LinkGameplayMotion.ApplyGravity(
+                body.Velocity.Z, body.Gravity, Game1.TimeMultiplier);
 
             // move the body up or down as long as it is not hitting the floor
             if (body.Position.Z + body.Velocity.Z * Game1.TimeMultiplier > floorHeight &&
@@ -660,11 +634,9 @@ namespace ProjectZ.InGame.GameObjects.Base.Systems
                 }
 
                 // bounce from the ground but not on the water
-                if (body.Velocity.Z * body.Bounciness < -0.4f &&
-                    !body.CurrentFieldState.HasFlag(MapStates.FieldStates.DeepWater))
-                    body.Velocity.Z *= -body.Bounciness;
-                else
-                    body.Velocity.Z = 0;
+                body.Velocity.Z = LinkGameplayMotion.ResolveGroundVelocity(
+                    body.Velocity.Z, body.Bounciness,
+                    body.CurrentFieldState.HasFlag(MapStates.FieldStates.DeepWater));
 
                 if (!body.IsGrounded)
                     collision |= Values.BodyCollision.Floor;
@@ -919,22 +891,8 @@ namespace ProjectZ.InGame.GameObjects.Base.Systems
             var newOverlap = objects.GetCollisionOverlapArea(box, escapeTypes, body.CollisionTypesIgnore, direction, body.Level);
             var bodyArea = box.Width * box.Height;
 
-            const float epsilon = 0.01f;
-
-            // Never allow burying itself any deeper.
-            if (newOverlap > oldOverlap + epsilon)
-                return true;
-
-            // Moving out is always allowed.
-            if (newOverlap < oldOverlap - epsilon)
-                return false;
-
-            // Fully buried: allow anything that does not make it worse so it can walk back out.
-            if (oldOverlap >= bodyArea - epsilon)
-                return false;
-
-            // Moving alongside the obstacle: only while under the buried threshold.
-            return bodyArea <= 0 || (newOverlap / bodyArea) >= body.InsideCollisionEscape;
+            return LinkGameplayMotion.BlocksInsideCollisionMovement(
+                oldOverlap, newOverlap, bodyArea, body.InsideCollisionEscape);
         }
     }
 }

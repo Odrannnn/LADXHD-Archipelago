@@ -27,7 +27,7 @@ namespace ProjectZ.InGame.GameObjects.NPCs
         private readonly CSprite _sprite;
 
         private string _saveKey;
-        private const int CarryHeight = 14;
+        private const int CarryHeight = RoosterGameplayMotion.CarryHeight;
         private int _blinkTime;
         private int _direction;
         private bool _updateCarry;
@@ -71,8 +71,8 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             _body = new BodyComponent(EntityPosition, -4, -10, 8, 10, 8)
             {
                 Bounciness = 0f,
-                Gravity = -0.075f,
-                Drag = 0.85f,
+                Gravity = RoosterGameplayMotion.Gravity,
+                Drag = RoosterGameplayMotion.GroundDrag,
                 IsSlider = true,
                 CollisionTypes = Values.CollisionTypes.None,
             };
@@ -450,8 +450,9 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             Game1.AudioManager.PlaySoundEffect("D378-45-2D", false);
 
             // move up
-            var targetPosZ = 36 + MathF.Sin(((float)Game1.TotalGameTime / 450) * MathF.PI * 2) * 1.5f;
-            EntityPosition.Z = AnimationHelper.MoveToTarget(EntityPosition.Z, targetPosZ, 0.5f * Game1.TimeMultiplier);
+            EntityPosition.Z = RoosterGameplayMotion.AdvanceFlightHeight(
+                EntityPosition.Z, Game1.TotalGameTime,
+                Game1.TimeMultiplier);
 
             // lift the player up
             if (EntityPosition.Z > CarryHeight)
@@ -473,7 +474,9 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             _isThrown = thrown;
             _carriableComponent.Thrown = thrown;
 
-            _body.DragAir = thrown ? 0.975f : 0.85f;
+            _body.DragAir = thrown
+                ? RoosterGameplayMotion.ThrownAirDrag
+                : RoosterGameplayMotion.GroundDrag;
         }
 
         private void StartGrabbing()

@@ -46,9 +46,9 @@ namespace ProjectZ.InGame.GameObjects.Things
         private float _fadeOffset;
         private double _deepWaterCounter;
         private float _despawnCount;
-        private int _despawnTime = 350;
-        private int _fadeStart = 250;
-        private int _moveStopTime = 250;
+        private int _despawnTime = DroppedItemMotion.CollectionDespawnMilliseconds;
+        private int _fadeStart = DroppedItemMotion.CollectionFadeStartMilliseconds;
+        private int _moveStopTime = DroppedItemMotion.CollectionMoveStopMilliseconds;
         private int _lastFieldTime;
 
         public bool _isFlying;
@@ -107,8 +107,10 @@ namespace ProjectZ.InGame.GameObjects.Things
             _body = new BodyComponent(EntityPosition, -4, -8, 8, 8, 8)
             {
                 RestAdditionalMovement = false,
-                Gravity = -0.1f,
-                Bounciness = 0.7f,
+                Drag = DroppedItemMotion.GroundDrag,
+                DragAir = DroppedItemMotion.AirDrag,
+                Gravity = DroppedItemMotion.Gravity,
+                Bounciness = DroppedItemMotion.Bounciness,
                 IgnoreHeight = true,
                 CollisionTypes = Values.CollisionTypes.Normal |
                                  Values.CollisionTypes.Field |

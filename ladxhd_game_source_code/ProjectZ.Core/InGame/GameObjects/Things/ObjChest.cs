@@ -29,7 +29,6 @@ namespace ProjectZ.InGame.GameObjects.Things
 
         // @INFO: this time is also used in the "seashell" script and should be changed there also
         private const int FadeTime = 175;
-        private const int MoveTime = 300;
 
         private bool _opened;
         private bool _isActive = true;
@@ -64,7 +63,9 @@ namespace ProjectZ.InGame.GameObjects.Things
             _locationBound = itemBounding;
             ItemKey = itemKey;
 
-            var openingTrigger = new AiTriggerCountdown(MoveTime, OpeningTick, OpeningEnd);
+            var openingTrigger = new AiTriggerCountdown(
+                ChestGameplayPresentation.OpeningMilliseconds,
+                OpeningTick, OpeningEnd);
             var fadingTrigger = new AiTriggerCountdown(FadeTime, FadeTick, FadeEnd);
 
             _aiComponent = new AiComponent();
@@ -179,7 +180,10 @@ namespace ProjectZ.InGame.GameObjects.Things
         {
             MapManager.ObjLink.FreezePlayer();
             MapManager.ObjLink.FreezeWorldForEvents = true;
-            _itemSprite.EntityPosition.Z = (float)Math.Sin((float)(MoveTime - tick) / MoveTime * Math.PI / 1.55f) * 12;
+            _itemSprite.EntityPosition.Z =
+                ChestGameplayPresentation.ResolveItemHeight(
+                    (ChestGameplayPresentation.OpeningMilliseconds - (float)tick) /
+                    ChestGameplayPresentation.OpeningMilliseconds);
         }
 
         private void OpeningEnd()

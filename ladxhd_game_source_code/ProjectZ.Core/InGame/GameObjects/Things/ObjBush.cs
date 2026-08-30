@@ -333,7 +333,8 @@ namespace ProjectZ.InGame.GameObjects.Things
                 var objSpawnedObject = ObjectManager.GetGameObject(Map, _spawnObjectId, _spawnObjectParameter);
                 spawnedObject = Map.Objects.SpawnObject(objSpawnedObject);
                 if (spawnedObject && objSpawnedObject is ObjItem spawnedItem)
-                    spawnedItem.SetVelocity(new Vector3(direction.X * 0.5f, direction.Y * 0.5f, 0.75f));
+                    spawnedItem.SetVelocity(
+                        DroppedItemMotion.CreateVelocity(direction));
 
                 // If the spawned object is a hole there needs to be a way to track it was created
                 // from a bush so it can be set to inactive when resetting the current field.
@@ -343,24 +344,15 @@ namespace ProjectZ.InGame.GameObjects.Things
             // Try to spawn a rupee or a heart.
             if (!spawnedObject)
             {
-                // There is a 1 in 8 chance (12.5%) an item is dropped.
-                if (Game1.RandomNumber.Next(0,8) != 0)
-                    return;
-
-                // Roll a heart or a rupee. Overall it's a 6.25% chance per item to drop.
-                var itemSpawn = Game1.RandomNumber.Next(0,2) == 0
-                    ? "heart"
-                    : "ruby";
-
-                // If it was a heart and item drops are disabled, nullify it.
-                if (GameSettings.NoHeartDrops && itemSpawn == "heart")
-                    itemSpawn = "";
+                var itemSpawn = BushDropRules.Roll(
+                    Game1.RandomNumber.Next, GameSettings.NoHeartDrops);
 
                 // If something is supposed to drop.
                 if (!string.IsNullOrEmpty(itemSpawn)) 
                 {
                     var objItem = new ObjItem(Map, (int)EntityPosition.X - 8, (int)EntityPosition.Y - 8, "j", null, itemSpawn, null, true);
-                    objItem.SetVelocity(new Vector3(direction.X * 0.5f, direction.Y * 0.5f, 0.75f));
+                    objItem.SetVelocity(
+                        DroppedItemMotion.CreateVelocity(direction));
                     Map.Objects.SpawnObject(objItem);
                 }
             }

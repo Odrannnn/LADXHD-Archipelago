@@ -34,7 +34,7 @@ namespace ProjectZ.InGame.GameObjects.Things
         private Vector2 _direction;
         private Vector2 _startPositionOffset;
 
-        private const float Speed = 3;
+        private const float Speed = LinkGameplayMotion.HookshotSpeed;
 
         private bool _comingBack;
         private bool _pullingPlayer;
@@ -138,7 +138,7 @@ namespace ProjectZ.InGame.GameObjects.Things
                     return;
                 }
                 // Make it come back if it goes too far.
-                if (distance > 120)
+                if (distance > LinkGameplayMotion.HookshotMaximumDistance)
                     ComeBack();
             }
             else

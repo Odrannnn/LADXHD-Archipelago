@@ -81,7 +81,7 @@ namespace ProjectZ.InGame.GameObjects
         private bool _forceWalking;
         private float WalkSpeed = 1.0f;
         private float WalkSpeedPoP = 1.25f;
-        private float BootsRunningSpeed = 2.0f;
+        private float BootsRunningSpeed = LinkGameplayMotion.PegasusBootsSpeed;
         private float SwimSpeed = 0.5f;
         private float SwimSpeedA = 1.0f;
         private float _currentWalkSpeed;
@@ -304,8 +304,9 @@ namespace ProjectZ.InGame.GameObjects
         private bool _bootsStop;
         private bool _bootsReset;
         private float _bootsCounter;
-        private float _bootsParticleTime = 120f;
-        private float _bootsMaxSpeed = 2.0f;
+        private float _bootsParticleTime =
+            LinkGameplayMotion.PegasusBootsParticleMilliseconds;
+        private float _bootsMaxSpeed = LinkGameplayMotion.PegasusBootsSpeed;
         private int _bootsLastDirection;
         private bool _bootsRunJump;
         private Box _crystalSmashBox;
@@ -346,10 +347,10 @@ namespace ProjectZ.InGame.GameObjects
 
         // Power Bracelet
         private RectangleF GrabRectangle;
-        private const float PullTime = 100;
+        private const float PullTime = LinkGameplayMotion.PullMilliseconds;
         private const float PullMaxTime = 400;
         private const float PullResetTime = -133;
-        private const float PreCarryTime = 200;
+        private const float PreCarryTime = LinkGameplayMotion.PreCarryMilliseconds;
         private float _preCarryCounter;
         private float _pullCounter;
         private bool _isPulling;
@@ -497,9 +498,10 @@ namespace ProjectZ.InGame.GameObjects
         private bool   feather_swimming2d     = false;
         private bool   bracelet_fast_pickup   = false;
         private float  sword_charge_time      = 670;
-        private float  boots_charge_time      = 533;
-        private float  feather_velocity       = 2.35f;
-        private float  corner_sidestep        = 2.50f;
+        private float  boots_charge_time      =
+            LinkGameplayMotion.PegasusBootsChargeMilliseconds;
+        private float  feather_velocity       = LinkGameplayMotion.FeatherVelocity;
+        private float  corner_sidestep        = LinkGameplayMotion.CornerCorrectionThreshold;
         private bool   light_source           = false;
         private int    light_red              = 255;
         private int    light_grn              = 255;
@@ -548,7 +550,7 @@ namespace ProjectZ.InGame.GameObjects
                 MaxJumpHeight = 3,
                 Drag = 0.72f,
                 DragAir = 0.72f,
-                Gravity = -0.15f,
+                Gravity = LinkGameplayMotion.Gravity,
                 Gravity2D = 0.1f,
                 AbsorbStop = 0.25f,
                 AbsorbPercentage = 1f,
@@ -2300,8 +2302,10 @@ namespace ProjectZ.InGame.GameObjects
                     }
                     else
                     {
-                        // Normal jump: just use Lerp on both axes
-                        _lastMoveVelocity = newMoveVelocity;
+                        // Shared with the wallpaper's lightweight ObjLink path.
+                        _lastMoveVelocity = LinkGameplayMotion.ResolveAirVelocity(
+                            _lastMoveVelocity, walkVelocity,
+                            _currentWalkSpeed, Game1.TimeMultiplier);
                     }
                 }
                 _moveVelocity = _lastMoveVelocity;
@@ -5767,16 +5771,10 @@ namespace ProjectZ.InGame.GameObjects
                     _preCarryCounter = PreCarryTime;
                     CurrentState = State.Carrying;
                 }
-                var pickupTime = 1 - MathF.Cos((_preCarryCounter / PreCarryTime) * (MathF.PI / 2));
+                var carryPosition = LinkGameplayMotion.ResolvePreCarryPosition(
+                    _carryStartPosition, targetPosition, _preCarryCounter);
 
-                var carryPositionXY = Vector2.Lerp(
-                    new Vector2(_carryStartPosition.X, _carryStartPosition.Y),
-                    new Vector2(targetPosition.X, targetPosition.Y),
-                    1 - MathF.Cos(pickupTime * (MathF.PI / 2)));
-                var carryPositionZ = MathHelper.Lerp(_carryStartPosition.Z, targetPosition.Z,
-                    MathF.Sin(pickupTime * (MathF.PI / 2)));
-
-                if (!_carriedComponent.UpdatePosition(new Vector3(carryPositionXY.X, carryPositionXY.Y, carryPositionZ)))
+                if (!_carriedComponent.UpdatePosition(carryPosition))
                 {
                     CurrentState = State.Idle;
                     ReleaseCarriedObject();
@@ -5801,7 +5799,8 @@ namespace ProjectZ.InGame.GameObjects
         private void ThrowCarriedObject()
         {
             // Throw the object being carried.
-            _carriedComponent.Throw(_walkDirection[Direction] * 3f);
+            _carriedComponent.Throw(
+                StoneGameplayMotion.CreateThrowVelocity(Direction));
             RemoveCarriedObject();
 
             // Prevents throwing an object and picking up a new one on the same button press

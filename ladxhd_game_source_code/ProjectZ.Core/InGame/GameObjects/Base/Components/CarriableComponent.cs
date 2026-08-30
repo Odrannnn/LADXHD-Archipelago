@@ -22,7 +22,7 @@ namespace ProjectZ.InGame.GameObjects.Base.Components
 
         public CRectangle Rectangle;
 
-        public int CarryHeight = 13;
+        public int CarryHeight = StoneGameplayMotion.CarryHeight;
 
         public bool IsInstant;
         public bool IsHeavy;
