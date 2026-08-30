@@ -6891,12 +6891,9 @@ namespace ProjectZ.InGame.GameObjects
 
             UpdateFollower(true);
 
-            if (Followers.Count > 0)
-                foreach (var follower in Followers)
-                    follower.EntityPosition.Set(NextMapPositionStart.Value);
-            
-            if (_spriteShadow != null)
-                _spriteShadow.EntityPosition.Set(NextMapPositionStart.Value);
+            // Use Link's resolved position, as UpdateFollower already does when
+            // no explicit arrival is supplied (for example an editor map load).
+            GameObjectFollower.PlaceAtMapArrival(Followers, _spriteShadow, EntityPosition.Position);
         }
         
         public void Respawn()

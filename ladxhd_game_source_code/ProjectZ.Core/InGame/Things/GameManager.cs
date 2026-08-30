@@ -558,7 +558,7 @@ namespace ProjectZ.InGame.Things
             return false;
         }
 
-        private void UpdateDialog()
+        internal void UpdateDialog()
         {
             while (_currentDialogPath != null || _dialogPathQueue != null)
             {

@@ -530,6 +530,9 @@ namespace ProjectZ.InGame.GameSystems
             }
         }
 
+        internal static bool NeedsEntryDialogUpdate(string entryId, Vector2? entryPosition, bool dialogPending) =>
+            !string.IsNullOrEmpty(entryId) && !entryPosition.HasValue && dialogPending;
+
         public void FinishLoading()
         {
             AdditionalBlackScreenDelay = 0;
@@ -565,6 +568,15 @@ namespace ProjectZ.InGame.GameSystems
                     mm.NextMap = restoreNext;
                 }
             }
+            // Android constructs objects here, after this frame's UpdateDialog.
+            // Conditional entrances (such as Turtle Rock's hidden stairs) are
+            // spawned by the queued map scripts, so run the existing dispatcher
+            // before resolving Link's arrival. Ordinary resolved entries do not
+            // advance unrelated dialogs a second time.
+            if (NeedsEntryDialogUpdate(MapManager.ObjLink.NextMapPositionId,
+                    MapManager.ObjLink.NextMapPositionStart, Game1.GameManager.DialogIsRunning()))
+                Game1.GameManager.UpdateDialog();
+
             // Getting the music to work correct with the map loading changes has been a nightmare. The
             // easiest place to handle if it restarts is here so give it a method to set it all up.
             SetUpMusic(mm, 1);
