@@ -59,11 +59,45 @@ data.
 Every bug fix should include the narrowest useful regression coverage in
 `ProjectZ.Archipelago.SmokeTests` or another appropriate test surface.
 
+## Game and live-wallpaper fidelity
+
+- Reuse the game's existing object implementations, animation files, sprite origins, draw order,
+  collision data, movement rules, timers, and physics constants directly. Trace the relevant game
+  code before changing equivalent live-wallpaper behavior.
+- Do not invent, approximate, hand-tune, or visually compensate for behavior or placement that the
+  installed game data or source already defines. Do not create a second guessed implementation
+  beside an existing canonical one. Move a reusable calculation into shared Core code and call it
+  from both gameplay and the lightweight renderer when direct execution is impractical.
+- Do not substitute generated, stylized, placeholder, or reconstructed art for locally installed
+  in-game assets. Missing source data is a blocker to that feature, not permission to fabricate it.
+- Keep the live wallpaper battery-friendly and silent: it must pause when not visible and must not
+  run the full gameplay engine, audio, saves, or network session in the background. Fidelity comes
+  from sharing the relevant deterministic game code and installed assets, not from continuously
+  running a hidden game instance.
+- Avoid speculative refactors and over-engineered abstractions. Make the smallest correction that
+  routes the affected behavior through the canonical game implementation.
+- Keep verification proportional: run the narrowest compilation and regression checks that cover
+  the changed path. Do not repeat unrelated suites merely out of routine.
+- When the user is testing on a connected device, install each newly verified APK over the existing
+  application automatically unless the user explicitly says not to. Never uninstall first.
+
 ## Pinned build environment
+
+Use GPT-5.3 Codex Spark for quick compilation, focused regression testing, Android APK builds,
+signing verification, and ADB deployment whenever the active environment supports assigning that
+model. If Spark is unavailable, use GPT-5.6 Terra for those tasks. Do not create a separate
+user-visible task solely to change models; if an already-active
+task cannot switch models, keep the verification narrow and continue in that task.
 
 Always use the pinned `ladxhd-android-builder:net9` Docker image for local .NET compilation,
 smoke tests, full asset migration, and Android APK builds. Do not use a host-installed .NET SDK or
 silently substitute another SDK, workload, Java version, Android SDK, or container tag.
+
+For iterative phone testing, restore, compile, and publish only `android-arm64` by overriding the
+project's `RuntimeIdentifiers` property to `android-arm64`; do not spend time building the universal
+four-ABI APK. Build the universal APK only for an explicitly requested public release or final
+distribution artifact. Reuse the scoped Docker NuGet cache and skip restore when dependencies and
+the existing assets file have not changed.
 
 The pinned image is defined by `.local/Dockerfile.android-builder`. That file and its build cache
 are local-only operational material. If the image is absent or cannot run, stop and report the
@@ -144,8 +178,9 @@ settings, generated assets, and Archipelago profiles survive. Never uninstall as
 
 ## Versioning and release conventions
 
-- The public version is defined in the root `Directory.Build.props`. Keep Android's application ID
-  `com.zelda.ladxhd.archipelago` stable and ensure the derived application version code increases.
+- The public version and explicit `GameVersionCode` are defined in the root `Directory.Build.props`.
+  Keep Android's application ID `com.zelda.ladxhd.archipelago` stable and ensure the code increases
+  beyond previous public and device-test builds; do not derive it by removing version-name dots.
 - Use plain semantic release versions such as `2.0.13`; do not restore the historical `-ap1`
   suffix. Git tags use `vX.Y.Z` and release titles use `LADXHD Archipelago X.Y.Z`.
 - Update `CHANGELOG.md` in the release-preparation commit.

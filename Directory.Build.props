@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup>
-    <GameVersion>2.0.28</GameVersion>
+    <GameVersion>2.0.65</GameVersion>
+    <GameVersionCode>2109</GameVersionCode>
     <Version>$(GameVersion)</Version>
     <TelemetryEndpoint>https://ladxhd-archipelago-telemetry.leonardo-701.workers.dev/v1/events</TelemetryEndpoint>
   </PropertyGroup>

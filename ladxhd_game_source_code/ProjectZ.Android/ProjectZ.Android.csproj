@@ -5,7 +5,7 @@
     <MonoGamePlatform>Android</MonoGamePlatform>
     <ApplicationId>com.zelda.ladxhd.archipelago</ApplicationId>
     <ApplicationDisplayVersion>$(GameVersion)</ApplicationDisplayVersion>
-    <ApplicationVersion>$(GameVersion.Replace('.', ''))</ApplicationVersion>
+    <ApplicationVersion>$(GameVersionCode)</ApplicationVersion>
     <TargetFramework>net9.0-android</TargetFramework>
     <RuntimeIdentifiers>android-x86;android-x64;android-arm;android-arm64</RuntimeIdentifiers>
     <SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>

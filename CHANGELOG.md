@@ -1,5 +1,17 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.65**
+### Live wallpaper exploration and game-object fidelity
+  * Published the accumulated live-wallpaper work since v2.0.28: installed-map rendering, world exploration, tap destinations, and optional camera following through supported overworld, house, cave, and dungeon transitions.
+  * Shared gameplay calculations for sprite placement, collision correction, feather and Pegasus jumps, Hookshot movement, rock lifting/throwing, rooster flight, bush drops, and chest presentation.
+  * Added installed-map NPCs and enemies, sword combat and local damage/death states, cuttable bushes, liftable rocks/pots, pushable blocks, rupee pickups, and chest opening without touching saves or Archipelago progress.
+  * Improved route coverage, stuck recovery, pit handling, obstacle clearance, interior exits, smooth camera scrolling, and portrait/landscape framing.
+  * Added optional 60 FPS with a battery warning, elapsed-time animation scheduling, cached tile rendering, visibility-based suspension, and wallpaper color hints for system-bar contrast.
+  * Fixed terminal-frame indoor doorway activation, restored the original animated warp-hole sprite, and supplied the ocean base beneath transparent outer-island wave overlays.
+  * Kept public tests assetless while retaining additional private installed-map regressions for local release verification.
+  * Separated Android's increasing version code from the display version so this public release can update both v2.0.28 installations and newer local test builds in place.
+  * No asset-format, save-format, APWorld rule, or seed-manifest changes. Existing assets and seeds can be reused; install over the existing app rather than uninstalling.
+
 ## **v2.0.28**
 ### Restore Magpie inventory after reconnect
   * Persisted received Archipelago item names per save so Magpie can restore tracked inventory before a live room connection is available.
@@ -2103,4 +2115,3 @@
  * Turtle Rock (dungeon 8) fixed locked door that took a key but did not open.
  * Turtle Rock (dungeon 8) breakable wall was fixed (it couldn't be broken).
  * Play the secret discovery chime when taking the correct path in the egg.
-

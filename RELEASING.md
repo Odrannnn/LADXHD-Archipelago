@@ -15,6 +15,15 @@ Android accepts an in-place update only when these remain stable:
 Keep the permanent release keystore offline, back it up securely, and never place it or its
 passwords in Git. Losing that key means existing users cannot install trusted updates.
 
+Set both `GameVersion` and `GameVersionCode` in `Directory.Build.props`. The Android version code
+is independent of the dotted version name and must exceed previous public and device-test builds;
+do not derive it by removing dots from the version name.
+
+Public CI runs the synthetic smoke regressions without original assets. For the additional
+installed-map and animation regressions, set `LADXHD_TEST_GAME_DATA` to the private migrated `Data`
+directory; an explicitly configured but missing directory fails the run. The canonical full
+migration check remains mandatory before releases and uses the separate source-ZIP/bootstrap inputs.
+
 The permanent release certificate has SHA-256 fingerprint:
 
 ```text
