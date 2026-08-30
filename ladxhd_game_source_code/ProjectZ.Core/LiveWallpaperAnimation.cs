@@ -18,6 +18,10 @@ namespace ProjectZ
             int height,
             int offsetX,
             int offsetY,
+            int collisionX,
+            int collisionY,
+            int collisionWidth,
+            int collisionHeight,
             bool mirroredVertically,
             bool mirroredHorizontally)
         {
@@ -28,6 +32,10 @@ namespace ProjectZ
             Height = height;
             OffsetX = offsetX;
             OffsetY = offsetY;
+            CollisionX = collisionX;
+            CollisionY = collisionY;
+            CollisionWidth = Math.Max(0, collisionWidth);
+            CollisionHeight = Math.Max(0, collisionHeight);
             MirroredVertically = mirroredVertically;
             MirroredHorizontally = mirroredHorizontally;
         }
@@ -39,6 +47,10 @@ namespace ProjectZ
         public int Height { get; }
         public int OffsetX { get; }
         public int OffsetY { get; }
+        public int CollisionX { get; }
+        public int CollisionY { get; }
+        public int CollisionWidth { get; }
+        public int CollisionHeight { get; }
         public bool MirroredVertically { get; }
         public bool MirroredHorizontally { get; }
     }
@@ -59,6 +71,24 @@ namespace ProjectZ
         public float Bottom { get; }
     }
 
+    public readonly struct LiveWallpaperCollisionRectangle
+    {
+        public LiveWallpaperCollisionRectangle(
+            float x, float y, float width, float height)
+        {
+            X = x;
+            Y = y;
+            Width = Math.Max(0f, width);
+            Height = Math.Max(0f, height);
+        }
+
+        public float X { get; }
+        public float Y { get; }
+        public float Width { get; }
+        public float Height { get; }
+        public bool IsEmpty => Width <= 0f || Height <= 0f;
+    }
+
     public sealed class LiveWallpaperAnimation
     {
         private const int MaximumFramesPerAnimation = 64;
@@ -68,12 +98,14 @@ namespace ProjectZ
         private LiveWallpaperAnimation(
             string spritePath,
             string animationId,
+            int loopCount,
             int offsetX,
             int offsetY,
             LiveWallpaperFrame[] frames)
         {
             SpritePath = spritePath;
             AnimationId = animationId;
+            LoopCount = loopCount;
             OffsetX = offsetX;
             OffsetY = offsetY;
             _frames = frames;
@@ -82,9 +114,11 @@ namespace ProjectZ
 
         public string SpritePath { get; }
         public string AnimationId { get; }
+        public int LoopCount { get; }
         public int OffsetX { get; }
         public int OffsetY { get; }
         public IReadOnlyList<LiveWallpaperFrame> Frames => _frames;
+        public long DurationMilliseconds => _durationMilliseconds;
 
         public static bool TryGetSpriteRelativeCandidates(
             string spritePath,
@@ -151,6 +185,56 @@ namespace ProjectZ
                 left, top, left + frame.Width * scale, top + frame.Height * scale);
         }
 
+        public bool TryGetOneShotCollisionRectangle(
+            long elapsedMilliseconds,
+            out LiveWallpaperCollisionRectangle rectangle)
+        {
+            rectangle = default;
+            if (_frames.Length == 0 || elapsedMilliseconds < 0 ||
+                elapsedMilliseconds >= _durationMilliseconds)
+                return false;
+            var position = elapsedMilliseconds;
+            var frameIndex = 0;
+            while (frameIndex + 1 < _frames.Length &&
+                   position >= _frames[frameIndex].DurationMilliseconds)
+            {
+                position -= _frames[frameIndex].DurationMilliseconds;
+                frameIndex++;
+            }
+            var current = GetCollisionRectangle(_frames[frameIndex]);
+            if (current.IsEmpty)
+                return false;
+            rectangle = current;
+            if (frameIndex + 1 >= _frames.Length)
+                return true;
+            var next = GetCollisionRectangle(_frames[frameIndex + 1]);
+            if (next.IsEmpty)
+                return true;
+            var progress = Math.Clamp(
+                position / (float)_frames[frameIndex].DurationMilliseconds, 0f, 1f);
+            rectangle = new LiveWallpaperCollisionRectangle(
+                MathHelper.Lerp(current.X, next.X, progress),
+                MathHelper.Lerp(current.Y, next.Y, progress),
+                MathHelper.Lerp(current.Width, next.Width, progress),
+                MathHelper.Lerp(current.Height, next.Height, progress));
+            return true;
+        }
+
+        private LiveWallpaperCollisionRectangle GetCollisionRectangle(
+            LiveWallpaperFrame frame)
+        {
+            if (frame.CollisionWidth <= 0 || frame.CollisionHeight <= 0)
+                return default;
+            var x = OffsetX + frame.OffsetX + (frame.MirroredHorizontally
+                ? frame.Width - frame.CollisionWidth - frame.CollisionX
+                : frame.CollisionX);
+            var y = OffsetY + frame.OffsetY + (frame.MirroredVertically
+                ? frame.Height - frame.CollisionHeight - frame.CollisionY
+                : frame.CollisionY);
+            return new LiveWallpaperCollisionRectangle(
+                x, y, frame.CollisionWidth, frame.CollisionHeight);
+        }
+
         public LiveWallpaperEngineAnimation CreateEngineAnimation() => new(this);
 
         public static bool TryLoad(
@@ -167,15 +251,16 @@ namespace ProjectZ
             if (string.IsNullOrWhiteSpace(spritePath))
                 return false;
 
-            var animations = new Dictionary<string, (int OffsetX, int OffsetY, LiveWallpaperFrame[] Frames)>(
+            var animations = new Dictionary<string, (int LoopCount, int OffsetX, int OffsetY, LiveWallpaperFrame[] Frames)>(
                 StringComparer.OrdinalIgnoreCase);
             string line;
             while ((line = reader.ReadLine()) != null)
             {
                 if (line.Length > 16384 || !TryParseAnimationLine(
-                        line, out var id, out var offsetX, out var offsetY, out var frames))
+                        line, out var id, out var loopCount,
+                        out var offsetX, out var offsetY, out var frames))
                     continue;
-                animations[id] = (offsetX, offsetY, frames);
+                animations[id] = (loopCount, offsetX, offsetY, frames);
             }
 
             foreach (var preferredId in preferredAnimationIds)
@@ -184,7 +269,8 @@ namespace ProjectZ
                     animations.TryGetValue(preferredId, out var parsed) && parsed.Frames.Length > 0)
                 {
                     animation = new LiveWallpaperAnimation(
-                        spritePath, preferredId, parsed.OffsetX, parsed.OffsetY, parsed.Frames);
+                        spritePath, preferredId, parsed.LoopCount,
+                        parsed.OffsetX, parsed.OffsetY, parsed.Frames);
                     return true;
                 }
             }
@@ -194,11 +280,13 @@ namespace ProjectZ
         private static bool TryParseAnimationLine(
             string line,
             out string animationId,
+            out int loopCount,
             out int offsetX,
             out int offsetY,
             out LiveWallpaperFrame[] frames)
         {
             animationId = null;
+            loopCount = 0;
             offsetX = 0;
             offsetY = 0;
             frames = [];
@@ -210,6 +298,7 @@ namespace ProjectZ
                 return false;
             animationId = values[0]?.Trim();
             if (string.IsNullOrWhiteSpace(animationId) ||
+                !TryInt(values[2], out loopCount) ||
                 !TryInt(values[3], out offsetX) ||
                 !TryInt(values[4], out offsetY) ||
                 !TryInt(values[5], out var frameCount) ||
@@ -227,13 +316,14 @@ namespace ProjectZ
                     !TryInt(values[position++], out var height) ||
                     !TryInt(values[position++], out var frameOffsetX) ||
                     !TryInt(values[position++], out var frameOffsetY) ||
-                    !TryInt(values[position++], out _) ||
-                    !TryInt(values[position++], out _) ||
-                    !TryInt(values[position++], out _) ||
-                    !TryInt(values[position++], out _) ||
+                    !TryInt(values[position++], out var collisionX) ||
+                    !TryInt(values[position++], out var collisionY) ||
+                    !TryInt(values[position++], out var collisionWidth) ||
+                    !TryInt(values[position++], out var collisionHeight) ||
                     !bool.TryParse(values[position++], out var mirroredVertically) ||
                     !bool.TryParse(values[position++], out var mirroredHorizontally) ||
-                    width <= 0 || height <= 0)
+                    width < 0 || height < 0 ||
+                    (width == 0) != (height == 0))
                 {
                     frames = [];
                     return false;
@@ -241,6 +331,7 @@ namespace ProjectZ
 
                 frames[index] = new LiveWallpaperFrame(
                     duration, x, y, width, height, frameOffsetX, frameOffsetY,
+                    collisionX, collisionY, collisionWidth, collisionHeight,
                     mirroredVertically, mirroredHorizontally);
             }
             return true;
@@ -266,13 +357,15 @@ namespace ProjectZ
             var gameAnimation = new Animation(source.AnimationId)
             {
                 Offset = new Point(source.OffsetX, source.OffsetY),
-                LoopCount = -1,
+                LoopCount = source.LoopCount,
                 Frames = source.Frames.Select(frame => new Frame
                 {
                     FrameTime = frame.DurationMilliseconds,
                     SourceRectangle = new Rectangle(frame.X, frame.Y, frame.Width, frame.Height),
                     Offset = new Point(frame.OffsetX, frame.OffsetY),
-                    CollisionRectangle = Rectangle.Empty,
+                    CollisionRectangle = new Rectangle(
+                        frame.CollisionX, frame.CollisionY,
+                        frame.CollisionWidth, frame.CollisionHeight),
                     MirroredV = frame.MirroredVertically,
                     MirroredH = frame.MirroredHorizontally
                 }).ToArray()
@@ -284,7 +377,16 @@ namespace ProjectZ
 
         public int CurrentFrameIndex => _animator.CurrentFrameIndex;
 
-        public LiveWallpaperFrame Advance(long elapsedMilliseconds, bool animated)
+        public void Restart(long elapsedMilliseconds)
+        {
+            _animator.Stop();
+            _animator.Play(_source.AnimationId);
+            _lastElapsed = elapsedMilliseconds;
+        }
+
+        public LiveWallpaperFrame Advance(
+            long elapsedMilliseconds, bool animated,
+            float speedMultiplier = 1f)
         {
             if (!animated)
             {
@@ -297,7 +399,7 @@ namespace ProjectZ
                 ? Math.Clamp(elapsedMilliseconds - _lastElapsed.Value, 0L, 250L)
                 : 0L;
             _lastElapsed = elapsedMilliseconds;
-            _animator.Update(delta);
+            _animator.Update(delta * Math.Max(0f, speedMultiplier));
             return _source.Frames[_animator.CurrentFrameIndex];
         }
     }

@@ -19,6 +19,18 @@ static void Assert(bool condition, string message)
         throw new InvalidOperationException(message);
 }
 
+static int FindBushDropSeed(string expectedItemName)
+{
+    for (var seed = 0; seed < 10_000; seed++)
+    {
+        var random = new Random(seed);
+        if (BushDropRules.Roll(random.Next) == expectedItemName)
+            return seed;
+    }
+    throw new InvalidOperationException(
+        $"Could not find a deterministic bush-drop seed for {expectedItemName}.");
+}
+
 static async Task SendWebSocketText(ClientWebSocket socket, string text)
 {
     var bytes = Encoding.UTF8.GetBytes(text);
@@ -42,6 +54,21 @@ static async Task<string> ReceiveWebSocketText(ClientWebSocket socket)
     }
 }
 
+// Public CI has no copyrighted game data. Synthetic regressions always run;
+// maintainers can additionally require the installed-asset tests with an explicit
+// directory. Resolve the default from either repository or game-source cwd.
+var wallpaperGameDataRoot = Environment.GetEnvironmentVariable("LADXHD_TEST_GAME_DATA");
+if (!string.IsNullOrWhiteSpace(wallpaperGameDataRoot))
+    Assert(Directory.Exists(wallpaperGameDataRoot),
+           "The explicitly configured wallpaper game-data directory is missing.");
+else
+    wallpaperGameDataRoot = Directory.Exists(Path.Combine("ProjectZ.Core", "Data"))
+        ? Path.Combine("ProjectZ.Core", "Data")
+        : Path.Combine("ladxhd_game_source_code", "ProjectZ.Core", "Data");
+var testInstalledWallpaperAssets = Directory.Exists(wallpaperGameDataRoot);
+if (!testInstalledWallpaperAssets)
+    Console.WriteLine("Private installed-asset wallpaper tests unavailable; running public synthetic regressions.");
+
 const string wallpaperAnimationData = """
 1
 link0.png
@@ -53,6 +80,7 @@ Assert(LiveWallpaperAnimation.TryLoad(
            out var wallpaperAnimation) &&
        wallpaperAnimation.SpritePath == "link0.png" &&
        wallpaperAnimation.AnimationId == "walk_2" &&
+       wallpaperAnimation.LoopCount == 0 &&
        wallpaperAnimation.OffsetX == -8 && wallpaperAnimation.OffsetY == -20 &&
        wallpaperAnimation.Frames.Count == 2,
        "The live wallpaper must select and parse Link's preferred LADXHD animation safely.");
@@ -70,15 +98,43 @@ Assert(Math.Abs(wallpaperPlacement.Left - 86f) < 0.001f &&
        Math.Abs(wallpaperPlacement.Right - 118f) < 0.001f &&
        Math.Abs(wallpaperPlacement.Bottom - 214f) < 0.001f,
        "The live wallpaper must place frames with the same animation and frame origin semantics as the game Animator.");
+Assert(wallpaperAnimation.TryGetOneShotCollisionRectangle(
+           0, out var wallpaperCollision0) &&
+       Math.Abs(wallpaperCollision0.X - -1f) < 0.001f &&
+       Math.Abs(wallpaperCollision0.Y - -18f) < 0.001f &&
+       wallpaperCollision0.Width == 8 && wallpaperCollision0.Height == 8 &&
+       wallpaperAnimation.TryGetOneShotCollisionRectangle(
+           100, out var wallpaperCollision1) &&
+       Math.Abs(wallpaperCollision1.X - -7f) < 0.001f &&
+       Math.Abs(wallpaperCollision1.Y - -1f) < 0.001f,
+       "Wallpaper weapon collisions must preserve ANI rectangles and Animator mirroring semantics.");
 var wallpaperEngineAnimation = wallpaperAnimation.CreateEngineAnimation();
 var wallpaperEngineFirstFrame = wallpaperEngineAnimation.Advance(0, animated: true);
 var wallpaperEngineSecondFrame = wallpaperEngineAnimation.Advance(101, animated: true);
 Assert(wallpaperEngineFirstFrame.X == 16 && wallpaperEngineSecondFrame.X == 32 &&
        wallpaperEngineAnimation.CurrentFrameIndex == 1,
        "The live wallpaper must drive character frames through the game's Animator state machine.");
+var wallpaperEngineStoppedFrame = wallpaperEngineAnimation.Advance(500, animated: true);
+wallpaperEngineAnimation.Restart(500);
+var wallpaperEngineRestartedFrame = wallpaperEngineAnimation.Advance(500, animated: true);
+Assert(wallpaperEngineStoppedFrame.X == 32 && wallpaperEngineRestartedFrame.X == 16 &&
+       wallpaperEngineAnimation.CurrentFrameIndex == 0,
+       "One-shot wallpaper animations must stop on their last frame and restart for the next action.");
 Assert(!LiveWallpaperAnimation.TryLoad(
            new StringReader("1\nlink0.png\nwalk_2;;0;0;0;99\n"), ["walk_2"], out _),
        "The live wallpaper must reject malformed or excessive animation frame data.");
+if (testInstalledWallpaperAssets)
+using (var fallReader = File.OpenText(Path.Combine(
+           wallpaperGameDataRoot, "Animations", "link0.ani")))
+{
+    Assert(LiveWallpaperAnimation.TryLoad(
+               fallReader, ["fall"], out var fallAnimation) &&
+           fallAnimation.Frames.Count == 6 &&
+           fallAnimation.DurationMilliseconds == 850L &&
+           fallAnimation.Frames[^1].Width == 0 &&
+           fallAnimation.Frames[^1].Height == 0,
+           "The wallpaper must retain link0/fall's legitimate hidden terminal frame and exact duration.");
+}
 Assert(LiveWallpaperAnimation.TryGetSpriteRelativeCandidates(
            "link0.png", out var wallpaperSpriteCandidates) &&
        wallpaperSpriteCandidates.SequenceEqual(["link0.png", "Map Objects/link0.png"]),
@@ -117,11 +173,279 @@ Assert(LiveWallpaperMap.TryLoad(
        wallpaperCollisionMap.IntersectsCollision(18, 2, 8, 8, includeHoles: false) &&
        !wallpaperCollisionMap.IntersectsCollision(33, 1, 8, 8, includeHoles: false) &&
        wallpaperCollisionMap.IntersectsCollision(33, 1, 8, 8, includeHoles: true) &&
+       Math.Abs(wallpaperCollisionMap.GetLinkHoleCoverage(35, 2, 8, 10) - 1f) <
+           0.001f &&
        wallpaperCollisionMap.IntersectsCollision(50, 5, 8, 8, includeHoles: false) &&
        wallpaperCollisionMap.IntersectsCollision(1, 16, 4, 4, includeHoles: false) &&
        !wallpaperCollisionMap.IntersectsCollision(81, 17, 4, 4, includeHoles: true) &&
        wallpaperCollisionMap.IntersectsNpcWall(81, 17, 4, 4),
        "The live wallpaper must parse scenery, fence, solid, hole, and NPC-wall records from installed maps.");
+const string wallpaperObjectParityMapData =
+    "3\n0\n0\ndungeon.png\n11\n1\n1\n" +
+    "0,0,0,0,0,0,0,0,0,0,0\n" +
+    "11\nmoveStone\nmoveStoneCave\nmoveStoneFrogHouse\nmoveStoneD3\n" +
+    "d6Statue\ncaveCrystal\ncrystalD4\nhardCrystal\n" +
+    "dungeonStatue\ndungeonStatueGrey\ndungeon3Head\n11\n" +
+    "0;0;0\n1;16;0\n2;32;0\n3;48;0\n4;64;0\n5;80;0\n" +
+    "6;96;0\n7;112;0\n8;128;0\n9;144;0\n10;160;0\n";
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(wallpaperObjectParityMapData),
+           out var wallpaperObjectParityMap),
+       "The wallpaper object-parity fixture must load as a valid installed map.");
+var wallpaperObjectDecorations = wallpaperObjectParityMap.Decorations
+    .ToDictionary(decoration => decoration.SpriteId);
+Assert(wallpaperObjectParityMap.CollisionCount == 11 &&
+       wallpaperObjectParityMap.Decorations.Count == 11 &&
+       wallpaperObjectDecorations.Keys.Contains("movestone_0") &&
+       wallpaperObjectDecorations.Keys.Contains("movestone_1") &&
+       wallpaperObjectDecorations.Keys.Contains("movestone_2") &&
+       wallpaperObjectDecorations.Keys.Contains("movestone_3") &&
+       !wallpaperObjectDecorations["movestone_0"].PlayerLayer &&
+       wallpaperObjectDecorations["movestone_0"].TopLeft &&
+       wallpaperObjectDecorations["d6_statue"].StoneLayout &&
+       wallpaperObjectDecorations.Keys.Contains("crystal_0") &&
+       wallpaperObjectDecorations.Keys.Contains("crystal_1") &&
+       wallpaperObjectDecorations.Keys.Contains("crystal_hard") &&
+       wallpaperObjectDecorations.Keys.Contains("dungeonStatue_0") &&
+       wallpaperObjectDecorations.Keys.Contains("dungeonStatue_1") &&
+       wallpaperObjectDecorations.Keys.Contains("dungeon3Head") &&
+       wallpaperObjectParityMap.IntersectsCollision(
+           0, 0, 16, 16, includeHoles: false) &&
+       wallpaperObjectParityMap.TryGetStoneKey(
+           64, 1, 16, 13, out _, ignoredStones: null) &&
+       wallpaperObjectParityMap.IntersectsCollision(
+           81, 2, 14, 14, includeHoles: false) &&
+       wallpaperObjectParityMap.IntersectsCollision(
+           112, 4, 16, 12, includeHoles: false) &&
+       wallpaperObjectParityMap.IntersectsCollision(
+           128, 3, 16, 13, includeHoles: false) &&
+       wallpaperObjectParityMap.IntersectsCollision(
+           160, 4, 16, 12, includeHoles: false),
+       "Wallpaper maps must retain the game's four push-block sprites, liftable D6 statue, crystals, dungeon statues, exact anchors, layers, and collision rectangles.");
+var wallpaperMoveStoneKey = wallpaperObjectParityMap.GetMoveStoneKey(0, 0);
+Assert(wallpaperObjectParityMap.TryGetMoveStone(
+           wallpaperMoveStoneKey, out var wallpaperMoveStoneX,
+           out var wallpaperMoveStoneY, out var wallpaperMoveStoneDirections) &&
+       wallpaperMoveStoneX == 0f && wallpaperMoveStoneY == 0f &&
+       wallpaperMoveStoneDirections == 15 &&
+       wallpaperObjectParityMap.IsPushableMoveStone(wallpaperMoveStoneKey) &&
+       !wallpaperObjectParityMap.IntersectsCollision(
+           0, 0, 16, 16, includeHoles: false,
+           includeMoveStones: false),
+       "Push blocks must retain their canonical cell key and default four-direction mask while remaining selectively traversable to the route planner.");
+var wallpaperMoveStoneMapData = new System.Text.StringBuilder(
+    "3\n0\n0\ndungeon.png\n7\n3\n1\n");
+for (var row = 0; row < 3; row++)
+    wallpaperMoveStoneMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 7)));
+wallpaperMoveStoneMapData.AppendLine("3");
+wallpaperMoveStoneMapData.AppendLine("c1");
+wallpaperMoveStoneMapData.AppendLine("moveStone");
+wallpaperMoveStoneMapData.AppendLine("fullHole");
+wallpaperMoveStoneMapData.AppendLine("16");
+for (var column = 0; column < 7; column++)
+{
+    wallpaperMoveStoneMapData.AppendLine($"0;{column * 16};0");
+    wallpaperMoveStoneMapData.AppendLine($"0;{column * 16};32");
+}
+wallpaperMoveStoneMapData.AppendLine("1;32;16;4");
+wallpaperMoveStoneMapData.AppendLine("2;48;16");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(wallpaperMoveStoneMapData.ToString()),
+           out var wallpaperMoveStoneMap),
+       "The push-block corridor regression fixture must load.");
+Assert(LiveWallpaperMapViewport.TryCreateCentered(
+           320, 240, wallpaperMoveStoneMap.Width,
+           wallpaperMoveStoneMap.Height, 24f, 28f, 0.5f,
+           out var wallpaperMoveStoneViewport),
+       "The push-block corridor regression fixture must produce a viewport.");
+var wallpaperMoveStonePlan = LiveWallpaperJourneyPlanner.CreateToPoint(
+    wallpaperMoveStoneMap, wallpaperMoveStoneViewport,
+    24f, 28f, 80f, 28f);
+Assert(wallpaperMoveStonePlan.Points.Any(point =>
+           point.Action == LiveWallpaperJourneyAction.PushBlock &&
+           point.MoveStoneKey == wallpaperMoveStoneMap.GetMoveStoneKey(32, 16)),
+       "A route through a permitted push block must schedule the real push before entering its occupied cell.");
+var wallpaperMoveStoneSimulation = new LiveWallpaperLinkSimulation();
+wallpaperMoveStoneSimulation.EnterMap(24f, 28f);
+wallpaperMoveStoneSimulation.UpdateJourney(
+    1, 0, 0L, true, wallpaperMoveStoneMap,
+    wallpaperMoveStoneViewport, allowIslandLife: false);
+Assert(wallpaperMoveStoneSimulation.TryWalkTo(
+           wallpaperMoveStoneMap, wallpaperMoveStoneViewport, 80f, 28f),
+       "The simulated Link must accept a tap route through a permitted push block.");
+var sawMoveStonePush = false;
+var sawMoveStoneMotion = false;
+LiveWallpaperSimulatedLinkState wallpaperMoveStoneState = default;
+for (var frame = 1; frame < 500; frame++)
+{
+    wallpaperMoveStoneState = wallpaperMoveStoneSimulation.UpdateJourney(
+        1, 0, frame * 17L, true, wallpaperMoveStoneMap,
+        wallpaperMoveStoneViewport, allowIslandLife: false);
+    sawMoveStonePush |= wallpaperMoveStoneState.Action ==
+                        LiveWallpaperLinkRouteAction.Pushing;
+    if (wallpaperMoveStoneState.MoveStones?.TryGetValue(
+            wallpaperMoveStoneMap.GetMoveStoneKey(32, 16),
+            out var movedBlock) == true && movedBlock.X > 32.01f)
+        sawMoveStoneMotion = true;
+    if (wallpaperMoveStoneState.FallenMoveStones?.Contains(
+            wallpaperMoveStoneMap.GetMoveStoneKey(32, 16)) == true)
+        break;
+}
+Assert(sawMoveStonePush && sawMoveStoneMotion &&
+       wallpaperMoveStoneState.FallenMoveStones?.Contains(
+           wallpaperMoveStoneMap.GetMoveStoneKey(32, 16)) == true,
+       "ObjMoveStone parity must show Link's push state, preserve the 500 ms inertia/450 ms one-tile motion, replace collision, and drop the block into a destination hole.");
+const string wallpaperWellMapData =
+    "3\n0\n0\noverworld.png\n5\n3\n1\n" +
+    "0,0,0,0,0\n0,0,0,0,0\n0,0,0,0,0\n" +
+    "2\nhole\nholeTeleporter\n2\n" +
+    "0;32;16;12;12;;2;0\n" +
+    "1;32;16;cave0.map;cave0\n";
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(wallpaperWellMapData), out var wallpaperWellMap) &&
+       wallpaperWellMap.Portals.Count == 1 &&
+       wallpaperWellMap.Portals[0].IsHoleTeleporter &&
+       wallpaperWellMap.Portals[0].HasDestination &&
+       wallpaperWellMap.Portals[0].NextMap == "cave0.map" &&
+       wallpaperWellMap.Portals[0].ExitId == "cave0" &&
+       wallpaperWellMap.IntersectsHoleTeleporter(32, 16, 8, 10),
+       "The wallpaper must retain ObjHoleTeleporter's destination over its real ObjHole collider.");
+Assert(LiveWallpaperMapViewport.TryCreateCentered(
+           160, 128, wallpaperWellMap.Width, wallpaperWellMap.Height,
+           40, 32, 0.5f, out var wallpaperWellViewport),
+       "The well regression fixture must have a valid centered viewport.");
+var wallpaperWellSimulation = new LiveWallpaperLinkSimulation();
+wallpaperWellSimulation.EnterMap(36f, 32f);
+var wellFell = false;
+var wellFoughtHolePull = false;
+for (var frame = 0; frame < 120 && !wellFell; frame++)
+{
+    var link = wallpaperWellSimulation.UpdateJourney(
+        1, 0, frame * 17L, true,
+        wallpaperWellMap, wallpaperWellViewport,
+        allowIslandLife: false, followLoadingZones: true);
+    wellFell = link.Action == LiveWallpaperLinkRouteAction.Falling;
+    if (!wellFell && link.Input.Move.LengthSquared() > 0.0001f)
+        wellFoughtHolePull = true;
+}
+Assert(wellFell && !wellFoughtHolePull,
+       "Once the well's canonical hole pull catches Link, journey movement must stop fighting it until the teleporter fall begins.");
+const string wallpaperPitChestMapData =
+    "3\n0\n0\ncave.png\n4\n2\n1\n" +
+    "0,0,0,0\n0,0,0,0\n" +
+    "2\ncaveBreakingFloor\nchest\n2\n" +
+    "0;16;0\n1;32;0;ruby50;;c6_ruby50;1;false\n";
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(wallpaperPitChestMapData), out var pitChestMap) &&
+       pitChestMap.HazardCount == 1 &&
+       pitChestMap.CollisionCount == 1 &&
+       !pitChestMap.IntersectsCollision(
+           20, 3, 8, 10, includeHoles: false) &&
+       pitChestMap.IntersectsCollision(
+           20, 3, 8, 10, includeHoles: true) &&
+       Math.Abs(pitChestMap.GetLinkHoleCoverage(20, 3, 8, 10) - 1f) <
+           0.001f &&
+       pitChestMap.IntersectsCollision(
+           32, 3, 16, 11, includeHoles: false) &&
+       pitChestMap.Decorations.Count == 2 &&
+       pitChestMap.Decorations[0].SpriteId == "chest_back" &&
+       pitChestMap.Decorations[0].EntityX == 32 &&
+       pitChestMap.Decorations[0].EntityY == 13 &&
+       pitChestMap.Decorations[0].TopLeft &&
+       pitChestMap.Decorations[0].DrawOffsetX == 0 &&
+       pitChestMap.Decorations[0].DrawOffsetY == -13 &&
+       pitChestMap.Decorations[0].SourceOffsetX == 32 &&
+       pitChestMap.Decorations[1].SpriteId == "chest_front" &&
+       pitChestMap.Decorations[1].EntityX == 32 &&
+       pitChestMap.Decorations[1].EntityY == 13 &&
+       !pitChestMap.Decorations[1].TopLeft &&
+       pitChestMap.Decorations[1].DrawOffsetX == 0 &&
+       pitChestMap.Decorations[1].DrawOffsetY == 0 &&
+       pitChestMap.Decorations[1].SourceOffsetX == 32 &&
+       LiveWallpaperChestItem.TryResolve("ruby50", out var rubyChestVisual) &&
+       rubyChestVisual.SpriteId == "rubyBlue" &&
+       rubyChestVisual.ShowAnimation == 1 &&
+       LiveWallpaperChestItem.TryResolve(
+           "pieceOfPower", out var powerChestVisual) &&
+       powerChestVisual.SpriteId == "pieceOfPower" &&
+       powerChestVisual.ShowAnimation == 2 &&
+       !LiveWallpaperChestItem.TryResolve("greenZol", out _),
+       "Wallpaper cave pits must expose ObjBreakingFloor's owned hole, and chests must retain both canonical sprites, depth, offsets, and collision.");
+var chestJourneyMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n20\n16\n1\n");
+for (var row = 0; row < 16; row++)
+    chestJourneyMapData.AppendLine(
+        string.Join(',', Enumerable.Repeat("0", 20)));
+chestJourneyMapData.Append(
+    "1\nchest\n1\n0;160;112;ruby50;;wallpaper_chest;0;false\n");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(chestJourneyMapData.ToString()),
+           out var chestJourneyMap),
+       "The wallpaper chest journey fixture must load as a valid installed map.");
+Assert(LiveWallpaperMapViewport.TryCreateCentered(
+           160, 128, chestJourneyMap.Width, chestJourneyMap.Height,
+           168, 136, 0.5f, out var chestJourneyViewport),
+       "The wallpaper chest journey fixture must have a centered viewport.");
+LiveWallpaperJourneyPlan chestJourney = null;
+var chestJourneyVariant = -1;
+for (var variant = 0; variant < 300; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        chestJourneyMap, chestJourneyViewport, 1, variant,
+        allowIslandLife: true);
+    if (!candidate.Points.Any(point =>
+            point.Action == LiveWallpaperJourneyAction.OpenChest))
+        continue;
+    chestJourney = candidate;
+    chestJourneyVariant = variant;
+    break;
+}
+var chestKey = chestJourneyMap.GetChestKey(160, 112);
+LiveWallpaperJourneyPoint? chestPoint = null;
+if (chestJourney != null)
+{
+    foreach (var point in chestJourney.Points)
+    {
+        if (point.Action != LiveWallpaperJourneyAction.OpenChest)
+            continue;
+        chestPoint = point;
+        break;
+    }
+}
+Assert(chestJourney != null && chestPoint.HasValue &&
+       chestPoint.Value.PixelX == 168 && chestPoint.Value.PixelY == 136 &&
+       chestPoint.Value.ChestKey == chestKey &&
+       chestPoint.Value.ChestItemName == "ruby50",
+       "Wallpaper journeys must approach an unopened item chest from below using ObjChest's upward-facing interaction rule.");
+var alreadyOpenedChests = new HashSet<int> { chestKey };
+for (var variant = 0; variant < 300; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        chestJourneyMap, chestJourneyViewport, 1, variant,
+        allowIslandLife: true, openedChests: alreadyOpenedChests);
+    Assert(!candidate.Points.Any(point =>
+               point.Action == LiveWallpaperJourneyAction.OpenChest),
+           "An opened wallpaper chest must not be selected by a later journey.");
+}
+var chestSimulation = new LiveWallpaperLinkSimulation();
+var sawChestOpen = false;
+var sawChestItem = false;
+var chestStartTime = chestJourneyVariant * 20_000L;
+for (var frame = 0; frame < 4_000 && !sawChestItem; frame++)
+{
+    var link = chestSimulation.UpdateJourney(
+        1, 0, chestStartTime + frame * 17L, true,
+        chestJourneyMap, chestJourneyViewport, allowIslandLife: true);
+    sawChestOpen |= link.Action == LiveWallpaperLinkRouteAction.OpenChest &&
+                    link.Direction == 1 && link.ActiveChestKey == chestKey &&
+                    link.OpenedChests?.Contains(chestKey) == true;
+    sawChestItem |= link.Action == LiveWallpaperLinkRouteAction.ShowItem &&
+                    link.Direction == 1 && link.ActiveChestKey == chestKey &&
+                    link.ChestItemSpriteId == "rubyBlue" &&
+                    link.ChestItemShowAnimation == 1;
+}
+Assert(sawChestOpen && sawChestItem,
+       "Wallpaper Link must open the chest, retain its opened state, and present the resolved item above his head after the canonical opening delay.");
 const string wallpaperAtlasData = "1\n1\nnote:262,185,7,12,0,0\n" +
                                   "bowwow chain:310,91,6,6,3,6\n";
 Assert(LiveWallpaperAtlas.TryLoad(
@@ -292,16 +616,82 @@ Assert(simulatedWalkStart.Input.Move == Microsoft.Xna.Framework.Vector2.Zero &&
        simulatedFeather.Height > 0 && !wallpaperLinkSimulation.Body.IsGrounded &&
        wallpaperLinkSimulation.Body.Velocity.Z > 0,
        "Wallpaper Link must translate the scripted route into real body movement and feather input.");
+var preCarryStart = Microsoft.Xna.Framework.Vector3.Zero;
+var preCarryTarget = new Microsoft.Xna.Framework.Vector3(16f, 16f, 13f);
+var preCarryAtStart = LinkGameplayMotion.ResolvePreCarryPosition(
+    preCarryStart, preCarryTarget, 0f);
+var preCarryAtHalf = LinkGameplayMotion.ResolvePreCarryPosition(
+    preCarryStart, preCarryTarget, 100f);
+var preCarryAtEnd = LinkGameplayMotion.ResolvePreCarryPosition(
+    preCarryStart, preCarryTarget, 200f);
+var featherHeight = 0f;
+var featherVelocity = LinkGameplayMotion.FeatherVelocity;
+var featherFrames = 0;
+var firstFeatherHeight = 0f;
+do
+{
+    featherVelocity = LinkGameplayMotion.ApplyGravity(
+        featherVelocity, LinkGameplayMotion.Gravity, 1f);
+    var nextHeight = featherHeight + featherVelocity;
+    featherFrames++;
+    featherHeight = nextHeight > 0f ? nextHeight : 0f;
+    if (featherFrames == 1)
+        firstFeatherHeight = featherHeight;
+} while (featherHeight > 0f && featherFrames < 100);
+var steeredAirVelocity = LinkGameplayMotion.ResolveAirVelocity(
+    new Microsoft.Xna.Framework.Vector2(1f, 0f),
+    new Microsoft.Xna.Framework.Vector2(0f, 1f), 1f, 1f);
+Assert(preCarryAtStart == preCarryStart &&
+       Math.Abs(preCarryAtHalf.X - 1.663697f) < 0.0001f &&
+       Math.Abs(preCarryAtHalf.Y - 1.663697f) < 0.0001f &&
+       Math.Abs(preCarryAtHalf.Z - 5.772206f) < 0.0001f &&
+       preCarryAtEnd == preCarryTarget &&
+       Math.Abs(firstFeatherHeight - 2.2f) < 0.0001f &&
+       featherFrames == LinkGameplayMotion.FeatherAirborneFramesAt60Fps &&
+       LinkGameplayMotion.FeatherTravelFramesAt60Fps == 32 &&
+       Math.Abs(steeredAirVelocity.X - 0.9646447f) < 0.0001f &&
+       Math.Abs(steeredAirVelocity.Y - 0.0353553f) < 0.0001f,
+       "Wallpaper pickup and feather motion must use ObjLink's exact pre-carry easing, gravity-first jump arc, duration, and airborne steering.");
+Assert(!LinkGameplayMotion.BlocksInsideCollisionMovement(
+           10f, 0f, 80f, 0.5f) &&
+       LinkGameplayMotion.BlocksInsideCollisionMovement(
+           10f, 20f, 80f, 0.5f) &&
+       !LinkGameplayMotion.BlocksInsideCollisionMovement(
+           80f, 80f, 80f, 0.5f) &&
+       LinkGameplayMotion.BlocksInsideCollisionMovement(
+           40f, 40f, 80f, 0.5f) &&
+       !LinkGameplayMotion.BlocksInsideCollisionMovement(
+           39f, 39f, 80f, 0.5f) &&
+       Math.Abs(LinkGameplayMotion.ResolveHorizontalCornerNudge(
+                    1288f, 10f, 1296f, 1312f,
+                    LinkGameplayMotion.CornerCorrectionThreshold) + 2.01f) <
+       0.0001f &&
+       Math.Abs(LinkGameplayMotion.ResolveVerticalCornerNudge(
+                    376f, 8f, 382f, 398f,
+                    LinkGameplayMotion.CornerCorrectionThreshold) + 2.01f) <
+       0.0001f,
+       "Wallpaper collision escape and corner correction must use SystemBody's exact overlap thresholds and 0.01-pixel overcorrection.");
 var constrainedMapData = new System.Text.StringBuilder(
     "3\n0\n0\noverworld.png\n40\n90\n1\n");
 for (var row = 0; row < 90; row++)
-    constrainedMapData.AppendLine(new string(',', 40));
+    constrainedMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
 constrainedMapData.Append("1\nc1\n1\n0;384;1296;;;\n");
 Assert(LiveWallpaperMap.TryLoad(
            new StringReader(constrainedMapData.ToString()), out var constrainedMap),
        "The collision regression fixture must be a valid installed map.");
+Assert(Math.Abs(constrainedMap.GetBlockingOverlapArea(
+                    377f, 1296f, 8f, 10f, includeHoles: false) - 10f) <
+       0.0001f &&
+       constrainedMap.GetBlockingOverlapArea(
+           376f, 1296f, 8f, 10f, includeHoles: false) == 0f &&
+       constrainedMap.TryGetBlockingCollisionBounds(
+           377f, 1296f, 8f, 10f, includeHoles: false,
+           out var constrainedCollision) &&
+       constrainedCollision.X == 384f && constrainedCollision.Y == 1296f &&
+       constrainedCollision.Width == 16f && constrainedCollision.Height == 16f,
+       "The lightweight map must expose the exact installed collider overlap and bounds used by SystemBody-compatible movement.");
 var actorMapData =
-    "3\n0\n0\noverworld.png\n2\n2\n1\n,\n,\n" +
+    "3\n0\n0\noverworld.png\n2\n2\n1\n0,0\n0,0\n" +
     "4\npersonNew\ndogo\nenemy_respawner\nphonehouse\n4\n" +
     "0;16;16;;npc_green_boy;;stand_3\n1;0;0\n" +
     "2;32;16;e2;\n3;48;16\n";
@@ -318,39 +708,2053 @@ Assert(LiveWallpaperMap.TryLoad(new StringReader(actorMapData), out var actorMap
        actorMap.Enemies[0].Kind == LiveWallpaperMapEnemyKind.Octorok &&
        actorMap.Enemies[0].EntityX == 40 && actorMap.Enemies[0].EntityY == 28 &&
        actorMap.IntersectsEnemy(34, 19, 8, 8) &&
+       actorMap.Objects.Count == 4 &&
+       actorMap.Objects[2].Template == "enemy_respawner" &&
+       actorMap.Objects[2].Arguments[0] == "e2" &&
        actorMap.Decorations.Count == 1 &&
        actorMap.Decorations[0].SpriteId == "tree_phonehouse" &&
        actorMap.Decorations[0].EntityX == 72 &&
        actorMap.Decorations[0].EntityY == 40,
        "Wallpaper maps must retain installed NPCs, enemies, and atlas-backed building objects.");
+var houseFixtureMapData =
+    "3\n0\n0\nhouse.png\n4\n4\n1\n" +
+    string.Concat(Enumerable.Repeat("0,0,0,0\n", 4)) +
+    "5\nhouseObject\ndoorLight\nlamp\nlamp_wall_house_1\nlamp_wall_house_3\n5\n" +
+    "0;0;0\n1;72;112\n2;16;16\n3;48;0\n4;0;48\n";
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(houseFixtureMapData), out var houseFixtureMap) &&
+       houseFixtureMap.IsHouse &&
+       houseFixtureMap.Lamps.Count == 3 &&
+       houseFixtureMap.Lamps[0].AnimationPath == "Objects/lamp_floor.ani" &&
+       houseFixtureMap.Lamps[0].PlayerLayer &&
+       houseFixtureMap.Lamps[0].PixelX == 16 &&
+       houseFixtureMap.Lamps[0].PixelY == 16 &&
+       houseFixtureMap.Lamps[0].EntityX == 24 &&
+       houseFixtureMap.Lamps[0].EntityY == 24 &&
+       houseFixtureMap.Lamps[1].AnimationPath == "Objects/lamp_wall_1.ani" &&
+       houseFixtureMap.Lamps[1].Rotation == 1 &&
+       !houseFixtureMap.Lamps[1].PlayerLayer &&
+       houseFixtureMap.Lamps[2].Rotation == 3 &&
+       houseFixtureMap.Lights.Count == 1 &&
+       houseFixtureMap.Lights[0].CenterX == 80 &&
+       houseFixtureMap.Lights[0].CenterY == 120 &&
+       houseFixtureMap.Lights[0].Size == 128 &&
+       houseFixtureMap.Lights[0].Alpha == 100 &&
+       houseFixtureMap.IntersectsCollision(
+           16, 16, 16, 16, includeHoles: true) &&
+       !houseFixtureMap.IntersectsCollision(
+           48, 0, 16, 16, includeHoles: true),
+       "House fixtures must retain ObjHouse, ObjLight, and ObjLamp's exact markers, anchors, rotations, layers, and collision.");
+const string overworldTeleporterFixtureData =
+    "3\n0\n0\ntileset0.png\n2\n2\n1\n,,\n,,\n" +
+    "1\noverworldTeleporter\n1\n0;16;16;0\n";
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(overworldTeleporterFixtureData),
+           out var overworldTeleporterFixture) &&
+       overworldTeleporterFixture.Lamps.Count == 1 &&
+       overworldTeleporterFixture.Lamps[0].AnimationPath ==
+           "Objects/holeTeleporter.ani" &&
+       overworldTeleporterFixture.Lamps[0].PixelX == 24 &&
+       overworldTeleporterFixture.Lamps[0].PixelY == 24 &&
+       overworldTeleporterFixture.Lamps[0].EntityX == 16 &&
+       overworldTeleporterFixture.Lamps[0].EntityY == 16 &&
+       !overworldTeleporterFixture.Lamps[0].PlayerLayer,
+       "The overworld warp hole must use ObjOverworldTeleporter's installed holeTeleporter animation, anchor, and bottom layer.");
+if (testInstalledWallpaperAssets)
+using (var floorLampReader = File.OpenText(Path.Combine(
+           wallpaperGameDataRoot, "Animations", "Objects", "lamp_floor.ani")))
+using (var wallLampReader = File.OpenText(Path.Combine(
+           wallpaperGameDataRoot, "Animations", "Objects", "lamp_wall_1.ani")))
+{
+    Assert(LiveWallpaperAnimation.TryLoad(
+               floorLampReader, ["idle"], out var floorLampAnimation) &&
+           LiveWallpaperAnimation.TryLoad(
+               wallLampReader, ["idle"], out var wallLampAnimation) &&
+           floorLampAnimation.Frames.Count == 6 &&
+           floorLampAnimation.DurationMilliseconds == 1448 &&
+           wallLampAnimation.Frames.Count == 6 &&
+           wallLampAnimation.DurationMilliseconds == 1335,
+           "Wallpaper lamps must use the installed game's exact animator frames and timing.");
+}
+var residentMapData =
+    "3\n0\n0\nhouse.png\n20\n8\n1\n" +
+    string.Concat(Enumerable.Repeat(
+        string.Join(',', Enumerable.Repeat("0", 20)) + "\n", 8)) +
+    "12\nperson\nalligator\nchickenDude\nhippo\npainter\ntracy\n" +
+    "letterBoy\nletterGirl\nletterBird\nletterBirdGreen\nphotoMouse\nsign\n13\n" +
+    "0;64;40;npc07;0.0.16.10;2.-1;stand\n" +
+    "1;16;16\n2;32;16;chicken_dude\n3;48;16\n4;80;16\n" +
+    "5;96;16\n5;64;48\n6;112;32;npc_letter_boy\n" +
+    "7;128;32;npc_letter_girl\n8;144;32;\n9;160;32;\n" +
+    "10;176;32;spawnMouseZora;mouseSeqZora\n10;192;32;;mouse\n";
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(residentMapData), out var residentMap) &&
+       residentMap.Actors.Count == 11 &&
+       residentMap.Actors[0].Kind == LiveWallpaperMapActorKind.LegacyPerson &&
+       residentMap.Actors[0].AnimationId == "npc07" &&
+       residentMap.Actors[0].AnimationName == "stand" &&
+       residentMap.Actors[0].BodyX == 64 &&
+       residentMap.Actors[0].BodyY == 46 &&
+       residentMap.Actors[0].BodyWidth == 16 &&
+       residentMap.Actors[0].BodyHeight == 10 &&
+       residentMap.Actors[0].SpriteOffsetX == 2 &&
+       residentMap.Actors[0].SpriteOffsetY == -1 &&
+       residentMap.Actors.Count(actor =>
+           actor.Kind == LiveWallpaperMapActorKind.Tracy) == 1 &&
+       residentMap.Actors.Count(actor =>
+           actor.Kind == LiveWallpaperMapActorKind.PhotoMouse) == 1 &&
+       residentMap.Actors.Any(actor =>
+           actor.Kind == LiveWallpaperMapActorKind.Alligator &&
+           actor.BodyX == 12 && actor.BodyY == 16 &&
+           actor.BodyWidth == 20 && actor.BodyHeight == 16) &&
+       residentMap.Decorations.Any(decoration =>
+           decoration.SpriteId == "bananas" &&
+           decoration.EntityX == 16 && decoration.EntityY == 52) &&
+       residentMap.IntersectsCollision(
+           8, 38, 16, 14, includeHoles: true) &&
+       residentMap.Actors.Any(actor =>
+           actor.Kind == LiveWallpaperMapActorKind.LetterBird &&
+           actor.AnimationId == "letterBirdGreen"),
+       "House residents must retain their canonical templates and bodies while fake Tracy and conditionally inactive Photo Mouse stay hidden.");
+var residentSimulation = new LiveWallpaperActorSimulation.Session();
+var chickenIndex = residentMap.Actors.ToList().FindIndex(actor =>
+    actor.Kind == LiveWallpaperMapActorKind.ChickenDude);
+var hippoIndex = residentMap.Actors.ToList().FindIndex(actor =>
+    actor.Kind == LiveWallpaperMapActorKind.Hippo);
+var letterBoyIndex = residentMap.Actors.ToList().FindIndex(actor =>
+    actor.Kind == LiveWallpaperMapActorKind.LetterBoy);
+var chickenIdle = residentSimulation.Resolve(
+    residentMap, chickenIndex, 0L, null);
+residentSimulation.Resolve(
+    residentMap, chickenIndex, 300L, null);
+var chickenPowder = residentSimulation.Resolve(
+    residentMap, chickenIndex, 317L, null);
+var hippo = residentMap.Actors[hippoIndex];
+var hippoReactionLink = new LiveWallpaperSimulatedLinkState(
+    (hippo.PixelX + 8f) / 16f,
+    (hippo.PixelY + 33f) / 16f,
+    0, 0, LiveWallpaperLinkRouteAction.Walk, default);
+residentSimulation.Resolve(residentMap, hippoIndex, 0L, null);
+var hippoEmbarrassed = residentSimulation.Resolve(
+    residentMap, hippoIndex, 17L, hippoReactionLink);
+var letterBoy = residentMap.Actors[letterBoyIndex];
+var letterLookLink = new LiveWallpaperSimulatedLinkState(
+    (letterBoy.PixelX + 18f) / 16f,
+    (letterBoy.PixelY + 18f) / 16f,
+    0, 0, LiveWallpaperLinkRouteAction.Walk, default);
+residentSimulation.Resolve(residentMap, letterBoyIndex, 0L, null);
+var letterLooking = residentSimulation.Resolve(
+    residentMap, letterBoyIndex, 17L, letterLookLink);
+var letterStillLooking = residentSimulation.Resolve(
+    residentMap, letterBoyIndex, 200L, null);
+var letterIdleAgain = residentSimulation.Resolve(
+    residentMap, letterBoyIndex, 500L, null);
+Assert(chickenIdle.Action == LiveWallpaperActorAction.Idle &&
+       chickenPowder.Action == LiveWallpaperActorAction.Walk &&
+       hippoEmbarrassed.Action == LiveWallpaperActorAction.Walk &&
+       letterLooking.Action == LiveWallpaperActorAction.Walk &&
+       letterStillLooking.Action == LiveWallpaperActorAction.Walk &&
+       letterIdleAgain.Action == LiveWallpaperActorAction.Idle,
+       "House resident ambience must retain Chicken Dude's powder timing, the hippo reaction, and the letter child's delayed look reset.");
+var mobileActorMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n80\n16\n1\n");
+for (var row = 0; row < 16; row++)
+    mobileActorMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 80)));
+mobileActorMapData.Append(
+    "8\ndogo\nbird\nbutterfly\nBowWow\nfrog\nmouse\nbobWowSmall\nletterBirdGreen\n8\n" +
+    "0;32;48\n1;192;48\n2;352;48\n3;512;48\n" +
+    "4;672;48\n5;832;48\n6;992;48;bowWow1\n7;1152;48\n");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(mobileActorMapData.ToString()),
+           out var mobileActorMap) && mobileActorMap.Actors.Count == 8 &&
+       mobileActorMap.Actors[4].Kind == LiveWallpaperMapActorKind.Frog &&
+       mobileActorMap.Actors[4].BodyX == 674 &&
+       mobileActorMap.Actors[4].BodyY == 56 &&
+       mobileActorMap.Actors[4].BodyWidth == 12 &&
+       mobileActorMap.Actors[4].BodyHeight == 8 &&
+       mobileActorMap.Actors[5].Kind == LiveWallpaperMapActorKind.Mouse &&
+       mobileActorMap.Actors[5].BodyX == 835 &&
+       mobileActorMap.Actors[5].BodyY == 52 &&
+       mobileActorMap.Actors[5].BodyWidth == 10 &&
+       mobileActorMap.Actors[5].BodyHeight == 8 &&
+       mobileActorMap.Actors[6].Kind == LiveWallpaperMapActorKind.BowWowSmall &&
+       mobileActorMap.Actors[6].BodyX == 995 &&
+       mobileActorMap.Actors[6].BodyY == 56 &&
+       mobileActorMap.Actors[6].BodyWidth == 10 &&
+       mobileActorMap.Actors[6].BodyHeight == 8 &&
+       mobileActorMap.Actors[7].Kind == LiveWallpaperMapActorKind.LetterBird &&
+       mobileActorMap.Actors[7].AnimationId == "letterBirdGreen",
+       "The mobile wallpaper actor fixture must be a valid installed map.");
+var owlMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n20\n16\n1\n");
+for (var row = 0; row < 16; row++)
+    owlMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 20)));
+owlMapData.Append(
+    "1\nowl\n1\n0;64;64;owl_key;-16.32.48.32;false;owl_text;0;true\n");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(owlMapData.ToString()), out var owlMap) &&
+       owlMap.Actors.Count == 1 &&
+       owlMap.Actors[0].Kind == LiveWallpaperMapActorKind.Owl &&
+       owlMap.Actors[0].TriggerX == 56 &&
+       owlMap.Actors[0].TriggerY == 104 &&
+       owlMap.Actors[0].TriggerWidth == 48 &&
+       owlMap.Actors[0].TriggerHeight == 32 &&
+       owlMap.IntersectsActor(66f, 72f, 12f, 8f) &&
+       !owlMap.IntersectsActor(
+           66f, 72f, 12f, 8f, ignoreOwl: true),
+       "Wallpaper owls must retain ObjOwl's installed trigger rectangle while route planning treats their perch as transient.");
+var owlSimulation = new LiveWallpaperActorSimulation.Session();
+var owlApproachLink = new LiveWallpaperSimulatedLinkState(
+    80f / 16f, 116f / 16f, 0f, 1,
+    LiveWallpaperLinkRouteAction.Walk, default);
+owlSimulation.Resolve(owlMap, 0, 0L, null);
+var owlFlying = owlSimulation.Resolve(
+    owlMap, 0, 17L, owlApproachLink);
+LiveWallpaperActorState owlGone = default;
+for (var frame = 2; frame <= 130; frame++)
+    owlGone = owlSimulation.Resolve(owlMap, 0, frame * 17L, null);
+var owlPathSimulation = new LiveWallpaperLinkSimulation();
+owlPathSimulation.UpdateLiveActorState(owlMap, 0, owlFlying);
+owlPathSimulation.BeginLiveStateFrame(owlMap);
+var intersectsLiveActor = typeof(LiveWallpaperLinkSimulation).GetMethod(
+    "IntersectsLiveActor", BindingFlags.Instance | BindingFlags.NonPublic);
+var flyingOwlStillBlocks = intersectsLiveActor?.Invoke(
+    owlPathSimulation, [owlMap, 66f, 72f, 12f, 8f]);
+Assert(owlFlying.Action == LiveWallpaperActorAction.Fly &&
+       owlFlying.Visible && !owlFlying.BlocksMovement &&
+       owlGone.Action == LiveWallpaperActorAction.Hidden &&
+       flyingOwlStillBlocks is false,
+       "Approaching Link must start ObjOwl's canonical two-second fly-away, immediately release its pathing body, and leave it hidden after departure.");
+var mobileActorSimulation = new LiveWallpaperActorSimulation.Session();
+var mobileActorStarts = mobileActorMap.Actors.Select(actor =>
+    (X: actor.Kind == LiveWallpaperMapActorKind.BowWow
+            ? actor.PixelX
+            : actor.PixelX + 8f,
+     Y: actor.Kind == LiveWallpaperMapActorKind.Butterfly
+            ? actor.PixelY + 23f
+            : actor.Kind == LiveWallpaperMapActorKind.Mouse
+                ? actor.PixelY + 12f
+            : actor.PixelY + 16f)).ToArray();
+var mobileActorMaximumDistance = new float[8];
+var mobileActorMaximumHeight = new float[8];
+LiveWallpaperActorState bowWowState = default;
+for (var frame = 0; frame < 600; frame++)
+{
+    for (var actorIndex = 0; actorIndex < 8; actorIndex++)
+    {
+        var state = mobileActorSimulation.Resolve(
+            mobileActorMap, actorIndex, frame * 17L, null);
+        var deltaX = state.EntityX - mobileActorStarts[actorIndex].X;
+        var deltaY = state.EntityY - mobileActorStarts[actorIndex].Y;
+        mobileActorMaximumDistance[actorIndex] = Math.Max(
+            mobileActorMaximumDistance[actorIndex],
+            MathF.Sqrt(deltaX * deltaX + deltaY * deltaY));
+        mobileActorMaximumHeight[actorIndex] = Math.Max(
+            mobileActorMaximumHeight[actorIndex], state.Height);
+        if (actorIndex == 3)
+            bowWowState = state;
+    }
+}
+var bowWowOriginX = mobileActorMap.Actors[3].PixelX + 8f;
+var bowWowOriginY = mobileActorMap.Actors[3].PixelY + 8f;
+var bowWowDistance = MathF.Sqrt(
+    MathF.Pow(bowWowState.EntityX - bowWowOriginX, 2) +
+    MathF.Pow(bowWowState.EntityY - 4f - bowWowOriginY, 2));
+Assert(mobileActorMaximumDistance.All(distance => distance > 1f) &&
+       mobileActorMaximumHeight[0] > 0f &&
+       mobileActorMaximumHeight[1] > 0f &&
+       mobileActorMaximumHeight[3] > 0f &&
+       mobileActorMaximumHeight[4] > 0f &&
+       mobileActorMaximumHeight[5] > 0f &&
+       mobileActorMaximumHeight[6] > 0f &&
+       mobileActorMaximumHeight[7] > 0f &&
+       bowWowDistance <= 40.01f,
+       "Installed dogs, cuccos, butterflies, frogs, mice, small BowWows, and BowWow must run their gameplay movement while BowWow remains chained.");
+var fairyFloatPeak = LiveWallpaperActorSimulation.ResolveFairyHeight(
+    550, animated: true);
+var grandmotherActor = new LiveWallpaperMapActor(
+    LiveWallpaperMapActorKind.Grandmother, 100, 100);
+var grandmotherRightLink = new LiveWallpaperSimulatedLinkState(
+    124f / 16f, 110f / 16f, 0, 0,
+    LiveWallpaperLinkRouteAction.Interact, default,
+    interactionActorIndex: 5);
+var grandmotherLeftLink = new LiveWallpaperSimulatedLinkState(
+    92f / 16f, 110f / 16f, 0, 0,
+    LiveWallpaperLinkRouteAction.Interact, default,
+    interactionActorIndex: 5);
+var raccoonActor = new LiveWallpaperMapActor(
+    LiveWallpaperMapActorKind.Raccoon, 100, 100);
+var raccoonLaughLink = new LiveWallpaperSimulatedLinkState(
+    64f / 16f, 70f / 16f, 0, 0,
+    LiveWallpaperLinkRouteAction.Walk, default);
+var dogActor = mobileActorMap.Actors[0];
+var dogStaticApproach = new Microsoft.Xna.Framework.Vector2(
+    dogActor.BodyX + dogActor.BodyWidth + 8f,
+    dogActor.BodyY + dogActor.BodyHeight / 2f + 5f);
+var dogLiveApproach = LiveWallpaperActorSimulation.ResolveInteractionApproach(
+    dogActor,
+    new LiveWallpaperActorState(
+        mobileActorStarts[0].X + 24f,
+        mobileActorStarts[0].Y + 8f,
+        0f, 1, LiveWallpaperActorAction.Walk),
+    dogStaticApproach);
+Assert(Math.Abs(fairyFloatPeak - 16f) < 0.001f &&
+       Math.Abs(LiveWallpaperActorSimulation.ResolveFairyHeight(
+           550, animated: false) - 12f) < 0.001f &&
+       LiveWallpaperActorSimulation.ResolveGrandmotherDirection(
+           grandmotherActor, -1, grandmotherRightLink) == 1 &&
+       LiveWallpaperActorSimulation.ResolveGrandmotherDirection(
+           grandmotherActor, 1, grandmotherLeftLink) == -1 &&
+       LiveWallpaperActorSimulation.ShouldRaccoonLaugh(
+           raccoonActor, raccoonLaughLink) &&
+       LiveWallpaperActorSimulation.IsInteraction(
+           grandmotherRightLink, 5) &&
+       !LiveWallpaperActorSimulation.IsInteraction(
+           grandmotherRightLink, 4) &&
+       Math.Abs(dogLiveApproach.X - dogStaticApproach.X - 24f) < 0.001f &&
+       Math.Abs(dogLiveApproach.Y - dogStaticApproach.Y - 8f) < 0.001f,
+       "Installed NPC ambience must retain the fairy float, grandmother facing, raccoon laugh trigger, and interaction targeting from gameplay.");
+var visualObjectMapData =
+    "3\n0\n0\noverworld.png\n8\n2\n1\n0,0,0,0,0,0,0,0\n0,0,0,0,0,0,0,0\n" +
+    "10\ntree0\nfence\nflower\naquaticPlant\nbush\ngrasForest\nstone\ngravestone\ntree9\noverworldDonut\n10\n" +
+    "0;0;0\n1;16;0\n2;32;0\n3;48;0\n4;64;16\n5;80;16\n6;96;15\n7;112;16\n" +
+    "8;128;16\n9;160;16\n";
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(visualObjectMapData), out var visualObjectMap) &&
+       Enumerable.Range(1, visualObjectMap.Decorations.Count - 1).All(index =>
+       {
+           var previous = visualObjectMap.Decorations[index - 1];
+           var current = visualObjectMap.Decorations[index];
+           var previousLayer = previous.PlayerLayer ? 1 : 0;
+           var currentLayer = current.PlayerLayer ? 1 : 0;
+           return previousLayer < currentLayer ||
+                  previousLayer == currentLayer &&
+                  previous.EntityY <= current.EntityY;
+       }) &&
+       visualObjectMap.Decorations.Count == 13 &&
+       visualObjectMap.Decorations.Any(item => item.SpriteId == "tree_0") &&
+       visualObjectMap.Decorations.Any(item =>
+           item.SpriteId == "tree_9" &&
+           item.EntityX == 144 && item.EntityY == 40 && item.PlayerLayer) &&
+       visualObjectMap.Decorations.Count(item => item.SpriteId == "fence") == 4 &&
+       visualObjectMap.Decorations.Any(item =>
+           item.SpriteId == "aquatic_plant_top" && item.TopLeft) &&
+       visualObjectMap.Decorations.Any(item =>
+           item.SpriteId == "bush_0" &&
+           item.EntityX == 72 && item.EntityY == 24 && item.PlayerLayer) &&
+       visualObjectMap.Decorations.Any(item =>
+           item.SpriteId == "grass_1" &&
+           item.EntityX == 88 && item.EntityY == 24 && !item.PlayerLayer) &&
+       visualObjectMap.Decorations.Any(item =>
+           item.SpriteId == "stone_0" &&
+           item.EntityX == 104 && item.EntityY == 28 && item.PlayerLayer) &&
+       visualObjectMap.Decorations.Any(item =>
+           item.SpriteId == "gravestone" &&
+           item.EntityX == 120 && item.EntityY == 32 && item.PlayerLayer) &&
+       visualObjectMap.Decorations.Any(item =>
+           item.SpriteId == "overworldDonut" &&
+           item.EntityX == 168 && item.EntityY == 16 && item.PlayerLayer) &&
+       visualObjectMap.IntersectsCollision(
+           96, 17, 16, 13, includeHoles: false) &&
+       visualObjectMap.TryGetStoneKey(
+           96, 17, 16, 13, out var visualStoneKey) &&
+       visualObjectMap.Decorations.Any(item =>
+           item.SpriteId == "stone_0" &&
+           visualObjectMap.GetStoneKey(item) == visualStoneKey &&
+           visualObjectMap.TryGetStoneMapPosition(
+               visualStoneKey, out var exactStoneX, out var exactStoneY) &&
+           exactStoneX == 96f && exactStoneY == 15f) &&
+       !visualObjectMap.IntersectsCollision(
+           96, 17, 16, 13, includeHoles: false, includeStones: false) &&
+       !visualObjectMap.IntersectsCollision(
+           96, 17, 16, 13, includeHoles: false,
+           ignoredStones: new HashSet<int> { visualStoneKey }) &&
+       visualObjectMap.IntersectsCollision(
+           112, 20, 16, 12, includeHoles: false) &&
+       visualObjectMap.IntersectsCollision(
+           160, 16, 16, 16, includeHoles: false) &&
+       visualObjectMap.TryGetBushKey(64, 17, 16, 14, out var visualBushKey) &&
+       !visualObjectMap.TryGetBushKey(80, 16, 16, 16, out _) &&
+       visualObjectMap.TryGetCuttableVegetationKey(
+           80, 16, 16, 16, out var visualGrassKey) &&
+       visualGrassKey == visualObjectMap.GetBushKey(80, 16) &&
+       !visualObjectMap.IntersectsCollision(
+           64, 17, 16, 14, includeHoles: false, includeBushes: false) &&
+       !visualObjectMap.IntersectsCollision(
+           64, 17, 16, 14, includeHoles: false,
+           ignoredBushes: new HashSet<int> { visualBushKey }) &&
+       visualObjectMap.AnimatedTiles.Count == 1 &&
+       visualObjectMap.AnimatedTiles[0].SpriteId == "flower_0",
+       "Wallpaper maps must use the installed GameObjectTemplates visuals instead of a building-only whitelist.");
+Assert(GameObjectVisualLayout.TryGetClassicLeafState(
+           0, 0, out var leafStart, out var leafFlipX,
+           out var leafFlipY, out var leafStartAlpha) &&
+       leafStart == new Microsoft.Xna.Framework.Vector2(-4, 2) &&
+       !leafFlipX && !leafFlipY && leafStartAlpha == 1f &&
+       GameObjectVisualLayout.TryGetClassicLeafState(
+           3, GameObjectVisualLayout.ClassicLeafAnimationMilliseconds + 60,
+           out _, out _, out _, out var leafFadeAlpha) &&
+       Math.Abs(leafFadeAlpha - 0.5f) < 0.001f &&
+       !GameObjectVisualLayout.TryGetClassicLeafState(
+           0, GameObjectVisualLayout.ClassicLeafAnimationMilliseconds +
+              GameObjectVisualLayout.ClassicLeafFadeMilliseconds,
+           out _, out _, out _, out _),
+       "Wallpaper vegetation effects must use ObjLeafClassic's exact path and fade timings.");
+var terrainMapData =
+    "3\n0\n0\noverworld.png\n4\n1\n1\n0,,0,0\n" +
+    "3\nwater\nwaterDeep\nwave1\n3\n0;0;0;-2\n1;32;0\n2;0;0\n";
+Assert(LiveWallpaperMap.TryLoad(new StringReader(terrainMapData), out var terrainMap) &&
+       terrainMap.GetTerrain(0, 0) == LiveWallpaperMapTerrain.Water &&
+       terrainMap.GetTerrain(1, 0) == LiveWallpaperMapTerrain.Void &&
+       terrainMap.GetTerrain(2, 0) == LiveWallpaperMapTerrain.DeepWater &&
+       terrainMap.GetTerrain(3, 0) == LiveWallpaperMapTerrain.Ground &&
+       terrainMap.IsWaterAt(8, 8) && !terrainMap.IsDeepWaterAt(8, 8) &&
+       terrainMap.IsWaterAt(40, 8) && terrainMap.IsDeepWaterAt(40, 8) &&
+       terrainMap.IntersectsVoid(17, 1, 14, 14) &&
+       terrainMap.AnimatedTiles.Count == 1 &&
+       terrainMap.AnimatedTiles[0].SpriteId == "water_0" &&
+       terrainMap.AnimatedTiles[0].FrameCount == 8 &&
+       terrainMap.AnimatedTiles[0].FrameDurationMilliseconds == 125,
+       "Wallpaper maps must classify water and void and retain installed water animation objects.");
+const string oceanBaseMapData =
+    "3\n0\n0\ntileset0.png\n3\n1\n1\n,235,\n" +
+    "2\nwave3\nwave4\n2\n0;0;0\n1;16;0\n";
+Assert(LiveWallpaperMap.TryLoad(new StringReader(oceanBaseMapData), out var oceanBaseMap) &&
+       oceanBaseMap.NeedsOverworldOceanBase(oceanBaseMap.AnimatedTiles[0]) &&
+       !oceanBaseMap.NeedsOverworldOceanBase(oceanBaseMap.AnimatedTiles[1]) &&
+       oceanBaseMap.GetTile(0, 0, 0) == -1 &&
+       oceanBaseMap.GetTerrain(2, 0) == LiveWallpaperMapTerrain.Void,
+       "Ocean rendering must fill only empty transparent-wave cells without overwriting existing tiles or changing route terrain.");
+var terminalDoor = new LiveWallpaperMapPortal(
+    64, 192, 16, 16, 1, 0, "entry", "room.map", "exit", is2dDoor: true);
+Assert(terminalDoor.ShouldActivateAt(72f, 208f, 0f, 1) &&
+       terminalDoor.ShouldActivateAt(72f, 208f, -1f, 3) &&
+       !terminalDoor.ShouldActivateAt(72f, 208f, 0f, 3) &&
+       !terminalDoor.ShouldActivateAt(72f, 216f, -1f, 1),
+       "A 2D door must accept its upward terminal frame but reject the wrong facing or a distant position.");
 var journeyMapData = new System.Text.StringBuilder(
     "3\n0\n0\noverworld.png\n40\n90\n1\n");
 for (var row = 0; row < 90; row++)
-    journeyMapData.AppendLine(new string(',', 40));
+    journeyMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
 journeyMapData.Append(
-    "3\npersonNew\ndoor\nenemy_respawner\n3\n" +
+    "4\npersonNew\ndoor\nenemy_respawner\nmoblinSword\n4\n" +
     "0;384;1248;;npc_green_boy;;stand_3\n" +
     "1;416;1216;;;cave_rooster;cave rooster.map;cave_rooster;3;0;\n" +
-    "2;400;1280;e2;\n");
+    "2;400;1280;e2;\n" +
+    "3;1000;1000;\n");
 Assert(LiveWallpaperMap.TryLoad(
            new StringReader(journeyMapData.ToString()), out var journeyMap) &&
        journeyMap.Portals.Count == 1 &&
        Math.Abs(journeyMap.Portals[0].LinkTargetX - 424f) < 0.001f &&
-       Math.Abs(journeyMap.Portals[0].LinkTargetY - 1232f) < 0.001f,
-       "Wallpaper maps must expose ObjDoor-compatible targets to the journey planner.");
+       Math.Abs(journeyMap.Portals[0].LinkTargetY - 1232f) < 0.001f &&
+       journeyMap.Portals[0].EntryId == "cave_rooster" &&
+       journeyMap.Portals[0].NextMap == "cave rooster.map" &&
+       journeyMap.Portals[0].ExitId == "cave_rooster" &&
+       journeyMap.Portals[0].HasDestination,
+       "Wallpaper maps must expose ObjDoor-compatible targets and canonical destination metadata.");
+var enemySession = new LiveWallpaperEnemySimulation.Session();
+var enemyStart = enemySession.Resolve(journeyMap, 0, 0, null);
+var enemyMoved = false;
+for (var frame = 1; frame <= 120; frame++)
+{
+    var enemyFrame = enemySession.Resolve(journeyMap, 0, frame * 17L, null);
+    enemyMoved |= Math.Abs(enemyFrame.PixelX - enemyStart.PixelX) > 0.5f ||
+                  Math.Abs(enemyFrame.PixelY - enemyStart.PixelY) > 0.5f;
+}
+Assert(enemyMoved,
+       "Wallpaper enemies must retain movement state across frames instead of looping around their spawn formula.");
+var sawOctorokShot = false;
+var enemyTime = 120 * 17L;
+var trackedEnemy = enemySession.Resolve(journeyMap, 0, enemyTime, null);
+for (var frame = 1; frame <= 600 && !sawOctorokShot; frame++)
+{
+    var facing = trackedEnemy.Direction switch
+    {
+        0 => new Microsoft.Xna.Framework.Vector2(-32, 0),
+        1 => new Microsoft.Xna.Framework.Vector2(0, -32),
+        2 => new Microsoft.Xna.Framework.Vector2(32, 0),
+        _ => new Microsoft.Xna.Framework.Vector2(0, 32)
+    };
+    var targetLink = new LiveWallpaperSimulatedLinkState(
+        (trackedEnemy.PixelX + facing.X) / 16f,
+        (trackedEnemy.PixelY + facing.Y) / 16f,
+        0, trackedEnemy.Direction, LiveWallpaperLinkRouteAction.Stand,
+        new LiveWallpaperLinkInput(Microsoft.Xna.Framework.Vector2.Zero, false));
+    enemyTime += 17;
+    trackedEnemy = enemySession.Resolve(
+        journeyMap, 0, enemyTime, targetLink);
+    sawOctorokShot |= trackedEnemy.Projectile.Kind ==
+                       LiveWallpaperEnemyProjectileKind.OctorokShot;
+}
+Assert(sawOctorokShot,
+       "Octoroks must fire their real projectile when Link is in range and in their facing direction.");
+enemyTime += 17;
+var contactLink = new LiveWallpaperSimulatedLinkState(
+    trackedEnemy.PixelX / 16f, trackedEnemy.PixelY / 16f,
+    0, trackedEnemy.Direction, LiveWallpaperLinkRouteAction.Stand,
+    new LiveWallpaperLinkInput(Microsoft.Xna.Framework.Vector2.Zero, false));
+var enemyContact = enemySession.Resolve(
+    journeyMap, 0, enemyTime, contactLink);
+Assert(enemyContact.LinkHit.Valid && enemyContact.LinkHit.Damage == 2 &&
+       Math.Abs(enemyContact.LinkHit.PushMultiplier - 1.85f) < 0.001f,
+       "An Octorok body or projectile must apply its real two-damage player hit and default push multiplier.");
+var damagedLinkSimulation = new LiveWallpaperLinkSimulation();
+Assert(damagedLinkSimulation.ApplyEnemyHit(enemyContact.LinkHit, enemyTime) &&
+       !damagedLinkSimulation.ApplyEnemyHit(enemyContact.LinkHit, enemyTime + 17) &&
+       !damagedLinkSimulation.IsDamageVisible(enemyTime) &&
+       damagedLinkSimulation.IsDamageVisible(enemyTime + 66),
+       "Wallpaper Link damage must use ObjLink's 66 ms blink and 1056 ms default invulnerability window.");
+var attackingLink = new LiveWallpaperSimulatedLinkState(
+    trackedEnemy.PixelX / 16f, trackedEnemy.PixelY / 16f,
+    0, trackedEnemy.Direction, LiveWallpaperLinkRouteAction.Attack,
+    new LiveWallpaperLinkInput(Microsoft.Xna.Framework.Vector2.Zero, false),
+    combatEnemyIndex: 0, actionProgress: 0.5f,
+    attackBox: new LiveWallpaperAttackBox(
+        trackedEnemy.PixelX - 8, trackedEnemy.PixelY - 16, 16, 16));
+enemyTime += 17;
+var enemyStruck = enemySession.Resolve(
+    journeyMap, 0, enemyTime, attackingLink);
+enemyTime += 500;
+var enemyDead = enemySession.Resolve(
+    journeyMap, 0, enemyTime,
+    new LiveWallpaperSimulatedLinkState(
+        trackedEnemy.PixelX / 16f, trackedEnemy.PixelY / 16f,
+        0, trackedEnemy.Direction, LiveWallpaperLinkRouteAction.Stand,
+        new LiveWallpaperLinkInput(Microsoft.Xna.Framework.Vector2.Zero, false)));
+Assert((enemyStruck.Action is LiveWallpaperEnemyAction.Hit or
+            LiveWallpaperEnemyAction.Hidden) && !enemyDead.Visible,
+       "A level-one sword hit must consume Octorok's real one HP, blink on the real cooldown, and remove it.");
 Assert(LiveWallpaperMapViewport.TryCreate(
            1080, 2400, journeyMap.Height, 1, 0.5f, out var journeyViewport),
        "The wallpaper journey regression fixture must produce a map viewport.");
+var holeResetAlignmentSimulation = new LiveWallpaperLinkSimulation();
+holeResetAlignmentSimulation.EnterMap(319f, 1100f);
+holeResetAlignmentSimulation.Body.Position.Set(
+    new Microsoft.Xna.Framework.Vector3(321f, 1100f, 0f));
+var updateHoleResetPosition = typeof(LiveWallpaperLinkSimulation).GetMethod(
+    "UpdateHoleResetPosition", BindingFlags.Instance | BindingFlags.NonPublic);
+var holeResetPositionField = typeof(LiveWallpaperLinkSimulation).GetField(
+    "_holeResetPosition", BindingFlags.Instance | BindingFlags.NonPublic);
+updateHoleResetPosition?.Invoke(holeResetAlignmentSimulation, [journeyMap]);
+var alignedHoleResetPosition = holeResetPositionField?.GetValue(
+    holeResetAlignmentSimulation) as Microsoft.Xna.Framework.Vector2?;
+Assert(alignedHoleResetPosition.HasValue &&
+       alignedHoleResetPosition.Value ==
+           new Microsoft.Xna.Framework.Vector2(328f, 1100f),
+       "Hole recovery must use ObjLink.UpdateSavePosition's tile alignment and eight-pixel inward field buffer.");
+var blockingMoblinSimulation = new LiveWallpaperLinkSimulation();
+blockingMoblinSimulation.UpdateJourney(
+    1, 0, 0L, true, journeyMap, journeyViewport,
+    allowIslandLife: true, followLoadingZones: false);
+blockingMoblinSimulation.EnterMap(448f, 1120f);
+Assert(blockingMoblinSimulation.TryWalkTo(
+           journeyMap, journeyViewport, 504f, 1120f),
+       "The live Moblin regression must begin with an unobstructed planned route.");
+blockingMoblinSimulation.UpdateLiveEnemyState(
+    journeyMap, 1, new LiveWallpaperEnemyState(
+        472f, 1120f, 0, LiveWallpaperEnemyAction.Attack));
+Assert(blockingMoblinSimulation.ApplyEnemyHit(
+           new LiveWallpaperLinkHit(472f, 1120f, 2, 1.85f), 1L),
+       "The Sword Moblin regression must apply its real knockback first.");
+var attackedBlockingMoblin = false;
+LiveWallpaperSimulatedLinkState blockingMoblinLink = default;
+for (var frame = 1; frame <= 360 && !attackedBlockingMoblin; frame++)
+{
+    blockingMoblinLink = blockingMoblinSimulation.UpdateJourney(
+        1, 0, frame * 17L, true, journeyMap, journeyViewport,
+        allowIslandLife: true, followLoadingZones: false);
+    attackedBlockingMoblin =
+        blockingMoblinLink.Action == LiveWallpaperLinkRouteAction.Attack &&
+        blockingMoblinLink.CombatEnemyIndex == 1;
+}
+Assert(attackedBlockingMoblin,
+       $"After Moblin knockback, a live enemy blocking the resumed route must become Link's sword target instead of deadlocking movement ({blockingMoblinLink.MapX * 16f},{blockingMoblinLink.MapY * 16f},{blockingMoblinLink.Action},{blockingMoblinLink.CombatEnemyIndex}).");
+var seaUrchinPathMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    seaUrchinPathMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
+seaUrchinPathMapData.Append("1\nenemy_respawner\n1\n0;472;1120;e1;\n");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(seaUrchinPathMapData.ToString()),
+           out var seaUrchinPathMap) &&
+       seaUrchinPathMap.Enemies.Count == 1 &&
+       seaUrchinPathMap.Enemies[0].Kind ==
+           LiveWallpaperMapEnemyKind.SeaUrchin,
+       "The route-blocking Sea Urchin regression fixture must be valid.");
+var seaUrchinCombatSimulation = new LiveWallpaperLinkSimulation();
+seaUrchinCombatSimulation.EnterMap(460f, 1133f);
+seaUrchinCombatSimulation.UpdateLiveEnemyState(
+    seaUrchinPathMap, 0, new LiveWallpaperEnemyState(
+        480f, 1136f, 3, LiveWallpaperEnemyAction.Idle));
+var startBlockingEnemyAttack = typeof(LiveWallpaperLinkSimulation).GetMethod(
+    "TryStartBlockingEnemyAttack", BindingFlags.Instance | BindingFlags.NonPublic);
+object[] seaUrchinAttackArguments =
+[
+    seaUrchinPathMap, Microsoft.Xna.Framework.Vector2.UnitX, 17L,
+    Microsoft.Xna.Framework.Vector2.Zero
+];
+var attackedSeaUrchin = startBlockingEnemyAttack?.Invoke(
+    seaUrchinCombatSimulation, seaUrchinAttackArguments);
+Assert(attackedSeaUrchin is true &&
+       seaUrchinAttackArguments[3] is Microsoft.Xna.Framework.Vector2
+           seaUrchinAttackDirection && seaUrchinAttackDirection.X > 0f,
+       "Any live enemy within the canonical sword approach corridor, including a stationary Sea Urchin, must trigger Link's normal attack.");
+var removedSeaUrchinSimulation = new LiveWallpaperLinkSimulation();
+removedSeaUrchinSimulation.EnterMap(460f, 1133f);
+removedSeaUrchinSimulation.UpdateLiveEnemyState(
+    seaUrchinPathMap, 0, new LiveWallpaperEnemyState(
+        480f, 1136f, 3, LiveWallpaperEnemyAction.Hidden));
+removedSeaUrchinSimulation.BeginLiveStateFrame(seaUrchinPathMap);
+object[] removedSeaUrchinAttackArguments =
+[
+    seaUrchinPathMap, Microsoft.Xna.Framework.Vector2.UnitX, 34L,
+    Microsoft.Xna.Framework.Vector2.Zero
+];
+var attackedRemovedSeaUrchin = startBlockingEnemyAttack?.Invoke(
+    removedSeaUrchinSimulation, removedSeaUrchinAttackArguments);
+Assert(attackedRemovedSeaUrchin is false,
+       "A killed Sea Urchin must remain absent from collision and sword targeting when viewport culling begins the next live-state frame.");
+var collisionEscapeSimulation = new LiveWallpaperLinkSimulation();
+collisionEscapeSimulation.UpdateJourney(
+    1, 0, 0L, true, constrainedMap, journeyViewport,
+    allowIslandLife: true, followLoadingZones: false);
+collisionEscapeSimulation.Body.Position.Set(
+    new Microsoft.Xna.Framework.Vector3(381f, 1306f, 0f));
+Assert(collisionEscapeSimulation.TryWalkTo(
+           constrainedMap, journeyViewport, 360f, 1306f),
+       "A continuation beginning partly inside installed collision must still produce a route out.");
+LiveWallpaperSimulatedLinkState collisionEscapeLink = default;
+for (var frame = 1; frame <= 180; frame++)
+{
+    collisionEscapeLink = collisionEscapeSimulation.UpdateJourney(
+        1, 0, frame * 17L, true, constrainedMap, journeyViewport,
+        allowIslandLife: true, followLoadingZones: false);
+}
+Assert(collisionEscapeLink.MapX * 16f < 376f &&
+       constrainedMap.GetBlockingOverlapArea(
+           collisionEscapeLink.MapX * 16f - 4f,
+           collisionEscapeLink.MapY * 16f - 10f,
+           8f, 10f, includeHoles: false) == 0f,
+       "Link must reduce an inherited transition overlap and leave the collider instead of walking in place until replanning.");
+var cornerCorrectionSimulation = new LiveWallpaperLinkSimulation();
+cornerCorrectionSimulation.Body.Position.Set(
+    new Microsoft.Xna.Framework.Vector3(376f, 1298f, 0f));
+var constrainedMovement = typeof(LiveWallpaperLinkSimulation).GetMethod(
+    "ApplyJourneyConstrainedMovement",
+    BindingFlags.Instance | BindingFlags.NonPublic);
+var correctedCorner = constrainedMovement?.Invoke(
+    cornerCorrectionSimulation,
+    [constrainedMap, new Microsoft.Xna.Framework.Vector2(12f, 0f), true, true]);
+Assert(correctedCorner is true &&
+       cornerCorrectionSimulation.Body.Position.X > 387f &&
+       cornerCorrectionSimulation.Body.Position.Y < 1296f,
+       "Link must apply ObjLink's real corner correction when grazing a collider instead of stopping at the corner.");
+var featherGapMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    featherGapMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
+featherGapMapData.AppendLine("1");
+featherGapMapData.AppendLine("fullHole");
+featherGapMapData.AppendLine("8");
+for (var gapRow = 72; gapRow < 80; gapRow++)
+    featherGapMapData.AppendLine($"0;400;{gapRow * 16}");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(featherGapMapData.ToString()), out var featherGapMap),
+       "The exact-feather journey fixture must be a valid installed map.");
+LiveWallpaperJourneyPlan featherGapPlan = null;
+var featherGapVariant = -1;
+for (var variant = 0; variant < 120 && featherGapPlan == null; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        featherGapMap, journeyViewport, 1, variant,
+        allowIslandLife: true, followLoadingZones: true);
+    if (candidate.Points.Any(point =>
+            point.Action == LiveWallpaperJourneyAction.FeatherJump) &&
+        candidate.Points.Min(point => point.PixelX) < 392f &&
+        candidate.Points.Max(point => point.PixelX) > 408f)
+    {
+        featherGapPlan = candidate;
+        featherGapVariant = variant;
+    }
+}
+Assert(featherGapPlan != null &&
+       featherGapPlan.Points.Count(point =>
+           point.Action == LiveWallpaperJourneyAction.FeatherJump) == 1,
+       "A traversable gap must schedule one real feather press at its takeoff edge, not repeated jump markers across the pit.");
+var featherGapPointIndex = Enumerable.Range(0, featherGapPlan.Points.Count)
+    .First(index => featherGapPlan.Points[index].Action ==
+                    LiveWallpaperJourneyAction.FeatherJump);
+var featherGapPreviousPoint = featherGapPlan.Points[
+    Math.Max(0, featherGapPointIndex - 1)];
+var featherGapPoint = featherGapPlan.Points[featherGapPointIndex];
+var featherGapNextPoint = featherGapPlan.Points[
+    Math.Min(featherGapPlan.Points.Count - 1, featherGapPointIndex + 1)];
+var featherGapSimulation = new LiveWallpaperLinkSimulation();
+var featherGapPresses = 0;
+var featherGapMinimumX = float.MaxValue;
+var featherGapMaximumX = float.MinValue;
+var featherGapStartTime = featherGapVariant * 20_000L;
+for (var frame = 0; frame < 2_000; frame++)
+{
+    var link = featherGapSimulation.UpdateJourney(
+        1, 0, featherGapStartTime + frame * 17L, true,
+        featherGapMap, journeyViewport, allowIslandLife: true,
+        followLoadingZones: true);
+    if (link.Input.FeatherPressed)
+        featherGapPresses++;
+    featherGapMinimumX = Math.Min(featherGapMinimumX, link.MapX * 16f);
+    featherGapMaximumX = Math.Max(featherGapMaximumX, link.MapX * 16f);
+    if (featherGapMinimumX < 392f && featherGapMaximumX > 408f)
+        break;
+}
+Assert(featherGapPresses == 1 && featherGapMinimumX < 392f &&
+       featherGapMaximumX > 408f,
+       $"Wallpaper Link must cross a one-tile pit with one gameplay-equivalent feather arc " +
+       $"(presses={featherGapPresses}, minX={featherGapMinimumX}, maxX={featherGapMaximumX}, " +
+       $"jump={featherGapPreviousPoint.PixelX},{featherGapPreviousPoint.PixelY}->" +
+       $"{featherGapPoint.PixelX},{featherGapPoint.PixelY}->" +
+       $"{featherGapNextPoint.PixelX},{featherGapNextPoint.PixelY}).");
+var lowRateFeatherSimulation = new LiveWallpaperLinkSimulation();
+var lowRateFeatherPresses = 0;
+var lowRateFeatherFell = false;
+var lowRateMinimumX = float.MaxValue;
+var lowRateMaximumX = float.MinValue;
+for (var frame = 0; frame < 600; frame++)
+{
+    var link = lowRateFeatherSimulation.UpdateJourney(
+        1, 0, featherGapStartTime + frame * 67L, true,
+        featherGapMap, journeyViewport, allowIslandLife: true,
+        followLoadingZones: true);
+    if (link.Input.FeatherPressed)
+        lowRateFeatherPresses++;
+    lowRateFeatherFell |= link.Action == LiveWallpaperLinkRouteAction.Falling;
+    lowRateMinimumX = Math.Min(lowRateMinimumX, link.MapX * 16f);
+    lowRateMaximumX = Math.Max(lowRateMaximumX, link.MapX * 16f);
+    if (lowRateMinimumX < 392f && lowRateMaximumX > 408f)
+        break;
+}
+Assert(lowRateFeatherPresses == 1 && !lowRateFeatherFell &&
+       lowRateMinimumX < 392f && lowRateMaximumX > 408f,
+       $"Battery-friendly 15 Hz rendering must preserve the same canonical feather arc " +
+       $"instead of landing Link in the pit (presses={lowRateFeatherPresses}, " +
+       $"fell={lowRateFeatherFell}, minX={lowRateMinimumX}, maxX={lowRateMaximumX}).");
+var unsafeWideGapMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    unsafeWideGapMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
+unsafeWideGapMapData.AppendLine("1");
+unsafeWideGapMapData.AppendLine("fullHole");
+unsafeWideGapMapData.AppendLine("8");
+for (var gapRow = 72; gapRow < 80; gapRow++)
+    unsafeWideGapMapData.AppendLine($"0;400;{gapRow * 16};64;16");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(unsafeWideGapMapData.ToString()),
+           out var unsafeWideGapMap),
+       "The overlong-feather regression fixture must be a valid installed map.");
+var unsafeWideGapRouteFound = false;
+for (var variant = 0; variant < 120 && !unsafeWideGapRouteFound; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        unsafeWideGapMap, journeyViewport, 1, variant,
+        allowIslandLife: true, followLoadingZones: true);
+    unsafeWideGapRouteFound = candidate.Points.Any(point =>
+                                  point.Action ==
+                                  LiveWallpaperJourneyAction.FeatherJump) &&
+                              candidate.Points.Min(point => point.PixelX) < 392f &&
+                              candidate.Points.Max(point => point.PixelX) > 464f;
+}
+Assert(!unsafeWideGapRouteFound,
+       "The planner must reject a gap wider than Link's real 31-update Pegasus running-jump arc.");
+var pegasusGapMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    pegasusGapMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
+pegasusGapMapData.AppendLine("1");
+pegasusGapMapData.AppendLine("fullHole");
+pegasusGapMapData.AppendLine("8");
+for (var gapRow = 72; gapRow < 80; gapRow++)
+    pegasusGapMapData.AppendLine($"0;400;{gapRow * 16};48;16");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(pegasusGapMapData.ToString()),
+           out var pegasusGapMap),
+       "The three-tile Pegasus gap fixture must be a valid installed map.");
+LiveWallpaperJourneyPlan pegasusGapPlan = null;
+var pegasusGapVariant = -1;
+for (var variant = 0; variant < 120 && pegasusGapPlan == null; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        pegasusGapMap, journeyViewport, 1, variant,
+        allowIslandLife: true, followLoadingZones: true);
+    if (candidate.Points.Any(point =>
+            point.Action == LiveWallpaperJourneyAction.PegasusJump) &&
+        candidate.Points.Any(point =>
+            point.Action == LiveWallpaperJourneyAction.PegasusCharge) &&
+        candidate.Points.Min(point => point.PixelX) < 392f &&
+        candidate.Points.Max(point => point.PixelX) > 448f)
+    {
+        pegasusGapPlan = candidate;
+        pegasusGapVariant = variant;
+    }
+}
+Assert(pegasusGapPlan != null,
+       "A three-tile pit must produce a Pegasus charge followed by one running feather jump.");
+var pegasusGapSimulation = new LiveWallpaperLinkSimulation();
+var sawPegasusGapCharge = false;
+var sawPegasusGapJump = false;
+var pegasusGapFell = false;
+var pegasusGapMinimumX = float.MaxValue;
+var pegasusGapMaximumX = float.MinValue;
+var pegasusGapStartTime = pegasusGapVariant * 20_000L;
+for (var frame = 0; frame < 5_000; frame++)
+{
+    var link = pegasusGapSimulation.UpdateJourney(
+        1, 0, pegasusGapStartTime + frame * 8L, true,
+        pegasusGapMap, journeyViewport, allowIslandLife: true,
+        followLoadingZones: true);
+    sawPegasusGapCharge |=
+        link.Action == LiveWallpaperLinkRouteAction.PegasusCharge;
+    sawPegasusGapJump |=
+        link.Action == LiveWallpaperLinkRouteAction.PegasusJump;
+    pegasusGapFell |= link.Action == LiveWallpaperLinkRouteAction.Falling;
+    pegasusGapMinimumX = Math.Min(pegasusGapMinimumX, link.MapX * 16f);
+    pegasusGapMaximumX = Math.Max(pegasusGapMaximumX, link.MapX * 16f);
+    // At 120+ Hz, completing the jump requires Link's entire 8-pixel body to
+    // clear the 48-pixel hole, not merely his entity anchor to cross its edge.
+    if (sawPegasusGapJump && link.Height <= 0.001f &&
+        pegasusGapMinimumX <= 392f && pegasusGapMaximumX >= 456f)
+        break;
+}
+Assert(sawPegasusGapCharge && sawPegasusGapJump && !pegasusGapFell &&
+       pegasusGapMinimumX <= 392f && pegasusGapMaximumX >= 456f,
+       $"Link must retain canonical Pegasus momentum through a three-tile pit " +
+       $"at a 120 Hz renderer cadence and land with his full body clear " +
+       $"(charge={sawPegasusGapCharge}, jump={sawPegasusGapJump}, " +
+       $"fell={pegasusGapFell}, minX={pegasusGapMinimumX}, maxX={pegasusGapMaximumX}).");
+var holeFallSimulation = new LiveWallpaperLinkSimulation();
+holeFallSimulation.EnterMap(384f, 1197f);
+holeFallSimulation.Body.Position.Set(
+    new Microsoft.Xna.Framework.Vector3(408f, 1197f, 0f));
+holeFallSimulation.Body.IsGrounded = true;
+var holeFallStart = holeFallSimulation.UpdateJourney(
+    1, 0, 0L, true, featherGapMap, journeyViewport,
+    allowIslandLife: true, followLoadingZones: true,
+    holeFallAnimationMilliseconds: 850L);
+var holeFallReset = holeFallSimulation.UpdateJourney(
+    1, 0, 867L, true, featherGapMap, journeyViewport,
+    allowIslandLife: true, followLoadingZones: true,
+    holeFallAnimationMilliseconds: 850L);
+Assert(holeFallStart.Action == LiveWallpaperLinkRouteAction.Falling &&
+       holeFallReset.Action != LiveWallpaperLinkRouteAction.Falling &&
+       holeFallReset.MapX * 16f < 400f &&
+       !featherGapMap.IntersectsHole(
+           holeFallReset.MapX * 16f - 4f,
+           holeFallReset.MapY * 16f - 10f, 8f, 10f),
+       $"A fully absorbed wallpaper Link must play the real fall state and reset to the field's saved safe position instead of remaining trapped in the hole " +
+       $"(start={holeFallStart.Action}@{holeFallStart.MapX * 16f},{holeFallStart.MapY * 16f}; " +
+       $"reset={holeFallReset.Action}@{holeFallReset.MapX * 16f},{holeFallReset.MapY * 16f}; " +
+       $"coverage={featherGapMap.GetLinkHoleCoverage(404f, 1187f, 8f, 10f)}).");
+var outdoorPitSimulation = new LiveWallpaperLinkSimulation();
+outdoorPitSimulation.EnterMap(392f, 1197f);
+var enteredOutdoorPit = constrainedMovement?.Invoke(
+    outdoorPitSimulation,
+    [featherGapMap, new Microsoft.Xna.Framework.Vector2(16f, 0f), false, true]);
+var outdoorPitFall = outdoorPitSimulation.UpdateJourney(
+    1, 0, 0L, true, featherGapMap, journeyViewport,
+    allowIslandLife: true, followLoadingZones: true,
+    holeFallAnimationMilliseconds: 850L);
+Assert(enteredOutdoorPit is true &&
+       outdoorPitFall.Action == LiveWallpaperLinkRouteAction.Falling,
+       "Outdoor bottomless holes must be non-solid hazards that start ObjLink's fall after grounded movement enters them.");
+var indoorPitMapData = new System.Text.StringBuilder(
+    "3\n0\n0\nhouse.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    indoorPitMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
+indoorPitMapData.Append(
+    "2\nhouseObject\nvisiblehole\n2\n0;0;0\n1;400;1184\n");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(indoorPitMapData.ToString()), out var indoorPitMap) &&
+       indoorPitMap.IsHouse && indoorPitMap.IntersectsHole(
+           404f, 1187f, 8f, 10f),
+       "Installed indoor visiblehole objects must retain ObjHole collision.");
+var indoorPitSimulation = new LiveWallpaperLinkSimulation();
+indoorPitSimulation.EnterMap(392f, 1197f);
+var enteredIndoorPit = constrainedMovement?.Invoke(
+    indoorPitSimulation,
+    [indoorPitMap, new Microsoft.Xna.Framework.Vector2(16f, 0f), false, true]);
+var indoorPitFall = indoorPitSimulation.UpdateJourney(
+    1, 0, 0L, true, indoorPitMap, journeyViewport,
+    allowIslandLife: true, followLoadingZones: false,
+    holeFallAnimationMilliseconds: 850L);
+Assert(enteredIndoorPit is true &&
+       indoorPitFall.Action == LiveWallpaperLinkRouteAction.Falling,
+       "Indoor bottomless holes must use the same non-solid fall and reset path as overworld holes.");
+var tappedAcrossHolePlan = LiveWallpaperJourneyPlanner.CreateToPoint(
+    featherGapMap, journeyViewport,
+    384f, 1197f, 424f, 1197f);
+Assert(tappedAcrossHolePlan.Points.Count >= 2 &&
+       tappedAcrossHolePlan.Points.Any(point =>
+           featherGapMap.IntersectsHole(
+               point.PixelX - 4f, point.PixelY - 10f, 8f, 10f)) &&
+       tappedAcrossHolePlan.Points.Any(point => point.Action ==
+           LiveWallpaperJourneyAction.FeatherJump),
+       "A safe manual destination beyond a one-tile pit must use the canonical feather jump instead of walking Link into the hole.");
+var tappedHoleSimulation = new LiveWallpaperLinkSimulation();
+tappedHoleSimulation.UpdateJourney(
+    1, 0, 0L, true, featherGapMap, journeyViewport,
+    allowIslandLife: true, followLoadingZones: false,
+    holeFallAnimationMilliseconds: 850L);
+tappedHoleSimulation.EnterMap(384f, 1197f);
+Assert(tappedHoleSimulation.TryWalkTo(
+           featherGapMap, journeyViewport, 408f, 1197f),
+       "A tap whose destination is inside a hole must be accepted as a manual journey.");
+var tappedHoleFell = false;
+for (var frame = 1; frame <= 120 && !tappedHoleFell; frame++)
+{
+    var link = tappedHoleSimulation.UpdateJourney(
+        1, 0, frame * 17L, true, featherGapMap, journeyViewport,
+        allowIslandLife: true, followLoadingZones: false,
+        holeFallAnimationMilliseconds: 850L);
+    tappedHoleFell = link.Action == LiveWallpaperLinkRouteAction.Falling;
+}
+Assert(tappedHoleFell,
+       "Tapping a bottomless hole must make Link walk into it and enter the canonical fall sequence.");
+var tappedPegasusPlan = LiveWallpaperJourneyPlanner.CreateToPoint(
+    pegasusGapMap, journeyViewport,
+    384f, 1197f, 456f, 1197f);
+Assert(tappedPegasusPlan.Points.Any(point => point.Action ==
+           LiveWallpaperJourneyAction.PegasusCharge) &&
+       tappedPegasusPlan.Points.Any(point => point.Action ==
+           LiveWallpaperJourneyAction.PegasusJump),
+       "A safe tap across a clear three-tile pit must schedule a real Pegasus charge and running feather jump.");
+var tappedPegasusSimulation = new LiveWallpaperLinkSimulation();
+tappedPegasusSimulation.UpdateJourney(
+    1, 0, 0L, true, pegasusGapMap, journeyViewport,
+    allowIslandLife: true, followLoadingZones: false,
+    holeFallAnimationMilliseconds: 850L);
+tappedPegasusSimulation.EnterMap(384f, 1197f);
+Assert(tappedPegasusSimulation.TryWalkTo(
+           pegasusGapMap, journeyViewport, 456f, 1197f),
+       "The wallpaper must accept a safe manual destination beyond a clear three-tile pit.");
+var tappedPegasusJumped = false;
+var tappedPegasusFell = false;
+var tappedPegasusReachedFarSide = false;
+for (var frame = 1; frame <= 500 && !tappedPegasusReachedFarSide; frame++)
+{
+    var link = tappedPegasusSimulation.UpdateJourney(
+        1, 0, frame * 17L, true, pegasusGapMap, journeyViewport,
+        allowIslandLife: true, followLoadingZones: false,
+        holeFallAnimationMilliseconds: 850L);
+    tappedPegasusJumped |= link.Action ==
+                           LiveWallpaperLinkRouteAction.PegasusJump;
+    tappedPegasusFell |= link.Action == LiveWallpaperLinkRouteAction.Falling;
+    tappedPegasusReachedFarSide = link.MapX * 16f >= 455f;
+}
+Assert(tappedPegasusJumped && !tappedPegasusFell &&
+       tappedPegasusReachedFarSide,
+       "A tapped three-tile Pegasus jump must retain enough canonical momentum to land fully on the clear far side.");
+var blockedPegasusMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    blockedPegasusMapData.AppendLine(
+        string.Join(',', Enumerable.Repeat("0", 40)));
+blockedPegasusMapData.AppendLine("2");
+blockedPegasusMapData.AppendLine("fullHole");
+blockedPegasusMapData.AppendLine("c1");
+blockedPegasusMapData.AppendLine("9");
+for (var gapRow = 72; gapRow < 80; gapRow++)
+    blockedPegasusMapData.AppendLine($"0;400;{gapRow * 16};48;16");
+blockedPegasusMapData.AppendLine("1;448;1184");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(blockedPegasusMapData.ToString()),
+           out var blockedPegasusMap),
+       "The obstructed Pegasus landing fixture must be a valid installed map.");
+var jumpValidator = typeof(LiveWallpaperJourneyPlanner).GetMethod(
+    "HasValidJumpSpans",
+    System.Reflection.BindingFlags.NonPublic |
+    System.Reflection.BindingFlags.Static);
+var blockedPegasusPath = Enumerable.Range(0, 9)
+    .Select(index => new Microsoft.Xna.Framework.Point(
+        392 + index * 8, 1200))
+    .ToList();
+Assert(jumpValidator?.Invoke(
+           null, [blockedPegasusMap, blockedPegasusPath]) is false,
+       "Pegasus jump validation must reject a three-tile span whose installed far-side landing body is obstructed.");
+var biasedHoleCoverage = featherGapMap.GetLinkHoleCoverage(
+    408f - 4f, 1200f - 10f, 8f, 10f);
+var biasedHoleSimulation = new LiveWallpaperLinkSimulation();
+biasedHoleSimulation.EnterMap(384f, 1200f);
+biasedHoleSimulation.Body.Position.Set(
+    new Microsoft.Xna.Framework.Vector3(408f, 1200f, 0f));
+biasedHoleSimulation.Body.IsGrounded = true;
+var biasedHoleStartedFalling = false;
+for (var frame = 0; frame < 100 && !biasedHoleStartedFalling; frame++)
+{
+    var link = biasedHoleSimulation.UpdateJourney(
+        1, 0, frame * 17L, true, featherGapMap, journeyViewport,
+        allowIslandLife: true, followLoadingZones: true,
+        holeFallAnimationMilliseconds: 850L);
+    biasedHoleStartedFalling = link.Action ==
+                               LiveWallpaperLinkRouteAction.Falling;
+}
+Assert(biasedHoleCoverage > biasedHoleSimulation.Body.AbsorbStop &&
+       biasedHoleCoverage < biasedHoleSimulation.Body.AbsorbPercentage &&
+       biasedHoleStartedFalling,
+       "Link caught by the canonical bottom-edge hole bias must advance through the stuck timeout into ObjLink's fall/reset sequence.");
+var hookshotGapMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    hookshotGapMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
+hookshotGapMapData.AppendLine("2");
+hookshotGapMapData.AppendLine("fullHole");
+hookshotGapMapData.AppendLine("overworldDonut");
+hookshotGapMapData.AppendLine("25");
+for (var gapRow = 72; gapRow < 80; gapRow++)
+for (var gapColumn = 25; gapColumn < 28; gapColumn++)
+    hookshotGapMapData.AppendLine($"0;{gapColumn * 16};{gapRow * 16}");
+hookshotGapMapData.AppendLine("1;464;1200");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(hookshotGapMapData.ToString()), out var hookshotGapMap) &&
+       hookshotGapMap.HookshotTargets.Count == 1,
+       "The Hookshot journey fixture must retain the exact installed grip rectangle.");
+LiveWallpaperJourneyPlan hookshotGapPlan = null;
+var hookshotGapVariant = -1;
+for (var variant = 0; variant < 120 && hookshotGapPlan == null; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        hookshotGapMap, journeyViewport, 1, variant,
+        allowIslandLife: true, followLoadingZones: true);
+    if (candidate.Points.Any(point =>
+            point.Action == LiveWallpaperJourneyAction.Hookshot))
+    {
+        hookshotGapPlan = candidate;
+        hookshotGapVariant = variant;
+    }
+}
+Assert(hookshotGapPlan != null,
+       "A gap wider than one feather jump must use a real installed Hookshot grip when its 120-pixel corridor is clear.");
+var hookshotGapSimulation = new LiveWallpaperLinkSimulation();
+var sawHookshot = false;
+var sawHookshotChain = false;
+var hookshotMinimumX = float.MaxValue;
+var hookshotMaximumX = float.MinValue;
+var hookshotStartTime = hookshotGapVariant * 20_000L;
+for (var frame = 0; frame < 2_500; frame++)
+{
+    var link = hookshotGapSimulation.UpdateJourney(
+        1, 0, hookshotStartTime + frame * 17L, true,
+        hookshotGapMap, journeyViewport, allowIslandLife: true,
+        followLoadingZones: true);
+    sawHookshot |= link.Action == LiveWallpaperLinkRouteAction.Hookshot;
+    sawHookshotChain |= link.HookshotVisible &&
+                        MathF.Abs(link.HookshotMapX - link.MapX) > 0.25f;
+    hookshotMinimumX = Math.Min(hookshotMinimumX, link.MapX * 16f);
+    hookshotMaximumX = Math.Max(hookshotMaximumX, link.MapX * 16f);
+    if (sawHookshotChain && hookshotMinimumX < 400f &&
+        hookshotMaximumX > 448f)
+        break;
+}
+Assert(sawHookshot && sawHookshotChain && hookshotMinimumX < 400f &&
+       hookshotMaximumX > 448f,
+       $"Hookshot simulation must extend the real chain and pull Link across the validated gap " +
+       $"(minX={hookshotMinimumX}, maxX={hookshotMaximumX}).");
+
+var pegasusPlan = LiveWallpaperJourneyPlanner.Create(
+    journeyMap, journeyViewport, 1, 0,
+    allowIslandLife: false, followLoadingZones: true);
+var pegasusVariant = 0;
+if (!pegasusPlan.Points.Any(point =>
+        point.Action == LiveWallpaperJourneyAction.PegasusDash))
+{
+    for (var variant = 1; variant < 120; variant++)
+    {
+        var candidate = LiveWallpaperJourneyPlanner.Create(
+            journeyMap, journeyViewport, 1, variant,
+            allowIslandLife: false, followLoadingZones: true);
+        if (!candidate.Points.Any(point =>
+                point.Action == LiveWallpaperJourneyAction.PegasusDash))
+            continue;
+        pegasusPlan = candidate;
+        pegasusVariant = variant;
+        break;
+    }
+}
+Assert(pegasusPlan.Points.Any(point =>
+           point.Action == LiveWallpaperJourneyAction.PegasusCharge) &&
+       pegasusPlan.Points.Any(point =>
+           point.Action == LiveWallpaperJourneyAction.PegasusDash),
+       "Long straight routes must schedule the real Pegasus charge before the dash.");
+var pegasusSimulation = new LiveWallpaperLinkSimulation();
+var pegasusStartTime = pegasusVariant * 20_000L;
+var firstPegasusChargeAt = -1L;
+var lastPegasusChargeAt = -1L;
+var maximumPegasusStep = 0f;
+LiveWallpaperSimulatedLinkState? previousPegasusLink = null;
+var sawPegasusDash = false;
+for (var frame = 0; frame < 2_500 && !sawPegasusDash; frame++)
+{
+    var elapsed = pegasusStartTime + frame * 17L;
+    var link = pegasusSimulation.UpdateJourney(
+        1, 0, elapsed, true, journeyMap, journeyViewport,
+        allowIslandLife: false, followLoadingZones: true);
+    if (link.Action == LiveWallpaperLinkRouteAction.PegasusCharge)
+    {
+        if (firstPegasusChargeAt < 0)
+            firstPegasusChargeAt = elapsed;
+        lastPegasusChargeAt = elapsed;
+    }
+    if (previousPegasusLink.HasValue &&
+        link.Action == LiveWallpaperLinkRouteAction.PegasusDash)
+    {
+        var deltaX = (link.MapX - previousPegasusLink.Value.MapX) * 16f;
+        var deltaY = (link.MapY - previousPegasusLink.Value.MapY) * 16f;
+        maximumPegasusStep = Math.Max(
+            maximumPegasusStep,
+            MathF.Sqrt(deltaX * deltaX + deltaY * deltaY));
+        sawPegasusDash = true;
+    }
+    previousPegasusLink = link;
+}
+Assert(firstPegasusChargeAt >= 0 &&
+       lastPegasusChargeAt - firstPegasusChargeAt >= 500L &&
+       sawPegasusDash && maximumPegasusStep is >= 1.9f and <= 2.1f,
+       $"Pegasus Boots must charge for 533 ms and move at ObjLink's exact two pixels per frame " +
+       $"(charge={lastPegasusChargeAt - firstPegasusChargeAt} ms, step={maximumPegasusStep}).");
+
+var coverageMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n30\n8\n1\n");
+for (var row = 0; row < 8; row++)
+    coverageMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 30)));
+coverageMapData.AppendLine("0");
+coverageMapData.AppendLine("0");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(coverageMapData.ToString()), out var coverageMap),
+       "The multi-field coverage fixture must load.");
+var reachableCoverageFields =
+    LiveWallpaperJourneyPlanner.GetReachableOverworldFieldKeys(
+        coverageMap, 80f, 64f);
+var visitedCoverageFields = new HashSet<int>
+{
+    LiveWallpaperJourneyPlanner.GetOverworldFieldKey(80f, 64f),
+    LiveWallpaperJourneyPlanner.GetOverworldFieldKey(240f, 64f)
+};
+Assert(reachableCoverageFields.Count == 3 &&
+       LiveWallpaperJourneyPlanner.TryGetNextCoverageFieldKey(
+           coverageMap, 80f, 64f, visitedCoverageFields,
+           out var nextCoverageField) &&
+       nextCoverageField ==
+           LiveWallpaperJourneyPlanner.GetOverworldFieldKey(240f, 64f),
+       "Coverage routing must backtrack through a visited field toward the nearest unseen reachable field instead of looping among recent screens.");
+var enclosedFieldData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n10\n8\n1\n");
+for (var row = 0; row < 8; row++)
+    enclosedFieldData.AppendLine(string.Join(',', Enumerable.Repeat("0", 10)));
+var enclosedWalls = new List<(int X, int Y)>();
+for (var x = 0; x < 10; x++)
+{
+    enclosedWalls.Add((x * 16, 0));
+    enclosedWalls.Add((x * 16, 7 * 16));
+}
+for (var y = 1; y < 7; y++)
+{
+    enclosedWalls.Add((0, y * 16));
+    enclosedWalls.Add((9 * 16, y * 16));
+}
+enclosedFieldData.AppendLine("1");
+enclosedFieldData.AppendLine("c1");
+enclosedFieldData.AppendLine(enclosedWalls.Count.ToString());
+foreach (var wall in enclosedWalls)
+    enclosedFieldData.AppendLine($"0;{wall.X};{wall.Y}");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(enclosedFieldData.ToString()), out var enclosedFieldMap),
+       "The enclosed-field fallback fixture must be a valid installed map.");
+var enclosedFallback = LiveWallpaperJourneyPlanner.Create(
+    enclosedFieldMap, journeyViewport, 1, 0,
+    allowIslandLife: true,
+    continuationPixelX: 80,
+    continuationPixelY: 64,
+    followLoadingZones: true);
+Assert(enclosedFallback.Points.Count > 1,
+       "A field with no valid loading-zone edge must still produce a real collision-safe local route instead of leaving Link stuck.");
+Assert(LiveWallpaperMapViewport.TryCreate(
+           2400, 1080, journeyMap.Height, 1, 0.5f, out var landscapeJourneyViewport) &&
+       Math.Abs(landscapeJourneyViewport.TileSize - journeyViewport.TileSize) < 0.001f &&
+       landscapeJourneyViewport.Columns > journeyViewport.Columns &&
+       landscapeJourneyViewport.Columns * landscapeJourneyViewport.TileSize >= 2400,
+       "Rotating the wallpaper must preserve map zoom and reveal more columns in landscape.");
 LiveWallpaperJourneyPlan interactionJourney = null;
 LiveWallpaperJourneyPlan roosterJourney = null;
 LiveWallpaperJourneyPlan combatJourney = null;
 var interactionJourneyVariant = -1;
 var roosterJourneyVariant = -1;
 var combatJourneyVariant = -1;
+var combatJourneyCount = 0;
+var sawLoadingZoneExit = false;
+var journeyMinimumX = journeyViewport.OriginX * 16 + 8;
+var journeyMinimumY = journeyViewport.OriginY * 16 + 8;
+var journeyMaximumX =
+    (journeyViewport.OriginX + journeyViewport.Columns) * 16 - 8;
+var journeyMaximumY =
+    (journeyViewport.OriginY + journeyViewport.Rows) * 16 - 8;
+var tappedLinkSimulation = new LiveWallpaperLinkSimulation();
+var tappedLinkStart = tappedLinkSimulation.UpdateJourney(
+    1, 0, 0, true, journeyMap, journeyViewport,
+    allowIslandLife: true, followLoadingZones: false);
+LiveWallpaperJourneyPlan tappedPlan = null;
+foreach (var offset in new (int X, int Y)[]
+         {
+             (80, 0), (-80, 0), (0, 80), (0, -80), (64, 64), (-64, -64)
+         })
+{
+    var requestedX = Math.Clamp(
+        tappedLinkStart.MapX * 16f + offset.X,
+        journeyMinimumX, journeyMaximumX);
+    var requestedY = Math.Clamp(
+        tappedLinkStart.MapY * 16f + offset.Y,
+        journeyMinimumY, journeyMaximumY);
+    var candidate = LiveWallpaperJourneyPlanner.CreateToPoint(
+        journeyMap, journeyViewport,
+        tappedLinkStart.MapX * 16f, tappedLinkStart.MapY * 16f,
+        requestedX, requestedY);
+    if (candidate.Points.Count < 2)
+        continue;
+    var candidateEnd = candidate.Points[^1];
+    var candidateDeltaX = candidateEnd.PixelX - tappedLinkStart.MapX * 16f;
+    var candidateDeltaY = candidateEnd.PixelY - tappedLinkStart.MapY * 16f;
+    if (candidateDeltaX * candidateDeltaX + candidateDeltaY * candidateDeltaY <= 16f * 16f)
+        continue;
+    tappedPlan = candidate;
+    break;
+}
+Assert(tappedPlan != null,
+       "A reachable wallpaper tap must produce a collision-aware path from Link's live position.");
+var tappedTarget = tappedPlan.Points[^1];
+Assert(tappedLinkSimulation.TryWalkTo(
+           journeyMap, journeyViewport,
+           tappedTarget.PixelX, tappedTarget.PixelY),
+       "The wallpaper simulation must accept a reachable tapped destination.");
+var tappedStartDistance = MathF.Sqrt(
+    MathF.Pow(tappedLinkStart.MapX * 16f - tappedTarget.PixelX, 2f) +
+    MathF.Pow(tappedLinkStart.MapY * 16f - tappedTarget.PixelY, 2f));
+var tappedNearestDistance = tappedStartDistance;
+for (var frame = 1; frame <= 1_200; frame++)
+{
+    var tappedLink = tappedLinkSimulation.UpdateJourney(
+        1, 0, frame * 17L, true, journeyMap, journeyViewport,
+        allowIslandLife: true, followLoadingZones: false);
+    var tappedDistance = MathF.Sqrt(
+        MathF.Pow(tappedLink.MapX * 16f - tappedTarget.PixelX, 2f) +
+        MathF.Pow(tappedLink.MapY * 16f - tappedTarget.PixelY, 2f));
+    tappedNearestDistance = Math.Min(tappedNearestDistance, tappedDistance);
+}
+Assert(tappedNearestDistance <= 4f &&
+       tappedNearestDistance < tappedStartDistance - 16f,
+       "Tapping the wallpaper must make Link walk to the selected reachable map point.");
+const int followedFieldMinimumX = 20 * 16 + 8;
+const int followedFieldMinimumY = 72 * 16 + 8;
+const int followedFieldMaximumX = 20 * 16 + 160 - 8;
+const int followedFieldMaximumY = 72 * 16 + 128 - 8;
+var followedEdgeExit = false;
+var followedDoorExit = false;
+for (var variant = 0; variant < 30; variant++)
+{
+    var followedCandidate = LiveWallpaperJourneyPlanner.Create(
+        journeyMap, journeyViewport, 1, variant, allowIslandLife: true,
+        followLoadingZones: true);
+    if (followedCandidate.Points.Count == 0)
+        continue;
+    var last = followedCandidate.Points[^1];
+    var isEdge = last.PixelX < followedFieldMinimumX ||
+                 last.PixelX > followedFieldMaximumX ||
+                 last.PixelY < followedFieldMinimumY ||
+                 last.PixelY > followedFieldMaximumY;
+    followedEdgeExit |= isEdge;
+    followedDoorExit |= !isEdge &&
+                        Math.Abs(last.PixelX - journeyMap.Portals[0].LinkTargetX) <= 1f &&
+                        Math.Abs(last.PixelY - journeyMap.Portals[0].LinkTargetY) <= 1f;
+}
+Assert(followedEdgeExit && followedDoorExit,
+       "Follow mode must cover overworld field edges and periodically select canonical interior doors.");
+
+var installedOverworldPath = Path.Combine(
+    wallpaperGameDataRoot, "Maps", "overworld.map");
+if (testInstalledWallpaperAssets)
+using (var installedOverworldReader = File.OpenText(installedOverworldPath))
+{
+    Assert(LiveWallpaperMap.TryLoad(installedOverworldReader, out var installedOverworld),
+           "The real installed overworld fixture must load for wallpaper transition coverage.");
+    var transparentOceanWave = installedOverworld.AnimatedTiles.First(tile =>
+        tile.RequiresOverworldOceanBase &&
+        tile.EntityX >= 0 && tile.EntityY >= 0 &&
+        !installedOverworld.HasDrawableTile(
+            tile.EntityX / 16, tile.EntityY / 16));
+    Assert(installedOverworld.NeedsOverworldOceanBase(transparentOceanWave) &&
+           LiveWallpaperMap.OverworldOceanTileIndex == 235,
+           "Transparent outer-island waves must restore tileset0's exact solid ocean tile instead of exposing Android's black canvas.");
+    const float overworldAuditStartX = 376f;
+    const float overworldAuditStartY = 1240f;
+    var overworldReachableFields =
+        LiveWallpaperJourneyPlanner.GetReachableOverworldFieldKeys(
+            installedOverworld, overworldAuditStartX, overworldAuditStartY);
+    var overworldCoverageFields = new HashSet<int>
+    {
+        LiveWallpaperJourneyPlanner.GetOverworldFieldKey(
+            overworldAuditStartX, overworldAuditStartY)
+    };
+    var overworldCoverageCurrentX = overworldAuditStartX;
+    var overworldCoverageCurrentY = overworldAuditStartY;
+    var overworldCoverageSteps = 0;
+    var overworldCoverageLimit = Math.Max(
+        1, overworldReachableFields.Count * overworldReachableFields.Count);
+    while (overworldCoverageFields.Count < overworldReachableFields.Count &&
+           overworldCoverageSteps++ < overworldCoverageLimit &&
+           LiveWallpaperJourneyPlanner.TryGetNextCoverageFieldKey(
+               installedOverworld,
+               overworldCoverageCurrentX, overworldCoverageCurrentY,
+               overworldCoverageFields, out var auditNextField))
+    {
+        overworldCoverageFields.Add(auditNextField);
+        var auditFieldX = auditNextField & 0xffff;
+        var auditFieldY = auditNextField >> 16;
+        overworldCoverageCurrentX = Math.Min(
+            installedOverworld.Width * 16f - 8f,
+            auditFieldX * 160f + 80f);
+        overworldCoverageCurrentY = Math.Min(
+            installedOverworld.Height * 16f - 8f,
+            auditFieldY * 128f + 64f);
+    }
+    Assert(overworldReachableFields.Count >= 60 &&
+           overworldCoverageFields.SetEquals(overworldReachableFields) &&
+           overworldCoverageSteps <= overworldCoverageLimit,
+           $"Every collision-reachable overworld field must be discoverable without a reciprocal-edge loop or coverage softlock " +
+           $"(reachable={overworldReachableFields.Count}, visited={overworldCoverageFields.Count}, steps={overworldCoverageSteps}).");
+    var dreamShrineStones = installedOverworld.Decorations
+        .Where(decoration => decoration.StoneLayout &&
+                             decoration.EntityX is >= 520 and <= 552 &&
+                             decoration.EntityY is >= 1101 and <= 1117)
+        .ToArray();
+    var stoneDrawOffset = GameObjectVisualLayout.GetStoneSpriteOffset(15, 15);
+    Assert(dreamShrineStones.Length == 3 &&
+           dreamShrineStones.Any(stone => stone.EntityX == 520 && stone.EntityY == 1101) &&
+           dreamShrineStones.Any(stone => stone.EntityX == 536 && stone.EntityY == 1117) &&
+           dreamShrineStones.Any(stone => stone.EntityX == 552 && stone.EntityY == 1101) &&
+           Math.Abs(stoneDrawOffset.X + 7f) < 0.001f &&
+           Math.Abs(stoneDrawOffset.Y + 12f) < 0.001f,
+           "Dream Shrine stones must use ObjStone's canonical entity and sprite transforms.");
+    var houseOneEntrance = installedOverworld.Portals.Single(portal =>
+        portal.NextMap == "house1.map" && portal.ExitId == "h1");
+    var installedHouseOnePath = Path.Combine(
+        wallpaperGameDataRoot, "Maps", houseOneEntrance.NextMap);
+    using (var installedHouseOneReader = File.OpenText(installedHouseOnePath))
+    {
+        Assert(LiveWallpaperMap.TryLoad(
+                   installedHouseOneReader, out var installedHouseOne),
+               "The real house-one map must load for wallpaper door coverage.");
+        var matchingHouseEntry = installedHouseOne.Portals.Single(portal =>
+            portal.EntryId == houseOneEntrance.ExitId);
+        Assert(LiveWallpaperMapViewport.TryCreateCentered(
+                   1080, 2400, installedHouseOne.Width,
+                   installedHouseOne.Height,
+                   80f, 120f, 0.5f, out var houseOneViewport),
+               "A real house entry must produce an interior viewport.");
+        var houseOneEntryScreenX = houseOneViewport.Left +
+            (80f / 16f - houseOneViewport.OriginX) *
+            houseOneViewport.TileSize;
+        var houseOneEntryScreenY = houseOneViewport.Top +
+            (120f / 16f - houseOneViewport.OriginY) *
+            houseOneViewport.TileSize;
+        Assert(installedHouseOne.IsHouse &&
+               installedHouseOne.Lights.Count == 1 &&
+               installedHouseOne.Lights[0].CenterX == 80 &&
+               installedHouseOne.Lights[0].CenterY == 120 &&
+               matchingHouseEntry.NextMap == "overworld.map" &&
+               matchingHouseEntry.ExitId == "h1" &&
+               Math.Abs(matchingHouseEntry.GetLinkSpawnX(
+                            installedHouseOne.Is2DMap) - 80f) < 0.001f &&
+               Math.Abs(matchingHouseEntry.GetLinkSpawnY(
+                            installedHouseOne.Is2DMap) - 120f) < 0.001f &&
+               Math.Abs(houseOneEntryScreenX - 540f) < 0.001f &&
+               Math.Abs(houseOneEntryScreenY - 1200f) < 0.001f,
+               "A real overworld door must resolve its matching interior entry, exact ObjDoor spawn, and centered camera.");
+        var houseExitPlan = LiveWallpaperJourneyPlanner.CreateToPoint(
+            installedHouseOne, houseOneViewport,
+            80f, 120f,
+            matchingHouseEntry.LinkTargetX,
+            matchingHouseEntry.LinkTargetY);
+        Assert(houseExitPlan.Points.Count >= 2 &&
+               Math.Abs(houseExitPlan.Points[^1].PixelX -
+                        matchingHouseEntry.LinkTargetX) < 0.001f &&
+               Math.Abs(houseExitPlan.Points[^1].PixelY -
+                        matchingHouseEntry.LinkTargetY) < 0.001f,
+               "The canonical house exit on the bottom map boundary must remain reachable from its entry spawn.");
+        var immediateReturnVariants = Enumerable.Range(0, 60)
+            .Where(variant =>
+            {
+                var plan = LiveWallpaperJourneyPlanner.Create(
+                    installedHouseOne, houseOneViewport, 1, variant,
+                    allowIslandLife: true,
+                    continuationPixelX: 80f,
+                    continuationPixelY: 120f);
+                if (plan.Points.Count == 0)
+                    return false;
+                var last = plan.Points[^1];
+                return Math.Abs(last.PixelX -
+                                matchingHouseEntry.LinkTargetX) <= 1f &&
+                       Math.Abs(last.PixelY -
+                                matchingHouseEntry.LinkTargetY) <= 1f;
+            })
+            .ToArray();
+        Assert(immediateReturnVariants.Length > 0 &&
+               immediateReturnVariants.All(variant =>
+               {
+                   var plan = LiveWallpaperJourneyPlanner.Create(
+                       installedHouseOne, houseOneViewport, 1, variant,
+                       allowIslandLife: true,
+                       continuationPixelX: 80f,
+                       continuationPixelY: 120f,
+                       excludedPortalEntryId: matchingHouseEntry.EntryId);
+                   if (plan.Points.Count == 0)
+                       return true;
+                   var last = plan.Points[^1];
+                   return Math.Abs(last.PixelX -
+                                   matchingHouseEntry.LinkTargetX) > 1f ||
+                          Math.Abs(last.PixelY -
+                                   matchingHouseEntry.LinkTargetY) > 1f;
+               }),
+               "A newly entered interior must not immediately route Link back through its reciprocal door.");
+        var houseOnePots = installedHouseOne.Objects
+            .Where(mapObject => mapObject.Template == "pot2")
+            .ToArray();
+        var houseOnePotSprites = installedHouseOne.Decorations
+            .Where(decoration => decoration.SpriteId == "pot_1" &&
+                                 decoration.StoneLayout)
+            .ToArray();
+        Assert(houseOnePots.Length == 2 && houseOnePotSprites.Length == 2 &&
+               houseOnePots.All(pot => houseOnePotSprites.Any(sprite =>
+                   sprite.EntityX == pot.PixelX + 8 &&
+                   sprite.EntityY == pot.PixelY + 13)) &&
+               houseOnePots.All(pot => installedHouseOne.TryGetStoneKey(
+                   pot.PixelX, pot.PixelY + 1, 16, 13, out _)),
+               "Installed house pots must render at ObjStone's canonical entity position and remain liftable stone collisions.");
+    }
+    var installedShopOnePath = Path.Combine(
+        wallpaperGameDataRoot, "Maps", "shop1.map");
+    using (var installedShopOneReader = File.OpenText(installedShopOnePath))
+    {
+        Assert(LiveWallpaperMap.TryLoad(
+                   installedShopOneReader, out var installedShopOne),
+               "The real Mabe shop map must load for merchandise collision coverage.");
+        var itemPedestal = installedShopOne.Objects.Single(mapObject =>
+            mapObject.Template == "itemShop");
+        var itemPedestalSprite = installedShopOne.Decorations.Single(decoration =>
+            decoration.SpriteId == "itemShop");
+        var shopkeeper = installedShopOne.Objects.Single(mapObject =>
+            mapObject.Template == "shopkeeper");
+        Assert(itemPedestal.PixelX == 96 && itemPedestal.PixelY == 80 &&
+               itemPedestalSprite.EntityX == 104 &&
+               itemPedestalSprite.EntityY == 94 &&
+               installedShopOne.IntersectsCollision(
+                   96, 84, 16, 12, includeHoles: true) &&
+               shopkeeper.PixelX == 112 && shopkeeper.PixelY == 80 &&
+               installedShopOne.IntersectsCollision(
+                   113, 86, 14, 10, includeHoles: true),
+               "The shop pedestal and shopkeeper must retain their canonical normal collision bodies.");
+    }
+    var installedHouseElevenPath = Path.Combine(
+        wallpaperGameDataRoot, "Maps", "house11.map");
+    using (var installedHouseElevenReader = File.OpenText(installedHouseElevenPath))
+    {
+        Assert(LiveWallpaperMap.TryLoad(
+                   installedHouseElevenReader, out var installedHouseEleven),
+               "The real painting-house map must load for furnishing coverage.");
+        var painting = installedHouseEleven.Decorations.Single(decoration =>
+            decoration.SpriteId == "painting");
+        var installedHippo = installedHouseEleven.Actors.Single(actor =>
+            actor.Kind == LiveWallpaperMapActorKind.Hippo);
+        var installedPainter = installedHouseEleven.Actors.Single(actor =>
+            actor.Kind == LiveWallpaperMapActorKind.Painter);
+        Assert(painting.EntityX == 104 && painting.EntityY == 71 &&
+               installedHouseEleven.IntersectsCollision(
+                   96, 59, 16, 8, includeHoles: true) &&
+               installedHippo.BodyX == 31 && installedHippo.BodyY == 31 &&
+               installedHippo.BodyWidth == 18 && installedHippo.BodyHeight == 12 &&
+               installedPainter.BodyX == 79 && installedPainter.BodyY == 59 &&
+               installedPainter.BodyWidth == 18 && installedPainter.BodyHeight == 12,
+               "The painting house must retain ObjPainting plus the hippo and painter's canonical bodies.");
+    }
+    var installedHouseFourPath = Path.Combine(
+        wallpaperGameDataRoot, "Maps", "house4.map");
+    using (var installedHouseFourReader = File.OpenText(installedHouseFourPath))
+    {
+        Assert(LiveWallpaperMap.TryLoad(
+                   installedHouseFourReader, out var installedHouseFour),
+               "The two-screen house fixture must load for interior camera coverage.");
+        var installedLegacyPerson = installedHouseFour.Actors.Single(actor =>
+            actor.Kind == LiveWallpaperMapActorKind.LegacyPerson);
+        var installedWallLamp = installedHouseFour.Lamps.Single();
+        Assert(installedLegacyPerson.AnimationId == "npc07" &&
+               installedLegacyPerson.AnimationName == "stand" &&
+               installedLegacyPerson.BodyX == 192 &&
+               installedLegacyPerson.BodyY == 54 &&
+               installedLegacyPerson.BodyWidth == 16 &&
+               installedLegacyPerson.BodyHeight == 10 &&
+               installedWallLamp.AnimationPath == "Objects/lamp_wall_1.ani" &&
+               installedWallLamp.PixelX == 48 &&
+               installedWallLamp.PixelY == 16 &&
+               installedWallLamp.Rotation == 0 &&
+               !installedWallLamp.PlayerLayer,
+               "The real two-screen house must retain ObjPerson plus its exact wall-lamp asset, anchor, rotation, and layer.");
+        var houseFourEntry = installedHouseFour.Portals.Single(portal =>
+            portal.EntryId == "h4-1");
+        var houseFourSpawnX = houseFourEntry.GetLinkSpawnX(
+            installedHouseFour.Is2DMap);
+        var houseFourSpawnY = houseFourEntry.GetLinkSpawnY(
+            installedHouseFour.Is2DMap);
+        Assert(LiveWallpaperMapViewport.TryCreateCentered(
+                   1080, 2400, installedHouseFour.Width,
+                   installedHouseFour.Height,
+                   houseFourSpawnX, houseFourSpawnY, 0.5f,
+                   out var houseFourViewport),
+               "The two-screen house must produce an interior viewport.");
+        var houseFourSimulation = new LiveWallpaperLinkSimulation();
+        houseFourSimulation.EnterMap(houseFourSpawnX, houseFourSpawnY);
+        var houseFourBeforeScroll = houseFourSimulation.UpdateJourney(
+            1, 0, 0L, true, installedHouseFour, houseFourViewport,
+            allowIslandLife: true, followLoadingZones: false,
+            allowViewportFollow: true);
+        var scrolledHouseViewport = houseFourViewport.WithCameraOrigin(
+            1f, houseFourViewport.CameraOriginY,
+            installedHouseFour.Width, installedHouseFour.Height);
+        var houseFourAfterScroll = houseFourSimulation.UpdateJourney(
+            1, 0, 17L, true, installedHouseFour, scrolledHouseViewport,
+            allowIslandLife: true, followLoadingZones: false,
+            allowViewportFollow: true);
+        var houseScrollStep = MathF.Sqrt(
+            MathF.Pow((houseFourAfterScroll.MapX - houseFourBeforeScroll.MapX) * 16f, 2f) +
+            MathF.Pow((houseFourAfterScroll.MapY - houseFourBeforeScroll.MapY) * 16f, 2f));
+        Assert(houseFourAfterScroll.Action != LiveWallpaperLinkRouteAction.Hidden &&
+               houseScrollStep <= 6.1f,
+               "Interior camera scrolling must not reset, teleport, or hide Link's live journey.");
+    }
+    var dungeonSeven2dPath = Path.Combine(
+        wallpaperGameDataRoot, "Maps", "dungeon7_2d.map");
+    var dungeonSevenFourPath = Path.Combine(
+        wallpaperGameDataRoot, "Maps", "dungeon7_4.map");
+    using (var dungeonSeven2dReader = File.OpenText(dungeonSeven2dPath))
+    using (var dungeonSevenFourReader = File.OpenText(dungeonSevenFourPath))
+    {
+        var loadedDungeonSeven2d = LiveWallpaperMap.TryLoad(
+            dungeonSeven2dReader, out var dungeonSeven2d);
+        var loadedDungeonSevenFour = LiveWallpaperMap.TryLoad(
+            dungeonSevenFourReader, out var dungeonSevenFour);
+        Assert(loadedDungeonSeven2d && loadedDungeonSevenFour,
+               "The real side-view door pair must load for wallpaper transition coverage.");
+        var sideViewDoor = dungeonSeven2d.Portals.Single(portal =>
+            portal.Is2DDoor && portal.EntryId == "d7_2d");
+        var topDownDoor = dungeonSevenFour.Portals.Single(portal =>
+            portal.EntryId == sideViewDoor.ExitId);
+        Assert(dungeonSeven2d.Is2DMap && sideViewDoor.HasDestination &&
+               sideViewDoor.NextMap == "dungeon7_4.map" &&
+               Math.Abs(sideViewDoor.LinkTargetX - 72f) < 0.001f &&
+               Math.Abs(sideViewDoor.LinkTargetY - 208f) < 0.001f &&
+               Math.Abs(sideViewDoor.GetLinkSpawnX(true) - 72f) < 0.001f &&
+               Math.Abs(sideViewDoor.GetLinkSpawnY(true) - 208f) < 0.001f &&
+               topDownDoor.NextMap == "dungeon7_2d.map",
+               "ObjDoor2d must use its installed destination and exact pos+8,pos+16 transition point.");
+        Assert(sideViewDoor.ShouldActivateAt(
+                   sideViewDoor.LinkTargetX, sideViewDoor.LinkTargetY,
+                   0f, 1) &&
+               !sideViewDoor.ShouldActivateAt(
+                   sideViewDoor.LinkTargetX, sideViewDoor.LinkTargetY,
+                   0f, 3) &&
+               sideViewDoor.ShouldActivateAt(
+                   sideViewDoor.LinkTargetX, sideViewDoor.LinkTargetY,
+                   -1f, 3),
+               "A 2D doorway must activate on the terminal zero-input frame only when Link retains the preceding upward entry direction.");
+    }
+    var dungeonTwoPath = Path.Combine(
+        wallpaperGameDataRoot, "Maps", "dungeon2.map");
+    using (var dungeonTwoReader = File.OpenText(dungeonTwoPath))
+    {
+        Assert(LiveWallpaperMap.TryLoad(dungeonTwoReader, out var dungeonTwo) &&
+               dungeonTwo.MapOffsetX == 1 && dungeonTwo.MapOffsetY == 1,
+               "Wallpaper maps must preserve dungeon room-grid offsets from the installed map header.");
+        const float dungeonRoomCenterX = (41f + 5f) * 16f;
+        const float dungeonRoomCenterY = (41f + 4f) * 16f;
+        Assert(LiveWallpaperMapViewport.TryCreateCentered(
+                   1080, 2400, dungeonTwo.Width, dungeonTwo.Height,
+                   dungeonRoomCenterX, dungeonRoomCenterY, 0.5f,
+                   out var dungeonRoomViewport) &&
+               !dungeonRoomViewport.TryGetRoomScrollTarget(
+                   dungeonRoomCenterX, dungeonRoomCenterY,
+                   dungeonTwo.MapOffsetX, dungeonTwo.MapOffsetY,
+                   dungeonTwo.Width, dungeonTwo.Height, out _, out _) &&
+               dungeonRoomViewport.TryGetRoomScrollTarget(
+                   dungeonRoomCenterX - 10f * 16f, dungeonRoomCenterY,
+                   dungeonTwo.MapOffsetX, dungeonTwo.MapOffsetY,
+                   dungeonTwo.Width, dungeonTwo.Height,
+                   out var adjacentRoomX, out var adjacentRoomY) &&
+               Math.Abs(adjacentRoomX -
+                        (dungeonRoomViewport.CameraOriginX - 10f)) < 0.001f &&
+               Math.Abs(adjacentRoomY -
+                        dungeonRoomViewport.CameraOriginY) < 0.001f,
+               "Dungeon wallpaper scrolling must stay centred within a room and move by one offset-aware 10x8 room at its boundary.");
+        Assert(LiveWallpaperMapViewport.TryCreateCentered(
+                   1200, 2608, dungeonTwo.Width, dungeonTwo.Height,
+                   680f, 728f, 0.5f, out var dungeonEntryViewport),
+               "The on-device dungeon entry must produce a wallpaper viewport.");
+        var dungeonContinuationVariants = Enumerable.Range(0, 120).Count(
+            variant => LiveWallpaperJourneyPlanner.Create(
+                dungeonTwo, dungeonEntryViewport, 1, variant,
+                allowIslandLife: true,
+                continuationPixelX: 680f,
+                continuationPixelY: 728f).Points.Count > 0);
+        Assert(dungeonContinuationVariants > 0,
+               $"The real Dungeon 2 entry must offer autonomous continuation routes (variants={dungeonContinuationVariants}).");
+        var dungeonEntrySimulation = new LiveWallpaperLinkSimulation();
+        dungeonEntrySimulation.EnterMap(680f, 728f);
+        var dungeonEntryMoved = false;
+        for (var frame = 0; frame < 1_200 && !dungeonEntryMoved; frame++)
+        {
+            var dungeonLink = dungeonEntrySimulation.UpdateJourney(
+                1, 0, 68L * 20_000L + frame * 17L, true,
+                dungeonTwo, dungeonEntryViewport, allowIslandLife: true,
+                allowViewportFollow: true);
+            var deltaX = dungeonLink.MapX * 16f - 680f;
+            var deltaY = dungeonLink.MapY * 16f - 728f;
+            dungeonEntryMoved = deltaX * deltaX + deltaY * deltaY > 64f;
+        }
+        Assert(dungeonEntryMoved,
+               "An empty dungeon journey variant must retry instead of leaving Link walking against the entry collider forever.");
+    }
+    Assert(LiveWallpaperMapViewport.TryCreate(
+               1080, 2400, installedOverworld.Height, 1, 0.5f,
+               out var followedOverworldViewport),
+           "The real overworld must produce a wallpaper viewport.");
+
+    var followedOverworldSimulation = new LiveWallpaperLinkSimulation();
+    var visitedOverworldFields = new HashSet<(int X, int Y)>();
+    var completedOverworldTransitions = 0;
+    var followedViewportChanges = 0;
+    LiveWallpaperSimulatedLinkState? previousFollowedLink = null;
+    var maximumFollowedStep = 0f;
+    var stationaryFrames = 0;
+    var maximumStationaryFrames = 0;
+    var stationaryMapX = 0f;
+    var stationaryMapY = 0f;
+    var stationaryAction = LiveWallpaperLinkRouteAction.Stand;
+    var stationaryInputX = 0f;
+    var stationaryInputY = 0f;
+    (int X, int Y)? currentFollowedField = null;
+    var sameFieldFrames = 0;
+    var maximumSameFieldFrames = 0;
+    (int X, int Y) maximumSameField = default;
+    var lastNewFollowedFieldFrame = 0;
+    for (var frame = 0; frame < 60_000; frame++)
+    {
+        var link = followedOverworldSimulation.UpdateJourney(
+            1, 0, frame * 17L, true,
+            installedOverworld, followedOverworldViewport,
+            allowIslandLife: true, followLoadingZones: true);
+        var followedField =
+            ((int)MathF.Floor(link.MapX / 10f),
+             (int)MathF.Floor(link.MapY / 8f));
+        if (visitedOverworldFields.Add(followedField))
+            lastNewFollowedFieldFrame = frame;
+        if (currentFollowedField.HasValue &&
+            currentFollowedField.Value == followedField)
+            sameFieldFrames++;
+        else
+        {
+            currentFollowedField = followedField;
+            sameFieldFrames = 1;
+        }
+        if (sameFieldFrames > maximumSameFieldFrames)
+        {
+            maximumSameFieldFrames = sameFieldFrames;
+            maximumSameField = followedField;
+        }
+        if (previousFollowedLink.HasValue)
+        {
+            var deltaX = (link.MapX - previousFollowedLink.Value.MapX) * 16f;
+            var deltaY = (link.MapY - previousFollowedLink.Value.MapY) * 16f;
+            maximumFollowedStep = Math.Max(
+                maximumFollowedStep,
+                MathF.Sqrt(deltaX * deltaX + deltaY * deltaY));
+            if (deltaX * deltaX + deltaY * deltaY <= 0.01f &&
+                link.Action != LiveWallpaperLinkRouteAction.Hidden)
+            {
+                stationaryFrames++;
+                if (stationaryFrames > maximumStationaryFrames)
+                {
+                    maximumStationaryFrames = stationaryFrames;
+                    stationaryMapX = link.MapX * 16f;
+                    stationaryMapY = link.MapY * 16f;
+                    stationaryAction = link.Action;
+                    stationaryInputX = link.Input.Move.X;
+                    stationaryInputY = link.Input.Move.Y;
+                }
+            }
+            else
+            {
+                stationaryFrames = 0;
+            }
+        }
+        previousFollowedLink = link;
+        if (followedOverworldViewport.TryGetEdgeScrollTarget(
+                link.MapX * 16f, link.MapY * 16f,
+                link.Input.Move.X, link.Input.Move.Y,
+                installedOverworld.Width, installedOverworld.Height,
+                out var targetOriginX, out var targetOriginY))
+        {
+            followedOverworldViewport = followedOverworldViewport.WithCameraOrigin(
+                targetOriginX, targetOriginY,
+                installedOverworld.Width, installedOverworld.Height);
+            followedViewportChanges++;
+        }
+        if (link.Action == LiveWallpaperLinkRouteAction.Hidden)
+            completedOverworldTransitions++;
+    }
+    var emptyBoundaryVariants = Enumerable.Range(0, 60)
+        .Where(variant => LiveWallpaperJourneyPlanner.Create(
+            installedOverworld, followedOverworldViewport, 1, variant,
+            allowIslandLife: true,
+            continuationPixelX: 48f,
+            continuationPixelY: 1928f,
+            followLoadingZones: true).Points.Count < 2)
+        .ToArray();
+    Assert(completedOverworldTransitions >= 2 &&
+           visitedOverworldFields.Count >= 60 &&
+           lastNewFollowedFieldFrame > 20_000 &&
+           followedViewportChanges >= 1 &&
+           maximumFollowedStep <= 8f &&
+           maximumStationaryFrames < 600 &&
+           maximumSameFieldFrames < 900 &&
+           emptyBoundaryVariants.Length == 0,
+           $"Following Link must visibly leave the selected starting scene and continue through multiple real overworld fields " +
+           $"(exits={completedOverworldTransitions}, fields={visitedOverworldFields.Count}, " +
+           $"lastNewFieldFrame={lastNewFollowedFieldFrame}, " +
+           $"camera={followedViewportChanges}, maxStep={maximumFollowedStep}, " +
+           $"sameFieldFrames={maximumSameFieldFrames} at {maximumSameField}, " +
+           $"stationary={maximumStationaryFrames} at {stationaryMapX},{stationaryMapY}, " +
+           $"action={stationaryAction}, input={stationaryInputX},{stationaryInputY}, " +
+           $"emptyBoundaryVariants={string.Join(',', emptyBoundaryVariants)}).");
+}
+
+var bushJourneyMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    bushJourneyMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
+// Keep the fixture wall on a key divisible by eight so ObjBush's first
+// deterministic 1-in-8 wallpaper roll emits a rupee.
+var bushWallX = (journeyMinimumX + journeyMaximumX) / 256 * 128;
+var bushWallStartY = Math.Max(0, (journeyMinimumY - 16) / 16 * 16);
+var bushWallEndY = Math.Min(89 * 16, (journeyMaximumY + 16) / 16 * 16);
+var bushWallCount = (bushWallEndY - bushWallStartY) / 16 + 1;
+bushJourneyMapData.AppendLine("1");
+bushJourneyMapData.AppendLine("bush");
+bushJourneyMapData.AppendLine(bushWallCount.ToString());
+for (var bushY = bushWallStartY; bushY <= bushWallEndY; bushY += 16)
+    bushJourneyMapData.AppendLine($"0;{bushWallX};{bushY}");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(bushJourneyMapData.ToString()), out var bushJourneyMap),
+       "The bush-cutting journey fixture must be a valid installed map.");
+var cornerBodyX = bushWallX + 15.5f;
+var cornerBodyY = bushWallStartY - 9.5f;
+Assert(!bushJourneyMap.TryGetBushKey(
+           cornerBodyX + 1f, cornerBodyY + 1f, 8f, 10f, out _) &&
+       bushJourneyMap.TryGetBushKeyAlongMovement(
+           cornerBodyX, cornerBodyY, 8f, 10f,
+           1f, 1f, out var cornerBushKey) &&
+       cornerBushKey == bushJourneyMap.GetBushKey(
+           bushWallX, bushWallStartY),
+       "Diagonal movement must detect a bush touched by its intermediate axis step at a half-tile corner.");
+LiveWallpaperJourneyPlan bushJourney = null;
+var bushJourneyVariant = -1;
+for (var variant = 0; variant < 60 && bushJourney == null; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        bushJourneyMap, journeyViewport, 1, variant,
+        allowIslandLife: true, followLoadingZones: true);
+    if (candidate.Points.Any(point =>
+            point.Action == LiveWallpaperJourneyAction.CutBush))
+    {
+        bushJourney = candidate;
+        bushJourneyVariant = variant;
+    }
+}
+Assert(bushJourney != null,
+       "A route through installed bushes must schedule a real sword cut before crossing.");
+var bushRolls = new Queue<int>(new[] { 0, 1 });
+Assert(BushDropRules.Roll((minimum, maximum) => bushRolls.Dequeue()) ==
+       BushDropRules.RupeeItemName && bushRolls.Count == 0,
+       "The shared ObjBush drop rule must perform the real 1-in-8 roll followed by the heart/rupee roll.");
+var suppressedHeartRolls = new Queue<int>(new[] { 0, 0 });
+Assert(BushDropRules.Roll(
+           (minimum, maximum) => suppressedHeartRolls.Dequeue(),
+           noHeartDrops: true) == null && suppressedHeartRolls.Count == 0,
+       "No-heart mode must suppress a rolled heart without changing the random-call sequence.");
+var firstDropFrame = DroppedItemMotion.Resolve(
+    Microsoft.Xna.Framework.Vector2.UnitX, 17L);
+Assert(Math.Abs(firstDropFrame.Offset.X - 0.5f) < 0.0001f &&
+       Math.Abs(firstDropFrame.Offset.Y) < 0.0001f &&
+       Math.Abs(firstDropFrame.Height - 0.65f) < 0.0001f &&
+       !firstDropFrame.Grounded,
+       "Wallpaper drops must use ObjItem's gravity-first launch on their first 60 Hz body update.");
+var settledDrop = DroppedItemMotion.Resolve(
+    Microsoft.Xna.Framework.Vector2.UnitX, 2_000L);
+Assert(settledDrop.Grounded && settledDrop.Height == 0f &&
+       settledDrop.Offset.X > firstDropFrame.Offset.X,
+       "Wallpaper drops must use ObjItem's bounce and drag until they settle on the floor.");
+DroppedItemMotion.ResolveCollectedVisual(
+    125L, out var collectedItemOffset, out var collectedItemAlpha,
+    out var collectedItemVisible);
+Assert(Math.Abs(collectedItemOffset + 8.660254f) < 0.0001f &&
+       collectedItemAlpha == 1f && collectedItemVisible,
+       "Collected wallpaper drops must use ObjItem's exact 250 ms upward fade curve.");
+DroppedItemMotion.ResolveCollectedVisual(
+    300L, out collectedItemOffset, out collectedItemAlpha,
+    out collectedItemVisible);
+Assert(collectedItemOffset == 0f &&
+       Math.Abs(collectedItemAlpha - 0.5f) < 0.0001f &&
+       collectedItemVisible,
+       "Collected wallpaper drops must use ObjItem's exact 250-350 ms alpha fade.");
+DroppedItemMotion.ResolveCollectedVisual(
+    351L, out _, out _, out collectedItemVisible);
+Assert(!collectedItemVisible,
+       "Collected wallpaper drops must disappear after ObjItem's 350 ms despawn time.");
+var bushSimulation = new LiveWallpaperLinkSimulation(
+    FindBushDropSeed(BushDropRules.RupeeItemName));
+var sawBushSword = false;
+var sawCutBush = false;
+var sawRupeeDrop = false;
+var sawCollectedRupee = false;
+var bushStartTime = bushJourneyVariant * 20_000L;
+for (var frame = 0; frame < 4_000 && !sawCollectedRupee; frame++)
+{
+    var link = bushSimulation.UpdateJourney(
+        1, 0, bushStartTime + frame * 17L, true,
+        bushJourneyMap, journeyViewport, allowIslandLife: true,
+        followLoadingZones: true);
+    sawBushSword |= link.Action == LiveWallpaperLinkRouteAction.Attack;
+    sawCutBush |= link.CutBushes?.Count > 0;
+    sawRupeeDrop |= link.VegetationDrops?.Values.Any(
+        drop => drop == LiveWallpaperVegetationDropKind.Rupee) == true;
+    sawCollectedRupee |= link.CollectedRupees > 0;
+}
+Assert(sawBushSword && sawCutBush && sawRupeeDrop && sawCollectedRupee,
+       "Wallpaper Link must swing the sword, remove the installed bush collider, and walk over a spawned rupee to collect it.");
+var heartSimulation = new LiveWallpaperLinkSimulation(
+    FindBushDropSeed(BushDropRules.HeartItemName));
+var sawHeartDrop = false;
+var sawCollectedHeart = false;
+for (var frame = 0; frame < 4_000 && !sawCollectedHeart; frame++)
+{
+    var link = heartSimulation.UpdateJourney(
+        1, 0, bushStartTime + frame * 17L, true,
+        bushJourneyMap, journeyViewport, allowIslandLife: true,
+        followLoadingZones: true);
+    sawHeartDrop |= link.VegetationDrops?.Values.Any(
+        drop => drop == LiveWallpaperVegetationDropKind.Heart) == true;
+    sawCollectedHeart |= link.CollectedHearts > 0;
+}
+Assert(sawHeartDrop && sawCollectedHeart,
+       "Wallpaper Link must walk over and collect a heart produced by the shared ObjBush drop rule.");
+var bushContinuation = LiveWallpaperJourneyPlanner.Create(
+    bushJourneyMap, journeyViewport, 1, 0,
+    allowIslandLife: true,
+    continuationPixelX: bushWallX + 16f,
+    continuationPixelY: bushWallStartY + 8f,
+    followLoadingZones: true);
+Assert(bushContinuation.Points.Count > 1 &&
+       bushContinuation.Points.Any(point =>
+           point.Action == LiveWallpaperJourneyAction.CutBush),
+       "A continuation rounded onto a bush boundary must retain a route and schedule the starting bush cut.");
+var grassJourneyMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    grassJourneyMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
+grassJourneyMapData.AppendLine("1");
+grassJourneyMapData.AppendLine("grasForest");
+grassJourneyMapData.AppendLine(bushWallCount.ToString());
+for (var grassY = bushWallStartY; grassY <= bushWallEndY; grassY += 16)
+    grassJourneyMapData.AppendLine($"0;{bushWallX};{grassY}");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(grassJourneyMapData.ToString()), out var grassJourneyMap),
+       "The grass-cutting journey fixture must be a valid installed map.");
+LiveWallpaperJourneyPlan grassJourney = null;
+var grassJourneyVariant = -1;
+for (var variant = 0; variant < 60 && grassJourney == null; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        grassJourneyMap, journeyViewport, 1, variant,
+        allowIslandLife: true, followLoadingZones: true);
+    if (candidate.Points.Any(point =>
+            point.Action == LiveWallpaperJourneyAction.CutBush))
+    {
+        grassJourney = candidate;
+        grassJourneyVariant = variant;
+    }
+}
+Assert(grassJourney != null,
+       "Routes must recognize sword-hittable gras templates even though ObjBush gives them no collider.");
+var grassSimulation = new LiveWallpaperLinkSimulation();
+var sawGrassSword = false;
+var sawCutGrass = false;
+var grassStartTime = grassJourneyVariant * 20_000L;
+for (var frame = 0; frame < 4_000 && !sawCutGrass; frame++)
+{
+    var link = grassSimulation.UpdateJourney(
+        1, 0, grassStartTime + frame * 17L, true,
+        grassJourneyMap, journeyViewport, allowIslandLife: true,
+        followLoadingZones: true);
+    sawGrassSword |= link.Action == LiveWallpaperLinkRouteAction.Attack;
+    sawCutGrass |= link.CutVegetationTimes?.Count > 0;
+}
+Assert(sawGrassSword && sawCutGrass,
+       "Wallpaper Link must use his sword and emit the real leaf event when a route crosses installed grass.");
+var stoneJourneyMapData = new System.Text.StringBuilder(
+    "3\n0\n0\noverworld.png\n40\n90\n1\n");
+for (var row = 0; row < 90; row++)
+    stoneJourneyMapData.AppendLine(string.Join(',', Enumerable.Repeat("0", 40)));
+stoneJourneyMapData.AppendLine("1");
+stoneJourneyMapData.AppendLine("stone");
+stoneJourneyMapData.AppendLine(bushWallCount.ToString());
+for (var stoneY = bushWallStartY; stoneY <= bushWallEndY; stoneY += 16)
+    stoneJourneyMapData.AppendLine($"0;{bushWallX};{stoneY}");
+Assert(LiveWallpaperMap.TryLoad(
+           new StringReader(stoneJourneyMapData.ToString()), out var stoneJourneyMap),
+       "The stone-lifting journey fixture must be a valid installed map.");
+LiveWallpaperJourneyPlan stoneJourney = null;
+var stoneJourneyVariant = -1;
+for (var variant = 0; variant < 60 && stoneJourney == null; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        stoneJourneyMap, journeyViewport, 1, variant,
+        allowIslandLife: true, followLoadingZones: true);
+    if (candidate.Points.Any(point =>
+            point.Action == LiveWallpaperJourneyAction.LiftStone))
+    {
+        stoneJourney = candidate;
+        stoneJourneyVariant = variant;
+    }
+}
+Assert(stoneJourney != null,
+       "A route through installed ObjStone objects must schedule their lift before crossing.");
+Assert(StoneGameplayMotion.CreateThrowVelocity(0) ==
+           new Microsoft.Xna.Framework.Vector2(-3f, 0f) &&
+       StoneGameplayMotion.CreateThrowVelocity(1) ==
+           new Microsoft.Xna.Framework.Vector2(0f, -3f) &&
+       StoneGameplayMotion.CreateThrowVelocity(2) ==
+           new Microsoft.Xna.Framework.Vector2(3f, 0f) &&
+       StoneGameplayMotion.CreateThrowVelocity(3) ==
+           new Microsoft.Xna.Framework.Vector2(0f, 3f),
+       "The shared stone throw rule must preserve ObjLink's exact cardinal 3 px/frame velocities.");
+Assert(Math.Abs(StoneGameplayMotion.ResolveHeight(13) - 1.625f) < 0.0001f &&
+       StoneGameplayMotion.ResolveHeight(
+           StoneGameplayMotion.ThrowFlightFrames) == 0f,
+       "The shared stone trajectory must apply ObjStone gravity first and land on frame 14.");
+var stoneSimulation = new LiveWallpaperLinkSimulation();
+var sawStoneLift = false;
+var sawStoneCarry = false;
+var sawStoneThrow = false;
+var sawLiftedStone = false;
+var stoneSequenceFinished = false;
+var maximumCarriedStoneHeight = 0f;
+var throwStartX = 0f;
+var throwStartY = 0f;
+var maximumThrowTravel = 0f;
+var sawStoneImpact = false;
+var sawReleasedStone = false;
+var sawReleasedStoneBehindLink = false;
+var sawFirstThrownGravityStep = false;
+var fullyCarriedStoneAt = -1L;
+var firstStoneThrowAt = -1L;
+var stoneStartTime = stoneJourneyVariant * 20_000L;
+for (var frame = 0; frame < 4_000 && !stoneSequenceFinished; frame++)
+{
+    var link = stoneSimulation.UpdateJourney(
+        1, 0, stoneStartTime + frame * 17L, true,
+        stoneJourneyMap, journeyViewport, allowIslandLife: true,
+        followLoadingZones: true);
+    sawStoneLift |= link.Action == LiveWallpaperLinkRouteAction.LiftStone;
+    sawStoneCarry |= link.Action == LiveWallpaperLinkRouteAction.CarryStone;
+    if (fullyCarriedStoneAt < 0 && !link.ActiveStoneReleased &&
+        link.ActiveLiftedStoneKey >= 0 && link.ActiveStoneHeight >= 12.999f)
+        fullyCarriedStoneAt = stoneStartTime + frame * 17L;
+    if (link.Action == LiveWallpaperLinkRouteAction.ThrowStone && !sawStoneThrow)
+    {
+        sawStoneThrow = true;
+        firstStoneThrowAt = stoneStartTime + frame * 17L;
+        throwStartX = link.ActiveStoneEntityX;
+        throwStartY = link.ActiveStoneEntityY;
+    }
+    sawLiftedStone |= link.LiftedStones?.Count > 0;
+    sawStoneImpact |= link.StoneImpactKind !=
+                      LiveWallpaperStoneImpactKind.None;
+    sawReleasedStone |= link.ActiveStoneReleased;
+    sawReleasedStoneBehindLink |=
+        LiveWallpaperLinkPlacement.DrawActiveStoneBeforeLink(link);
+    if (link.ActiveLiftedStoneKey >= 0)
+    {
+        maximumCarriedStoneHeight = Math.Max(
+            maximumCarriedStoneHeight, link.ActiveStoneHeight);
+        if (sawStoneThrow)
+        {
+            var throwDeltaX = link.ActiveStoneEntityX - throwStartX;
+            var throwDeltaY = link.ActiveStoneEntityY - throwStartY;
+            maximumThrowTravel = Math.Max(
+                maximumThrowTravel,
+                MathF.Sqrt(throwDeltaX * throwDeltaX +
+                           throwDeltaY * throwDeltaY));
+            if (maximumThrowTravel >= 2.9f && maximumThrowTravel <= 3.1f &&
+                link.ActiveStoneHeight < 13f)
+                sawFirstThrownGravityStep = true;
+        }
+    }
+    else if (sawStoneThrow)
+    {
+        stoneSequenceFinished = true;
+    }
+}
+Assert(sawStoneLift && sawStoneCarry && sawStoneThrow && sawLiftedStone &&
+       sawReleasedStone && sawReleasedStoneBehindLink &&
+       sawFirstThrownGravityStep && sawStoneImpact && stoneSequenceFinished &&
+       fullyCarriedStoneAt >= 0 &&
+       firstStoneThrowAt - fullyCarriedStoneAt >=
+           LinkGameplayMotion.MinimumSeparateInputMilliseconds &&
+       maximumCarriedStoneHeight >= 12.5f &&
+       maximumThrowTravel >= 30f,
+       "Wallpaper Link must reproduce ObjLink's pull/carry/throw states and ObjStone's carried height, thrown motion, and impact.");
+var stoneEnemySession = new LiveWallpaperEnemySimulation.Session();
+var stoneEnemyStart = stoneEnemySession.Resolve(journeyMap, 0, 0, null);
+var stoneHitLink = new LiveWallpaperSimulatedLinkState(
+    0, 0, 0, 2, LiveWallpaperLinkRouteAction.Stand, default,
+    stoneImpactKind: LiveWallpaperStoneImpactKind.Enemy,
+    stoneImpactX: stoneEnemyStart.PixelX - 3,
+    stoneImpactY: stoneEnemyStart.PixelY,
+    stoneImpactStartedAt: 17,
+    stoneImpactSerial: 1,
+    stoneImpactEnemyIndex: 0);
+var stoneEnemyHit = stoneEnemySession.Resolve(
+    journeyMap, 0, 17, stoneHitLink);
+var stoneEnemyDead = stoneEnemySession.Resolve(
+    journeyMap, 0, 500, stoneHitLink);
+Assert((stoneEnemyHit.Action is LiveWallpaperEnemyAction.Hit or
+            LiveWallpaperEnemyAction.Hidden) && !stoneEnemyDead.Visible,
+       "Thrown stones must apply ObjStone's two damage exactly once and kill a one-HP Octorok.");
 for (var variant = 0; variant < 120; variant++)
 {
     var candidate = LiveWallpaperJourneyPlanner.Create(
         journeyMap, journeyViewport, 1, variant, allowIslandLife: true);
+    if (candidate.Points.Count > 0)
+    {
+        var last = candidate.Points[^1];
+        sawLoadingZoneExit |= last.PixelX < journeyMinimumX ||
+                              last.PixelX > journeyMaximumX ||
+                              last.PixelY < journeyMinimumY ||
+                              last.PixelY > journeyMaximumY;
+        sawLoadingZoneExit |= last.Action == LiveWallpaperJourneyAction.Exit;
+    }
     if (interactionJourney == null && candidate.HasInteraction)
     {
         interactionJourney = candidate;
@@ -366,6 +2770,8 @@ for (var variant = 0; variant < 120; variant++)
         combatJourney = candidate;
         combatJourneyVariant = variant;
     }
+    if (candidate.HasCombat)
+        combatJourneyCount++;
 }
 Assert(interactionJourney != null && interactionJourney.Points.Count > 2 &&
        interactionJourney.InteractionActorIndex == 0 &&
@@ -377,8 +2783,10 @@ Assert(interactionJourney != null && interactionJourney.Points.Count > 2 &&
        combatJourney != null && combatJourney.Points.Count > 2 &&
        combatJourney.CombatEnemyIndex == 0 &&
        combatJourney.Points[combatJourney.CombatPointIndex].Action ==
-           LiveWallpaperJourneyAction.Attack,
-       "Wallpaper journeys must cross real boundaries and include interactions, flights, and fights.");
+           LiveWallpaperJourneyAction.Attack &&
+       combatJourneyCount >= 60 &&
+       sawLoadingZoneExit,
+       "Wallpaper journeys must cross real boundaries, continue through loading zones, and include interactions, flights, and fights.");
 foreach (var point in interactionJourney.Points)
 {
     Assert(!journeyMap.IntersectsActor(
@@ -388,31 +2796,98 @@ foreach (var point in interactionJourney.Points)
 var interactionSimulation = new LiveWallpaperLinkSimulation();
 var sawInteraction = false;
 var interactionStartTime = interactionJourneyVariant * 20_000L;
+LiveWallpaperSimulatedLinkState? previousInteractionLink = null;
+var maximumInteractionStep = 0f;
 for (var frame = 0; frame < 3_000; frame++)
 {
     var link = interactionSimulation.UpdateJourney(
         1, 0, interactionStartTime + frame * 17L, true,
         journeyMap, journeyViewport, allowIslandLife: true);
+    if (previousInteractionLink.HasValue)
+    {
+        var previousPixelX = previousInteractionLink.Value.MapX * 16f;
+        var previousPixelY = previousInteractionLink.Value.MapY * 16f;
+        var previousWasVisible =
+            previousInteractionLink.Value.Action !=
+                LiveWallpaperLinkRouteAction.Hidden &&
+            previousPixelX >= journeyMinimumX &&
+            previousPixelX <= journeyMaximumX &&
+            previousPixelY >= journeyMinimumY &&
+            previousPixelY <= journeyMaximumY;
+        if (previousWasVisible)
+        {
+            var deltaX = link.MapX * 16f - previousPixelX;
+            var deltaY = link.MapY * 16f - previousPixelY;
+            maximumInteractionStep = Math.Max(
+                maximumInteractionStep,
+                MathF.Sqrt(deltaX * deltaX + deltaY * deltaY));
+        }
+    }
+    previousInteractionLink = link;
     sawInteraction |= link.Action == LiveWallpaperLinkRouteAction.Interact &&
                       link.InteractionActorIndex == 0;
     Assert(!journeyMap.IntersectsActor(
                link.MapX * 16f - 4, link.MapY * 16f - 10, 8, 10),
            "Wallpaper Link must not enter an NPC body while following an interaction route.");
 }
+Assert(maximumInteractionStep <= 2f,
+       "Completing a wallpaper journey must continue from Link's current endpoint without teleporting across obstacles.");
 var roosterSimulation = new LiveWallpaperLinkSimulation();
+var roosterPickupStart = new Microsoft.Xna.Framework.Vector3(40f, 56f, 0f);
+var roosterLinkPosition = new Microsoft.Xna.Framework.Vector3(40f, 56f, 0f);
+Assert(RoosterGameplayMotion.ResolvePickupPosition(
+           roosterPickupStart, roosterLinkPosition,
+           RoosterGameplayMotion.PullMilliseconds).Z == 0f &&
+       RoosterGameplayMotion.ResolvePickupPosition(
+           roosterPickupStart, roosterLinkPosition,
+           RoosterGameplayMotion.PickupSequenceMilliseconds).Z ==
+       RoosterGameplayMotion.CarryHeight,
+       "Rooster pickup must remain grounded for ObjLink's pull and finish at ObjCock's exact carry height.");
+Assert(Math.Abs(RoosterGameplayMotion.ResolveHoverTarget(0) - 36f) < 0.0001f &&
+       Math.Abs(RoosterGameplayMotion.AdvanceFlightHeight(
+           RoosterGameplayMotion.CarryHeight, 0, 1f) - 14.5f) < 0.0001f,
+       "Rooster flight must use ObjCock's real hover target and 0.5 px/frame ascent.");
+var releasedRooster = RoosterGameplayMotion.AdvanceRelease(
+    new RoosterReleaseMotionState(
+        Microsoft.Xna.Framework.Vector2.Zero,
+        RoosterGameplayMotion.HoverHeight,
+        Microsoft.Xna.Framework.Vector2.UnitX * StoneGameplayMotion.ThrowSpeed,
+        0f, grounded: false),
+    1f);
+Assert(Math.Abs(releasedRooster.Position.X - StoneGameplayMotion.ThrowSpeed) < 0.0001f &&
+       Math.Abs(releasedRooster.Height - 35.925f) < 0.0001f &&
+       Math.Abs(releasedRooster.Velocity.X - 2.925f) < 0.0001f &&
+       !releasedRooster.Grounded,
+       "Released rooster motion must match ObjCock's gravity and airborne drag instead of teleporting to the ground.");
 var sawRoosterFlight = false;
+var sawRoosterPickup = false;
+var sawRoosterThrow = false;
+var sawRoosterDescent = false;
+var roosterReleaseHeight = 0f;
 var roosterStartTime = roosterJourneyVariant * 20_000L;
 for (var frame = 0; frame < 3_000; frame++)
 {
     var link = roosterSimulation.UpdateJourney(
         1, 0, roosterStartTime + frame * 17L, true,
         journeyMap, journeyViewport, allowIslandLife: true);
+    sawRoosterPickup |=
+        link.Action == LiveWallpaperLinkRouteAction.RoosterPickup &&
+        link.RoosterHeight <= RoosterGameplayMotion.CarryHeight;
     sawRoosterFlight |= link.CarryingRooster &&
                         link.Action == LiveWallpaperLinkRouteAction.RoosterFly &&
                         link.RoosterHeight > link.Height;
+    if (link.Action == LiveWallpaperLinkRouteAction.RoosterThrow)
+    {
+        sawRoosterThrow = true;
+        roosterReleaseHeight = Math.Max(roosterReleaseHeight, link.RoosterHeight);
+    }
+    sawRoosterDescent |= sawRoosterThrow && !link.CarryingRooster &&
+                         link.RoosterVisible &&
+                         link.RoosterHeight < roosterReleaseHeight - 0.05f;
 }
-Assert(sawInteraction && sawRoosterFlight,
-       "Wallpaper journey simulation must pause to face NPCs and use Link's rooster-flight state.");
+Assert(sawInteraction && sawRoosterPickup && sawRoosterFlight &&
+       sawRoosterThrow && sawRoosterDescent,
+       "Wallpaper journey simulation must pause to face NPCs and reproduce ObjCock's pickup, flight, throw, and descent states.");
 var combatSimulation = new LiveWallpaperLinkSimulation();
 var sawCombat = false;
 var combatStartTime = combatJourneyVariant * 20_000L;
@@ -475,9 +2950,20 @@ Assert(Math.Abs(constrainedBowWow.HorizontalOffset) < 0.001f &&
        "Wallpaper BowWow must use its gameplay body width and respect installed NPC walls.");
 Assert(LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 15) == 66 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 30) == 33 &&
+       LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 60) == 16 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 999) == 33 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(false, 30) == 1_000,
-       "A static wallpaper must use its low-power cadence regardless of animation FPS.");
+       "The wallpaper scheduler must support 15, 30, and opt-in 60 FPS while keeping its static low-power cadence.");
+var firstHighFpsDelay = LiveWallpaperFrameScheduler.GetCompensatedDelayMilliseconds(
+    1_000, 0, true, 60, out var firstHighFpsDeadline);
+var renderCompensatedDelay = LiveWallpaperFrameScheduler.GetCompensatedDelayMilliseconds(
+    1_006, firstHighFpsDeadline - 16, true, 60, out var compensatedDeadline);
+var missedFrameDelay = LiveWallpaperFrameScheduler.GetCompensatedDelayMilliseconds(
+    1_020, firstHighFpsDeadline - 16, true, 60, out var recoveredDeadline);
+Assert(firstHighFpsDelay == 16 && firstHighFpsDeadline == 1_016 &&
+       renderCompensatedDelay == 10 && compensatedDeadline == 1_016 &&
+       missedFrameDelay == 0 && recoveredDeadline == 1_020,
+       "Wallpaper scheduling must subtract rendering time and immediately recover from a missed frame deadline.");
 var dayWildlife = LiveWallpaperWildlife.Resolve(0, LiveWallpaperTimePhase.Day);
 var sunsetWildlife = LiveWallpaperWildlife.Resolve(0, LiveWallpaperTimePhase.Sunset);
 var nightWildlife = LiveWallpaperWildlife.Resolve(0, LiveWallpaperTimePhase.Night);
@@ -545,6 +3031,76 @@ Assert(LiveWallpaperMapViewport.TryCreate(
        landscapeViewport.Left + landscapeViewport.Columns * landscapeViewport.TileSize >= 2400 &&
        !LiveWallpaperMapViewport.TryCreate(0, 2400, 128, 1, 0.5f, out _),
        "Installed map viewports must cover portrait and landscape canvases without synthetic art.");
+Assert(portraitViewport.TryMoveToAdjacentField(
+           1, 0, 160, 128, out var followedRight) &&
+       followedRight.OriginX == portraitViewport.OriginX + 10 &&
+       followedRight.OriginY == portraitViewport.OriginY &&
+       portraitViewport.TryMoveToAdjacentField(
+           0, -1, 160, 128, out var followedUp) &&
+       followedUp.OriginX == portraitViewport.OriginX &&
+       followedUp.OriginY == portraitViewport.OriginY - 8 &&
+       !portraitViewport.TryMoveToAdjacentField(
+           1, 1, 160, 128, out _),
+       "Wallpaper loading-zone following must move by the engine's exact 10x8-tile field size.");
+var rightExitPixelX =
+    (portraitViewport.OriginX + portraitViewport.Columns) * 16f + 8f;
+var viewportCenterPixelY =
+    (portraitViewport.OriginY + portraitViewport.Rows / 2f) * 16f;
+Assert(portraitViewport.TryFollowLinkThroughExit(
+           rightExitPixelX, viewportCenterPixelY, 160, 128,
+           out var centeredFollowViewport) &&
+       centeredFollowViewport.OriginX > portraitViewport.OriginX &&
+       Math.Abs(
+           rightExitPixelX / 16f -
+           (centeredFollowViewport.OriginX + centeredFollowViewport.Columns / 2f)) <= 1f,
+       "A followed loading-zone transition must visibly recenter the wallpaper crop on Link.");
+var rightScrollThresholdPixelX =
+    (portraitViewport.CameraOriginX + portraitViewport.Columns - 2f) * 16f;
+var beforeRightScrollThresholdPixelX = rightScrollThresholdPixelX - 2f;
+Assert(!portraitViewport.TryGetEdgeScrollTarget(
+           rightScrollThresholdPixelX, viewportCenterPixelY,
+           -1f, 0f, 160, 128, out _, out _) &&
+       !portraitViewport.TryGetEdgeScrollTarget(
+           beforeRightScrollThresholdPixelX, viewportCenterPixelY,
+           1f, 0f, 160, 128, out _, out _) &&
+       portraitViewport.TryGetEdgeScrollTarget(
+           rightScrollThresholdPixelX, viewportCenterPixelY,
+           1f, 0f, 160, 128, out var edgeTargetX, out var edgeTargetY) &&
+       Math.Abs(edgeTargetX - portraitViewport.CameraOriginX - 10f) < 0.001f &&
+       Math.Abs(edgeTargetY - portraitViewport.CameraOriginY) < 0.001f,
+       "The wallpaper camera must begin scrolling one visible tile before Link reaches the phone edge while moving outward.");
+var topScrollThresholdPixelY =
+    (portraitViewport.CameraOriginY + 3f) * 16f;
+var bottomScrollThresholdPixelY =
+    (portraitViewport.CameraOriginY + portraitViewport.Rows - 3f) * 16f;
+var viewportCenterPixelX =
+    (portraitViewport.CameraOriginX + portraitViewport.Columns / 2f) * 16f;
+Assert(!portraitViewport.TryGetEdgeScrollTarget(
+           viewportCenterPixelX, topScrollThresholdPixelY + 2f,
+           0f, -1f, 160, 128, out _, out _) &&
+       portraitViewport.TryGetEdgeScrollTarget(
+           viewportCenterPixelX, topScrollThresholdPixelY,
+           0f, -1f, 160, 128, out var topTargetX, out var topTargetY) &&
+       Math.Abs(topTargetX - portraitViewport.CameraOriginX) < 0.001f &&
+       Math.Abs(topTargetY - portraitViewport.CameraOriginY + 8f) < 0.001f &&
+       !portraitViewport.TryGetEdgeScrollTarget(
+           viewportCenterPixelX, bottomScrollThresholdPixelY - 2f,
+           0f, 1f, 160, 128, out _, out _) &&
+       portraitViewport.TryGetEdgeScrollTarget(
+           viewportCenterPixelX, bottomScrollThresholdPixelY,
+           0f, 1f, 160, 128, out var bottomTargetX, out var bottomTargetY) &&
+       Math.Abs(bottomTargetX - portraitViewport.CameraOriginX) < 0.001f &&
+       Math.Abs(bottomTargetY - portraitViewport.CameraOriginY - 8f) < 0.001f,
+       "The wallpaper camera must begin vertical transitions two visible tiles before the status and navigation bar edges.");
+var halfTileCamera = portraitViewport.WithCameraOrigin(
+    portraitViewport.CameraOriginX + 0.5f,
+    portraitViewport.CameraOriginY, 160, 128);
+Assert(halfTileCamera.OriginX == portraitViewport.OriginX &&
+       Math.Abs(halfTileCamera.CameraOriginX -
+                portraitViewport.CameraOriginX - 0.5f) < 0.001f &&
+       Math.Abs(halfTileCamera.Left - portraitViewport.Left +
+                portraitViewport.TileSize * 0.5f) < 0.001f,
+       "Fractional camera origins must scroll map rendering smoothly between tile boundaries.");
 Assert(LiveWallpaperPresets.TryResolve(1, out var mabePreset) &&
        mabePreset.Scene == 1 && mabePreset.TimeOfDay == 2 &&
        mabePreset.FeaturedCharacter == 4 && mabePreset.LinkActivity == 1 &&

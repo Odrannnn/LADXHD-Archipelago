@@ -36,5 +36,14 @@ namespace ProjectZ
                 entityY + LinkSpriteOffsetY * scale,
                 scale);
         }
+
+        /// <summary>
+        /// ObjLink draws a carried object itself after Link. Once released, the
+        /// object's normal player-layer component is restored and Y-sorted.
+        /// </summary>
+        public static bool DrawActiveStoneBeforeLink(
+            LiveWallpaperSimulatedLinkState link) =>
+            link.ActiveStoneReleased &&
+            link.ActiveStoneEntityY < link.MapY * GameTileSize;
     }
 }

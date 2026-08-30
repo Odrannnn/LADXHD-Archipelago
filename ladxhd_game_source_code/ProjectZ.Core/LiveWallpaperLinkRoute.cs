@@ -7,9 +7,24 @@ namespace ProjectZ
         Stand,
         Walk,
         FeatherJump,
+        PegasusJump,
+        Swim,
         Interact,
+        OpenChest,
+        ShowItem,
         Attack,
-        RoosterFly
+        Pushing,
+        LiftStone,
+        CarryStone,
+        ThrowStone,
+        PegasusCharge,
+        PegasusDash,
+        Hookshot,
+        RoosterPickup,
+        RoosterFly,
+        RoosterThrow,
+        Falling,
+        Hidden
     }
 
     public readonly struct LiveWallpaperLinkRouteState
