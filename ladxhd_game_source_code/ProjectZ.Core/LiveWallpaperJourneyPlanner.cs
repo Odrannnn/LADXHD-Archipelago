@@ -475,6 +475,12 @@ namespace ProjectZ
             // A deliberate tap on a hole walks into the canonical fall. For a
             // safe destination, the shortest route may cross a valid pit span,
             // but that span is converted to the normal feather/Pegasus jump.
+            // An exhausted search has already visited every reachable position.
+            // Reuse that result for this tap instead of searching the same
+            // disconnected area again for each of the 289 nearby candidates.
+            var reachableWithHoles = new HashSet<Point>();
+            var reachableWithoutHoles = new HashSet<Point>();
+            var attemptedCandidates = new HashSet<Point>();
             const int maximumTapRadius = GridStep * 8;
             for (var radius = 0; radius <= maximumTapRadius; radius += GridStep)
             {
@@ -486,6 +492,10 @@ namespace ProjectZ
                         continue;
                     var candidateX = Snap(Math.Clamp(targetX + offsetX, minX, maxX));
                     var candidateY = Snap(Math.Clamp(targetY + offsetY, minY, maxY));
+                    var candidate = new Point(candidateX, candidateY);
+                    if (!attemptedCandidates.Add(candidate) ||
+                        reachableWithHoles.Count > 0 && !reachableWithHoles.Contains(candidate))
+                        continue;
                     if (!IsWalkable(
                             map, candidateX, candidateY,
                             includeHoles: !tappedHole, includeBushes: false,
@@ -497,7 +507,8 @@ namespace ProjectZ
                         includeHoles: false, includeBushes: false,
                         includeStones: false, includeMoveStones: false,
                         allowDiagonal: true,
-                        penalizeVisibleEdges: false);
+                        penalizeVisibleEdges: false,
+                        reachableWhenNoPath: reachableWithHoles);
                     if (path.Count < 2)
                         continue;
                     if (tappedHole)
@@ -516,13 +527,17 @@ namespace ProjectZ
                                 : ToJumpPlan(map, path);
                             return AddPegasusDash(jumpPlan);
                         }
+                        if (reachableWithoutHoles.Count > 0 &&
+                            !reachableWithoutHoles.Contains(candidate))
+                            continue;
                         path = FindPath(
                             map, startX, startY, candidateX, candidateY,
                             minX, minY, maxX, maxY,
                             includeHoles: true, includeBushes: false,
                             includeStones: false, includeMoveStones: false,
                             allowDiagonal: true,
-                            penalizeVisibleEdges: false);
+                            penalizeVisibleEdges: false,
+                            reachableWhenNoPath: reachableWithoutHoles);
                         if (path.Count < 2)
                             continue;
                     }
@@ -1875,7 +1890,8 @@ namespace ProjectZ
             bool includeStones = true,
             bool includeMoveStones = true,
             bool allowDiagonal = false,
-            bool penalizeVisibleEdges = true)
+            bool penalizeVisibleEdges = true,
+            HashSet<Point> reachableWhenNoPath = null)
         {
             startX = Snap(Math.Clamp(startX, minX, maxX));
             startY = Snap(Math.Clamp(startY, minY, maxY));
@@ -1968,7 +1984,17 @@ namespace ProjectZ
                 }
             }
             if (startIndex != endIndex && previous[endIndex] < 0)
+            {
+                if (reachableWhenNoPath != null)
+                {
+                    for (var index = 0; index < cost.Length; index++)
+                        if (cost[index] < int.MaxValue)
+                            reachableWhenNoPath.Add(new Point(
+                                minX + index % columns * GridStep,
+                                minY + index / columns * GridStep));
+                }
                 return [];
+            }
 
             var result = new List<Point>();
             for (var current = endIndex; current >= 0; current = previous[current])
