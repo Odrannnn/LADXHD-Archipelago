@@ -4,6 +4,9 @@ namespace ProjectZ
 {
     public readonly struct LiveWallpaperMapViewport
     {
+        // Show twelve rather than ten tiles across the short display dimension.
+        // Both world and interior cameras share this orientation-stable zoom.
+        public const int ReferenceVisibleTiles = 12;
         private LiveWallpaperMapViewport(
             int originX, int originY, int columns, int rows,
             float tileSize, float left, float top, float groundY,
@@ -199,7 +202,7 @@ namespace ProjectZ
                 !LiveWallpaperSceneSelection.TryGetTileOrigin(scene, out var sceneX, out var sceneY))
                 return false;
 
-            const int referenceVisibleTiles = 10;
+            const int referenceVisibleTiles = ReferenceVisibleTiles;
             const int horizontalOverscan = 2;
             // Keep the same physical map scale when the device rotates. Using
             // width here made landscape tiles more than twice as large; the
@@ -223,7 +226,7 @@ namespace ProjectZ
             viewport = new LiveWallpaperMapViewport(
                 Math.Max(0, sceneX - horizontalSceneMargin), originY, columns, rows,
                 tileSize, left, top, groundY,
-                Math.Max(0, sceneX - 1), originY);
+                Math.Max(0, sceneX - horizontalSceneMargin), originY);
             return true;
         }
 
@@ -236,7 +239,7 @@ namespace ProjectZ
             if (width <= 0 || height <= 0 || mapWidth <= 0 || mapHeight <= 0)
                 return false;
 
-            const int referenceVisibleTiles = 10;
+            const int referenceVisibleTiles = ReferenceVisibleTiles;
             const int horizontalOverscan = 2;
             var tileSize = MathF.Ceiling(
                 Math.Min(width, height) / (float)referenceVisibleTiles);

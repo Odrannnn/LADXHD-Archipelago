@@ -69,6 +69,10 @@ var testInstalledWallpaperAssets = Directory.Exists(wallpaperGameDataRoot);
 if (!testInstalledWallpaperAssets)
     Console.WriteLine("Private installed-asset wallpaper tests unavailable; running public synthetic regressions.");
 
+WallpaperSceneEffectsTests.Run();
+WallpaperDayCycleTests.Run();
+WallpaperDecorationDrawingTests.Run();
+
 const string wallpaperAnimationData = """
 1
 link0.png
@@ -3019,7 +3023,8 @@ Assert(Math.Abs(defaultLayout.FeaturedXRatio - 0.72f) < 0.001f &&
        "Wallpaper scene layouts must expose stable regional and user-overridden anchors.");
 Assert(LiveWallpaperMapViewport.TryCreate(
            1080, 2400, 128, 1, 0.5f, out var portraitViewport) &&
-       portraitViewport.Columns == 12 && portraitViewport.Rows >= 24 &&
+       portraitViewport.Columns == 14 && portraitViewport.Rows >= 28 &&
+       portraitViewport.TileSize == 90f &&
        portraitViewport.Left <= 0 &&
        portraitViewport.Left + portraitViewport.Columns * portraitViewport.TileSize >= 1080 &&
        portraitViewport.Top <= 0 &&
@@ -3028,6 +3033,8 @@ Assert(LiveWallpaperMapViewport.TryCreate(
        LiveWallpaperMapViewport.TryCreate(
            2400, 1080, 128, 2, 0f, out var landscapeViewport) &&
        landscapeViewport.Left <= 0 &&
+       landscapeViewport.TileSize == portraitViewport.TileSize &&
+       landscapeViewport.CameraOriginX == landscapeViewport.OriginX &&
        landscapeViewport.Left + landscapeViewport.Columns * landscapeViewport.TileSize >= 2400 &&
        !LiveWallpaperMapViewport.TryCreate(0, 2400, 128, 1, 0.5f, out _),
        "Installed map viewports must cover portrait and landscape canvases without synthetic art.");

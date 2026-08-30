@@ -322,7 +322,7 @@ namespace ProjectZ
                     BeginIdle(runtime, actor.Kind);
             }
 
-            private static Vector3 GetSpawn(LiveWallpaperMapActor actor) =>
+            public static Vector3 GetSpawn(LiveWallpaperMapActor actor) =>
                 actor.Kind switch
                 {
                     LiveWallpaperMapActorKind.Butterfly =>

@@ -112,8 +112,8 @@ namespace ProjectZ.InGame.GameObjects.Base.CObjects
                 ? MathF.Round(Position.X + DrawOffset.X - Center.X)
                 : (float)Math.Round((Position.X + DrawOffset.X - Center.X) * MapManager.Camera.Scale) / MapManager.Camera.Scale;
             var normY = GameSettings.PixelSnapping
-                ? MathF.Round(Position.Y + DrawOffset.Y - Center.Y - Position.Z * 0.5f + offsetY)
-                : (float)Math.Round((Position.Y + DrawOffset.Y - Center.Y - Position.Z * 0.5f + offsetY) * MapManager.Camera.Scale) / MapManager.Camera.Scale;
+                ? MathF.Round(Position.Y + DrawOffset.Y - Center.Y + GameSceneEffects.SpriteShadowYOffset(Position.Z, offsetY))
+                : (float)Math.Round((Position.Y + DrawOffset.Y - Center.Y + GameSceneEffects.SpriteShadowYOffset(Position.Z, offsetY)) * MapManager.Camera.Scale) / MapManager.Camera.Scale;
 
             // TODO_OPT: this does currently not support FlipVertically
             DrawHelper.DrawShadow(SprTexture, new Vector2(normX, normY),

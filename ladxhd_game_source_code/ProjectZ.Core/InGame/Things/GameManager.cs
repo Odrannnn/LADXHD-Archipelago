@@ -315,10 +315,10 @@ namespace ProjectZ.InGame.Things
 
                 Resources.BlurEffectH.Parameters["pixelX"].SetValue(1.0f / _shadowRenderTarget.Width);
                 Resources.BlurEffectV.Parameters["pixelY"].SetValue(1.0f / _shadowRenderTarget.Height);
-                Resources.BlurEffectH.Parameters["mult0"].SetValue(0.35f);
-                Resources.BlurEffectH.Parameters["mult1"].SetValue(0.15f);
-                Resources.BlurEffectV.Parameters["mult0"].SetValue(0.35f);
-                Resources.BlurEffectV.Parameters["mult1"].SetValue(0.15f);
+                Resources.BlurEffectH.Parameters["mult0"].SetValue(GameSceneEffects.ShadowBlurNearWeight);
+                Resources.BlurEffectH.Parameters["mult1"].SetValue(GameSceneEffects.ShadowBlurFarWeight);
+                Resources.BlurEffectV.Parameters["mult0"].SetValue(GameSceneEffects.ShadowBlurNearWeight);
+                Resources.BlurEffectV.Parameters["mult1"].SetValue(GameSceneEffects.ShadowBlurFarWeight);
 
                 // v blur
                 Game1.Graphics.GraphicsDevice.SetRenderTarget(_shadowRenderTargetBlur);

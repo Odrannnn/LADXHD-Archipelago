@@ -37,7 +37,7 @@ namespace ProjectZ.InGame.GameObjects.Dungeon
                 }
             }
             map.UseLight = true;
-            map.LightColor = new Color(colorR, colorG, colorB) * (colorA / 255f);
+            map.LightColor = GameSceneEffects.AmbientLight(colorR, colorG, colorB, colorA);
             _baseColor = map.LightColor;
             IsDead = true;
         }

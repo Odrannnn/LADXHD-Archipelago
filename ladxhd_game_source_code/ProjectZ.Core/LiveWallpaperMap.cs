@@ -121,9 +121,12 @@ namespace ProjectZ
     {
         public LiveWallpaperMapLamp(
             string animationPath, int pixelX, int pixelY,
-            int entityX, int entityY, int rotation, bool playerLayer)
+            int entityX, int entityY, int rotation, bool playerLayer,
+            string animationName = "idle")
         {
             AnimationPath = animationPath;
+            AnimationName = animationName;
+            AnimationKey = animationPath + "\n" + animationName;
             PixelX = pixelX;
             PixelY = pixelY;
             EntityX = entityX;
@@ -133,6 +136,8 @@ namespace ProjectZ
         }
 
         public string AnimationPath { get; }
+        public string AnimationName { get; }
+        public string AnimationKey { get; }
         public int PixelX { get; }
         public int PixelY { get; }
         public int EntityX { get; }
@@ -209,6 +214,7 @@ namespace ProjectZ
             PlayerLayer = playerLayer;
             TopLeft = topLeft;
             AtlasName = atlasName;
+            AssetKey = atlasName + "\n" + spriteId;
             StoneLayout = stoneLayout;
             DrawOffsetX = drawOffsetX;
             DrawOffsetY = drawOffsetY;
@@ -221,10 +227,28 @@ namespace ProjectZ
         public bool PlayerLayer { get; }
         public bool TopLeft { get; }
         public string AtlasName { get; }
+        public string AssetKey { get; }
         public bool StoneLayout { get; }
         public int DrawOffsetX { get; }
         public int DrawOffsetY { get; }
         public int SourceOffsetX { get; }
+
+        // Same renderer anchor and conservative margin, shared with regression
+        // tests. Resolve moved-block positions before calling; atlas origins and
+        // stone offsets are still applied by the original drawing helpers.
+        public bool TryGetDrawAnchor(LiveWallpaperMapViewport viewport,
+            float entityX, float entityY, out float anchorX, out float anchorY)
+        {
+            var scale = viewport.TileSize / 16f;
+            anchorX = viewport.Left +
+                ((entityX + DrawOffsetX) / 16f - viewport.OriginX) * viewport.TileSize;
+            anchorY = viewport.Top +
+                ((entityY + DrawOffsetY) / 16f - viewport.OriginY) * viewport.TileSize;
+            return !(anchorX < viewport.Left - 64f * scale ||
+                anchorX > viewport.Left + viewport.Columns * viewport.TileSize + 64f * scale ||
+                anchorY < viewport.Top - 64f * scale ||
+                anchorY > viewport.Top + viewport.Rows * viewport.TileSize + 64f * scale);
+        }
     }
 
     public readonly struct LiveWallpaperMapObject
@@ -459,6 +483,7 @@ namespace ProjectZ
             Lamps = lamps ?? [];
             Lights = lights ?? [];
             Objects = objects ?? [];
+            SceneEffects = LiveWallpaperSceneEffects.Create(this);
             IsHouse = Objects.Any(mapObject =>
                 string.Equals(mapObject.Template, "houseObject",
                     StringComparison.OrdinalIgnoreCase));
@@ -487,6 +512,7 @@ namespace ProjectZ
         public IReadOnlyList<LiveWallpaperMapLamp> Lamps { get; }
         public IReadOnlyList<LiveWallpaperMapLight> Lights { get; }
         public IReadOnlyList<LiveWallpaperMapObject> Objects { get; }
+        public LiveWallpaperSceneEffects SceneEffects { get; }
 
         public bool IntersectsHoleTeleporter(
             float x, float y, float width, float height)
@@ -1387,7 +1413,7 @@ namespace ProjectZ
                 TryAddAnimatedTile(
                     parsedAnimatedTiles, templates[templateIndex], positionX, positionY);
                 TryAddLamp(
-                    parsedLamps, templates[templateIndex], positionX, positionY);
+                    parsedLamps, parsedObjects[^1]);
                 TryAddLight(
                     parsedLights, templates[templateIndex], positionX, positionY);
             }
@@ -1411,22 +1437,22 @@ namespace ProjectZ
 
         private static void TryAddLamp(
             List<LiveWallpaperMapLamp> lamps,
-            string template, int positionX, int positionY)
+            LiveWallpaperMapObject mapObject)
         {
-            var lamp = template switch
+            var positionX = mapObject.PixelX;
+            var positionY = mapObject.PixelY;
+            if (mapObject.Template == "overworldTeleporter")
             {
-                "lamp" => ("Objects/lamp_floor.ani", 0, true, 0, 0, 8, 8),
-                "lamp_wall_house_0" => ("Objects/lamp_wall_1.ani", 0, false, 0, 0, 8, 8),
-                "lamp_wall_house_1" => ("Objects/lamp_wall_1.ani", 1, false, 0, 0, 8, 8),
-                "lamp_wall_house_2" => ("Objects/lamp_wall_1.ani", 2, false, 0, 0, 8, 8),
-                "lamp_wall_house_3" => ("Objects/lamp_wall_1.ani", 3, false, 0, 0, 8, 8),
                 // ObjOverworldTeleporter uses CPosition(posX,posY) with an
                 // AnimationComponent offset of (8,8). holeTeleporter.ani then
                 // supplies its exact per-frame -7/-9 sprite offsets.
-                "overworldTeleporter" => ("Objects/holeTeleporter.ani", 0, false, 8, 8, 0, 0),
-                _ => ((string)null, 0, false, 0, 0, 0, 0)
-            };
-            if (lamp.Item1 == null)
+                lamps.Add(new LiveWallpaperMapLamp("Objects/holeTeleporter.ani",
+                    positionX + 8, positionY + 8, positionX, positionY, 0, false));
+                return;
+            }
+            if (!LiveWallpaperSceneEffects.TryResolve(mapObject, out var definition, out var p) ||
+                definition.ObjectType != typeof(InGame.GameObjects.Things.ObjLamp) ||
+                !LiveWallpaperAnimation.TryNormalizeRelativePath((string)p[0] + ".ani", out var path))
                 return;
 
             // ObjLamp uses CPosition(posX, posY + 8), a sprite center of (8,8),
@@ -1434,9 +1460,9 @@ namespace ProjectZ
             // animation's top-left at the map placement and rotates around its
             // exact 8x8 centre.
             lamps.Add(new LiveWallpaperMapLamp(
-                lamp.Item1, positionX + lamp.Item4, positionY + lamp.Item5,
-                positionX + lamp.Item6, positionY + lamp.Item7,
-                lamp.Item2, lamp.Item3));
+                path, positionX, positionY, positionX + 8, positionY + 8,
+                (int)p[1], (bool)p[2],
+                (bool)p[3] || !string.IsNullOrEmpty(p[4] as string) ? "dead" : "idle"));
         }
 
         private static void TryAddLight(

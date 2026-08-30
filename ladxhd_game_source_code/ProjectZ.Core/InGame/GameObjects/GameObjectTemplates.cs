@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Microsoft.Xna.Framework;
@@ -34,8 +34,13 @@ namespace ProjectZ.InGame.GameObjects
         public static Dictionary<string, ObjActivator.ObjectActivator<GameObject>> ObjectSpawner = new Dictionary<string, ObjActivator.ObjectActivator<GameObject>>();
         public static Dictionary<string, ParameterInfo[]> GameObjectParameter = new Dictionary<string, ParameterInfo[]>();
 
-        public static void SetUpGameObjects()
+        // Inert definitions can also be read by the wallpaper without constructing
+        // game objects, registering spawners, or starting a gameplay session.
+        internal static Dictionary<string, GameObjectTemplate> CreateDefinitions(
+            Func<string, Rectangle> sourceRectangle = null)
         {
+            sourceRectangle ??= Resources.SourceRectangle;
+            var ObjectTemplates = new Dictionary<string, GameObjectTemplate>();
             var colliderColor = Color.OrangeRed * 0.65f;
             var lowerColliderColor = Color.Green * 0.65f;
             var specColliderColor = Color.Orange * 0.65f;
@@ -211,11 +216,11 @@ namespace ProjectZ.InGame.GameObjects
             ObjectTemplates.Add("sand2", new GameObjectTemplate(typeof(ObjAnimatedTile), new object[] { "sand_1", 4, 175, true, 0, Values.LayerBackground }));
             ObjectTemplates.Add("sand3", new GameObjectTemplate(typeof(ObjAnimatedTile), new object[] { "sand_2", 4, 175, true, 0, Values.LayerBackground }));
 
-            ObjectTemplates.Add("2dPondWater", new GameObjectTemplate(typeof(ObjAnimatedShiftedTile), new object[] { Resources.SourceRectangle("water_2d_0"), -2, 0, 366, 0 }));
-            ObjectTemplates.Add("2dWaterDungeon", new GameObjectTemplate(typeof(ObjAnimatedShiftedTile), new object[] { Resources.SourceRectangle("water_2d_1"), -2, 0, 366, 0 }));
-            ObjectTemplates.Add("2dWaterDungeonDark", new GameObjectTemplate(typeof(ObjAnimatedShiftedTile), new object[] { Resources.SourceRectangle("water_2d_2"), -2, 0, 350, 0 }));
-            ObjectTemplates.Add("2dWater", new GameObjectTemplate(typeof(ObjAnimatedShiftedTile), new object[] { Resources.SourceRectangle("water_2d_3"), -2, 0, 366, 0 }));
-            ObjectTemplates.Add("2dWaterDungeon2", new GameObjectTemplate(typeof(ObjAnimatedShiftedTile), new object[] { Resources.SourceRectangle("water_2d_4"), -2, 0, 366, 0 }));
+            ObjectTemplates.Add("2dPondWater", new GameObjectTemplate(typeof(ObjAnimatedShiftedTile), new object[] { sourceRectangle("water_2d_0"), -2, 0, 366, 0 }));
+            ObjectTemplates.Add("2dWaterDungeon", new GameObjectTemplate(typeof(ObjAnimatedShiftedTile), new object[] { sourceRectangle("water_2d_1"), -2, 0, 366, 0 }));
+            ObjectTemplates.Add("2dWaterDungeonDark", new GameObjectTemplate(typeof(ObjAnimatedShiftedTile), new object[] { sourceRectangle("water_2d_2"), -2, 0, 350, 0 }));
+            ObjectTemplates.Add("2dWater", new GameObjectTemplate(typeof(ObjAnimatedShiftedTile), new object[] { sourceRectangle("water_2d_3"), -2, 0, 366, 0 }));
+            ObjectTemplates.Add("2dWaterDungeon2", new GameObjectTemplate(typeof(ObjAnimatedShiftedTile), new object[] { sourceRectangle("water_2d_4"), -2, 0, 366, 0 }));
 
             ObjectTemplates.Add("colorTileRed", new GameObjectTemplate(typeof(ObjAnimatedTile), new object[] { "color_tile_red", 4, 200, true, 0, Values.LayerBottom }));
             ObjectTemplates.Add("colorTileGreen", new GameObjectTemplate(typeof(ObjAnimatedTile), new object[] { "color_tile_green", 4, 200, true, 0, Values.LayerBottom }));
@@ -314,7 +319,7 @@ namespace ProjectZ.InGame.GameObjects
 
             ObjectTemplates.Add("break_real_stuff_start", null);
 
-            ObjectTemplates.Add("destroyableStone", new GameObjectTemplate(typeof(ObjDestroyableStone), new object[] { Resources.SourceRectangle("destroyableStone"), null }));
+            ObjectTemplates.Add("destroyableStone", new GameObjectTemplate(typeof(ObjDestroyableStone), new object[] { sourceRectangle("destroyableStone"), null }));
 
             ObjectTemplates.Add("weatherBird", new GameObjectTemplate(typeof(ObjWeatherBird), new object[] { null }));
 
@@ -414,11 +419,11 @@ namespace ProjectZ.InGame.GameObjects
             ObjectTemplates.Add("dungeon7_tower", new GameObjectTemplate(typeof(ObjTower), new object[] { null }));
             ObjectTemplates.Add("mermaid_statue", new GameObjectTemplate(typeof(ObjMermaidStatue), new object[] { null }));
 
-            ObjectTemplates.Add("destroyable_barrier", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("destroyable_barrier"), "", 0, false, "cracked_rock" }));
-            ObjectTemplates.Add("stoneWall", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_0"), "", 0, true, null }));
-            ObjectTemplates.Add("destroyableWallCave", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_1"), "", 0, true, null }));
-            ObjectTemplates.Add("destroyableWallColorDungeon", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_7"), "", 0, true, null }));
-            ObjectTemplates.Add("destroyableWallDungeon7", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_9"), "", 0, true, null }));
+            ObjectTemplates.Add("destroyable_barrier", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("destroyable_barrier"), "", 0, false, "cracked_rock" }));
+            ObjectTemplates.Add("stoneWall", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_0"), "", 0, true, null }));
+            ObjectTemplates.Add("destroyableWallCave", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_1"), "", 0, true, null }));
+            ObjectTemplates.Add("destroyableWallColorDungeon", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_7"), "", 0, true, null }));
+            ObjectTemplates.Add("destroyableWallDungeon7", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_9"), "", 0, true, null }));
 
             ObjectTemplates.Add("dungeonCrystal", new GameObjectTemplate(typeof(ObjCrystal), new object[] { "crystal_2", 0, false, null }));
             ObjectTemplates.Add("caveCrystal", new GameObjectTemplate(typeof(ObjCrystal), new object[] { "crystal_0", 1, false, null }));
@@ -486,15 +491,15 @@ namespace ProjectZ.InGame.GameObjects
             ObjectTemplates.Add("torch_d4", new GameObjectTemplate(typeof(ObjLamp), new object[] { "Objects/torch_d4", 0, false, false, null, true }));
             ObjectTemplates.Add("torch_d8", new GameObjectTemplate(typeof(ObjLamp), new object[] { "Objects/torch_d8", 0, false, false, null, true }));
 
-            ObjectTemplates.Add("dungeonWall", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_2"), "", 0, true, null }));
-            ObjectTemplates.Add("dungeonWall3", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_3"), "", 0, true, null }));
-            ObjectTemplates.Add("dungeonWall3cracks", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_4"), "", 0, true, null }));
-            ObjectTemplates.Add("dungeon4Block", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_5"), "", 0, false, "rock_cracks" }));
-            ObjectTemplates.Add("dungeon6Wall", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_6"), "", 0, true, null }));
-            ObjectTemplates.Add("dungeon7Wall", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_8"), "", 0, true, null }));
-            ObjectTemplates.Add("dungeon8Wall", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_10"), "", 0, true, null }));
-            ObjectTemplates.Add("dungeon8WallCracks", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_11"), "", 0, true, null }));
-            ObjectTemplates.Add("caveWallBottom", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { Resources.SourceRectangle("stone_wall_12"), "", 0, true, null }));
+            ObjectTemplates.Add("dungeonWall", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_2"), "", 0, true, null }));
+            ObjectTemplates.Add("dungeonWall3", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_3"), "", 0, true, null }));
+            ObjectTemplates.Add("dungeonWall3cracks", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_4"), "", 0, true, null }));
+            ObjectTemplates.Add("dungeon4Block", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_5"), "", 0, false, "rock_cracks" }));
+            ObjectTemplates.Add("dungeon6Wall", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_6"), "", 0, true, null }));
+            ObjectTemplates.Add("dungeon7Wall", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_8"), "", 0, true, null }));
+            ObjectTemplates.Add("dungeon8Wall", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_10"), "", 0, true, null }));
+            ObjectTemplates.Add("dungeon8WallCracks", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_11"), "", 0, true, null }));
+            ObjectTemplates.Add("caveWallBottom", new GameObjectTemplate(typeof(ObjDestroyableBarrier), new object[] { sourceRectangle("stone_wall_12"), "", 0, true, null }));
 
             ObjectTemplates.Add("dungeonSwitch", new GameObjectTemplate(typeof(ObjDungeonSwitch), new object[] { null }));
             ObjectTemplates.Add("dungeonOneWay", new GameObjectTemplate(typeof(ObjDungeonOneWay), new object[] { }));
@@ -510,7 +515,7 @@ namespace ProjectZ.InGame.GameObjects
             ObjectTemplates.Add("break_dungeon_end", null);
 
             ObjectTemplates.Add("hole", new GameObjectTemplate(typeof(ObjHole), new object[] { 14, 14, Rectangle.Empty, 1, 1, 0 }));
-            ObjectTemplates.Add("visiblehole", new GameObjectTemplate(typeof(ObjHole), new object[] { 14, 14, Resources.SourceRectangle("hole_0"), 1, 1, 0 }));
+            ObjectTemplates.Add("visiblehole", new GameObjectTemplate(typeof(ObjHole), new object[] { 14, 14, sourceRectangle("hole_0"), 1, 1, 0 }));
             ObjectTemplates.Add("fullHole", new GameObjectTemplate(typeof(ObjHole), new object[] { 16, 16, Rectangle.Empty, 0, 0, 0 }));
             ObjectTemplates.Add("holeReset", new GameObjectTemplate(typeof(ObjHoleResetPoint), new object[] { 0 }));
             ObjectTemplates.Add("holeTeleporter", new GameObjectTemplate(typeof(ObjHoleTeleporter), new object[] { null, null }));
@@ -720,6 +725,12 @@ namespace ProjectZ.InGame.GameObjects
             ObjectTemplates.Add("nightmare", new GameObjectTemplate(typeof(BossFinalBoss), new object[] { null }));
 
 
+            return ObjectTemplates;
+        }
+
+        public static void SetUpGameObjects()
+        {
+            ObjectTemplates = CreateDefinitions();
             foreach (var objectTemplate in ObjectTemplates)
             {
                 var name = objectTemplate.Key;

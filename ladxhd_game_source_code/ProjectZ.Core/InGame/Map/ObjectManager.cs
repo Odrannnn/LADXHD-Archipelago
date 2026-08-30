@@ -626,7 +626,7 @@ namespace ProjectZ.InGame.Map
             if (GameSettings.EnableShadows && Owner.UseShadows && !Game1.GameManager.UseShockEffect && ShadowTexture != null)
             {
                 spriteBatch.Begin(SpriteSortMode.Deferred, null, SamplerState.AnisotropicClamp);//, null, null, null, Game1.GameManager.GetMatrix);
-                spriteBatch.Draw(ShadowTexture, new Rectangle(0, 0, Game1.GameManager.CurrentRenderWidth, Game1.GameManager.CurrentRenderHeight), Color.Black * 0.55f);
+                spriteBatch.Draw(ShadowTexture, new Rectangle(0, 0, Game1.GameManager.CurrentRenderWidth, Game1.GameManager.CurrentRenderHeight), Color.Black * GameSceneEffects.ShadowOpacity);
                 spriteBatch.End();
             }
         }

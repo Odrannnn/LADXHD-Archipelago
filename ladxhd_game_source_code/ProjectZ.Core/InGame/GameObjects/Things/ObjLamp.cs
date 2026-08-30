@@ -27,11 +27,11 @@ namespace ProjectZ.InGame.GameObjects.Things
         // Values configurable via lahdmod.
         private int   powder_time  = 9000;
         private bool  light_source = true;
-        private int   light_red    = 255;
-        private int   light_grn    = 200;
-        private int   light_blu    = 200;
+        private int   light_red    = GameSceneEffects.LampRed;
+        private int   light_grn    = GameSceneEffects.LampGreen;
+        private int   light_blu    = GameSceneEffects.LampBlue;
         private float light_bright = 1.00f;
-        private int   light_size   = 160;
+        private int   light_size   = GameSceneEffects.LampSize;
 
         public ObjLamp(Map.Map map, int posX, int posY, string animationName, int rotation, bool hasCollision, bool powderLamp, string lampKey, bool emitslight) : base(map)
         {

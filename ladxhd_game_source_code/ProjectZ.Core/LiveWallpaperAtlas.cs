@@ -7,7 +7,8 @@ namespace ProjectZ
     public readonly struct LiveWallpaperAtlasEntry
     {
         public LiveWallpaperAtlasEntry(
-            int x, int y, int width, int height, float originX, float originY)
+            int x, int y, int width, int height, float originX, float originY,
+            int textureScale = 1)
         {
             X = x;
             Y = y;
@@ -15,6 +16,7 @@ namespace ProjectZ
             Height = height;
             OriginX = originX;
             OriginY = originY;
+            TextureScale = textureScale;
         }
 
         public int X { get; }
@@ -23,6 +25,7 @@ namespace ProjectZ
         public int Height { get; }
         public float OriginX { get; }
         public float OriginY { get; }
+        public int TextureScale { get; }
     }
 
     public static class LiveWallpaperAtlas
@@ -63,7 +66,7 @@ namespace ProjectZ
                     : 0f;
                 entry = new LiveWallpaperAtlasEntry(
                     x * scale, y * scale, width * scale, height * scale,
-                    originX * scale, originY * scale);
+                    originX * scale, originY * scale, scale);
                 return true;
             }
             return false;
