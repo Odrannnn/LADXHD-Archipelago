@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Microsoft.Xna.Framework;
@@ -730,8 +730,19 @@ namespace ProjectZ.InGame.GameObjects
 
         public static void SetUpGameObjects()
         {
-            ObjectTemplates = CreateDefinitions();
-            foreach (var objectTemplate in ObjectTemplates)
+            RegisterGameObjects(Resources.SourceRectangle);
+            if (Game1.EditorMode)
+                Game1.EditorManager?.PopulateEditorObjectTemplates(ObjectTemplates, AddPositionToParameterArray);
+        }
+
+        internal static void RegisterGameObjects(Func<string, Rectangle> sourceRectangle)
+        {
+            // Android can recreate the game while process-static registries
+            // survive. Rebuild all three together, without adding to old entries.
+            var templates = CreateDefinitions(sourceRectangle);
+            var spawners = new Dictionary<string, ObjActivator.ObjectActivator<GameObject>>();
+            var parametersByName = new Dictionary<string, ParameterInfo[]>();
+            foreach (var objectTemplate in templates)
             {
                 var name = objectTemplate.Key;
                 var gameObjectTemplate = objectTemplate.Value;
@@ -760,12 +771,13 @@ namespace ProjectZ.InGame.GameObjects
                     if (!correctParameter)
                         continue;
 
-                    ObjectSpawner.Add(name, ObjActivator.GetActivator<GameObject>(constructor));
-                    GameObjectParameter.Add(name, constructor.GetParameters());
+                    spawners.Add(name, ObjActivator.GetActivator<GameObject>(constructor));
+                    parametersByName.Add(name, constructor.GetParameters());
                 }
             }
-            if (Game1.EditorMode)
-                Game1.EditorManager?.PopulateEditorObjectTemplates(ObjectTemplates, AddPositionToParameterArray);
+            ObjectTemplates = templates;
+            ObjectSpawner = spawners;
+            GameObjectParameter = parametersByName;
         }
 
         private static object[] AddPositionToParameterArray(object[] objParameter, Map.Map map, int posX, int posY)
