@@ -488,6 +488,10 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             Type[] _dontEat = new Type[]{ typeof(EnemyGhini), typeof(EnemyGhiniGiant), typeof(EnemySeaUrchin), typeof(EnemyZombie) };
             _enemyList.RemoveAll(obj => ObjectManager.IsGameObjectType(obj, _dontEat));
 
+            // The Enemy tag also includes objects without an attack hitbox.
+            // Do not select one and then dereference its missing component.
+            _enemyList.RemoveAll(obj => !TryGetAttackTarget(obj, out _));
+
             // Make sure the enemy is currently within the field rectangle.
             if (Camera.ClassicMode)
                 _enemyList.RemoveAll(obj => !_body.FieldRectangle.Contains(obj.EntityPosition.Position));
@@ -527,7 +531,7 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             _enemyTarget = closestFlower ?? closestOther;
 
             // No reachable enemies to attack.
-            if (_enemyTarget == null)
+            if (!TryGetAttackTarget(_enemyTarget, out var damageState))
             {
                 // Coming out of the initial attack state just resumes wandering.
                 if (_aiComponent.CurrentStateId == "iattack")
@@ -545,7 +549,6 @@ namespace ProjectZ.InGame.GameObjects.NPCs
                 fish.MakeVulerable();
 
             // Set the attack direction.
-            var damageState = (HittableComponent)_enemyTarget.Components[HittableComponent.Index];
             var attackDir = damageState.HittableBox.Box.Center - bowWowPoint;
             if (attackDir != Vector2.Zero)
                 attackDir.Normalize();
@@ -562,6 +565,16 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             if (obj.Components[HittableComponent.Index] is HittableComponent hit)
                 return hit.HittableBox.Box.Center;
             return obj.EntityPosition.Position;
+        }
+
+        private static bool TryGetAttackTarget(GameObject target, out HittableComponent hit)
+        {
+            hit = target?.Components[HittableComponent.Index] as HittableComponent;
+            // Do not reject HittableComponent.IsActive here: fish are made
+            // vulnerable by ToAttack after selection, as in normal gameplay.
+            return target?.Map != null && target.EntityPosition != null &&
+                   target.IsActive && !target.IsDead &&
+                   hit?.HittableBox != null && hit.Hit != null;
         }
         
         private Vector2 GetTreasurePosition()
@@ -604,7 +617,13 @@ namespace ProjectZ.InGame.GameObjects.NPCs
 
         private void UpdateAttack()
         {
-            var damageState = (HittableComponent)_enemyTarget.Components[HittableComponent.Index];
+            // Link or another enemy can remove the target during the lunge.
+            if (!TryGetAttackTarget(_enemyTarget, out var damageState))
+            {
+                _enemyTarget = null;
+                ToIdle();
+                return;
+            }
             var direction = damageState.HittableBox.Box.Center - new Vector2(EntityPosition.X, EntityPosition.Y - 8);
 
             // Attack the enemy if we are close enough.
