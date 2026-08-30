@@ -62,51 +62,33 @@ or sharing a `.apladxhd` from another app remains available as an alternative.
 
 ### Using the live wallpaper
 
-Open **Settings → Live wallpaper** in LADXHD Archipelago. Choose whether the scene should animate,
-whether Koholint wildlife should appear, select Marin, BowWow, the rooster, automatic rotation, or
-characters matched to each location, use automatic regional character placement or force a left,
-center, or right anchor, choose Mabe Village, Toronbo Shores, Mysterious Forest, Kanalet Castle,
-Animal Village, Wind Fish's Egg, Martha's Bay, Ukuku Prairie, Cemetery, Goponga Swamp, Rapids
-Ride, Eastern Tal Tal Heights, Yarna Desert, Face Shrine, or rotating installed locations, choose
-whether Link walks,
-rests, alternates, or stays hidden, follow the
-phone's local time or force day, sunset, or night lighting, use a natural butterfly/owl schedule or
-keep all wildlife visible, choose whether taps do nothing, cycle the featured character, or switch
-locations, and select the battery-friendly 15 FPS mode or smoother 30 FPS mode. Tap **Preview
-and set wallpaper** to open Android's system wallpaper picker.
+Open **Settings → Live wallpaper**, choose a starting location and Link activity, then tap
+**Preview and set wallpaper** to open Android's system picker. Enable **Follow Link through
+overworld loading zones** to let the camera follow Link beyond the starting view and through
+supported doors, stairs, and interiors. With following disabled, the selected location or rotating
+scene mode remains the backdrop. Tap an accessible place on the wallpaper to send Link toward it.
 
-When animation is enabled, Marin uses her singing animation with the original musical-note sprite,
-BowWow wanders and hops against his original chain links, and the rooster flutters around its
-anchor with the original feather particles. Turning animation off holds each character still and
-removes those ambient effects.
+The lightweight simulation reads the installed map's objects and animation sheets. Supported
+residents and enemies remain local to their map; Marin's notes, BowWow's chain, rooster motion,
+combat, swimming, jumping, rock lifting/throwing, pushable blocks, bush drops, and chest
+presentation reuse gameplay calculations and original sprites. Routes favor unexplored areas,
+recover from stalled targets, and account for supported obstacles and item-assisted crossings.
+This is an ambient simulation, not a complete autonomous playthrough or a replacement for the game.
 
-The **Mabe Sunset**, **Forest Night**, and **Island Journey** quick presets configure those controls
-together. Selecting a preset refreshes the settings screen with its individual values, which can
-then be adjusted normally.
+Choose **15 FPS** for lower power use, **30 FPS** for balanced motion, or **High FPS (60 FPS)** for
+smoother motion with increased battery consumption and possible device heating. Animation timing
+uses elapsed time rather than making gameplay run faster at the higher frame rate. Static tile
+rendering is cached; animation-off mode redraws once per second while visible, with immediate
+redraws for touch or launcher movement. Rendering stops when Android marks the wallpaper hidden.
+The wallpaper supplies scene-color hints to Android for system-bar contrast; the launcher/system
+decides whether to use them.
 
-Turning animation off automatically drops background rendering to one update per second while the
-wallpaper is visible. Touches and launcher-page movement still redraw immediately, and automatic
-location rotation and local-time lighting remain active.
-
-The wallpaper is a lightweight, standalone view of actual LADXHD game data. It pauses when it is
-not visible, supports launcher-page map parallax and configurable tap actions, and does not start
-gameplay, audio, saves, or an Archipelago connection. It reads Link, Marin, BowWow, the rooster,
-butterflies, the owl, the overworld map, and its tileset directly from the locally prepared files.
-The selected map region expands with real adjacent tiles to cover portrait and landscape screens;
-no substitute coast, sky, clouds, palms, stars, waves, or synthetic touch artwork is drawn.
-Static map objects such as telephone houses, the Seashell Mansion, Witch's house, and village and
-castle roofs are read from the installed object layer and `objects.atlas`, rather than omitted or
-redrawn. Supported overworld enemies are read from their real spawn objects and animation files;
-they idle, wander, emerge, fly, or attack according to their species, and some generated journeys
-detour into a short sword fight. Those fights are visual only and never change enemy flags, drops,
-saves, or Archipelago state. Link follows a collision-planned route in overworld tile coordinates
-instead of crossing walls, NPCs, enemies, or pits in screen space. Entry/exit runs, doors, scenic
-waypoints, NPC visits, rooster flights, and enemy approaches provide deterministic route variety.
-The forest route marks its narrow gap explicitly, uses the original
-directional feather-jump animation for that segment, and lands Link back on the safe route.
-Automatic location rotation fades between regions every 45 seconds. The public assetless APK
-remains blank until the user completes the normal v1.0.0 ZIP setup; none of the game assets are
-embedded in the APK.
+Local-time day/sunset/night lighting and the **Mabe Sunset**, **Forest Night**, and **Island Journey**
+presets remain available. The wallpaper is silent and does not start a full hidden game engine,
+write gameplay saves, grant Archipelago items, or open an Archipelago connection. Its collected
+items, opened chests, and defeated enemies are simulation state only. It uses the locally prepared
+game assets, so normal first-run ZIP setup is required; no original game-data tree is embedded in
+the public APK.
 
 ----
 
