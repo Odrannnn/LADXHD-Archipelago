@@ -1919,9 +1919,15 @@ namespace ProjectZ
                     var next = nextY * columns + nextX;
                     var pixelX = minX + nextX * GridStep;
                     var pixelY = minY + nextY * GridStep;
-                    if (next != endIndex && !IsWalkable(
+                    if (!IsWalkable(
                             map, pixelX, pixelY, includeHoles, ignoredEnemyIndex,
                             includeBushes, includeStones, includeMoveStones))
+                        continue;
+                    if (!includeMoveStones && map.TryGetMoveStoneAt(
+                            pixelX + LinkBodyOffsetX, pixelY + LinkBodyOffsetY,
+                            LinkBodyWidth, LinkBodyHeight, out var blockKey) &&
+                        (offsetX != 0 && offsetY != 0 || !map.CanPushMoveStone(
+                            blockKey, offsetX < 0 ? 0 : offsetX > 0 ? 2 : offsetY < 0 ? 1 : 3)))
                         continue;
                     if (offsetX != 0 && offsetY != 0)
                     {

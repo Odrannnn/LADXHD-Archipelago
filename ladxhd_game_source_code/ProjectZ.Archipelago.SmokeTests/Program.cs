@@ -73,6 +73,7 @@ WallpaperSceneEffectsTests.Run();
 WallpaperDayCycleTests.Run();
 WallpaperDecorationDrawingTests.Run();
 WallpaperCameraResizeTests.Run();
+WallpaperIndoorNavigationTests.Run();
 
 const string wallpaperAnimationData = """
 1

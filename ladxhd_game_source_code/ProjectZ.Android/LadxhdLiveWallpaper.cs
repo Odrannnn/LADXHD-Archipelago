@@ -1575,7 +1575,8 @@ namespace ProjectZ.Android
                 {
                     if (!portal.ShouldActivateAt(
                             linkPixelX, linkPixelY,
-                            link.Input.Move.Y, link.Direction))
+                            link.Input.Move.Y, link.Direction,
+                            sourceMap.Is2DMap, link.Height <= 0f))
                         continue;
                 }
 

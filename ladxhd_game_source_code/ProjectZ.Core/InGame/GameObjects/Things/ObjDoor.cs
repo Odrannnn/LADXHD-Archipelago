@@ -52,18 +52,9 @@ namespace ProjectZ.InGame.GameObjects.Things
             EntityPosition = new CPosition(posX, posY, 0);
             EntitySize = new Rectangle(0, 0, width, height);
 
-            // stairs have a smaller entry
-            if (Map.Is2dMap || mode != 1)
-                _collisionRectangle = new Rectangle(posX, posY, width, height);
-            else
-            {
-                _collisionRectangle = new Rectangle(posX + 6, posY + 6, width - 12, height - 12);
-                _positionOffset = 4;
-            }
-            if (mode == 4)
-            {
-                _collisionRectangle.Height = 10;
-            }
+            _collisionRectangle = DoorGameplayGeometry.GetTrigger(
+                posX, posY, width, height, mode, Map.Is2dMap);
+            _positionOffset = mode == 1 && !Map.Is2dMap ? 4 : 0;
             _entryId = entryId;
             _direction = direction;
             _mode = mode;
@@ -188,14 +179,9 @@ namespace ProjectZ.InGame.GameObjects.Things
             {
                 if (MapManager.ObjLink.CurrentState != ObjLink.State.OcarinaTeleport)
                 {
-                    if (_direction == 0)
-                        transitionEnd.X = _collisionRectangle.X - MathF.Ceiling(MapManager.ObjLink.Body.Width / 2f) - _positionOffset;
-                    else if (_direction == 1)
-                        transitionEnd.Y = _collisionRectangle.Y - _positionOffset;
-                    else if (_direction == 2)
-                        transitionEnd.X = _collisionRectangle.X + _collisionRectangle.Width + MathF.Ceiling(MapManager.ObjLink.Body.Width / 2f) + _positionOffset;
-                    else if (_direction == 3)
-                        transitionEnd.Y = _collisionRectangle.Y + _collisionRectangle.Height + MapManager.ObjLink.Body.Height + _positionOffset;
+                    transitionEnd = DoorGameplayGeometry.GetWalkingSpawn(
+                        _collisionRectangle, _direction, _mode, Map.Is2dMap,
+                        MapManager.ObjLink.Body.Width, MapManager.ObjLink.Body.Height);
                 }
                 // walk on the ground
                 if (Map.Is2dMap)
@@ -205,11 +191,10 @@ namespace ProjectZ.InGame.GameObjects.Things
                         transitionStart.Y = _collisionRectangle.Bottom;
                         transitionEnd.Y = _collisionRectangle.Bottom;
                     }
-                    // Increase offsets of 2D ladder entry to prevent accidental exits.
-                    if (_direction == 1)
-                        transitionEnd.Y -= 4;
-                    if (_direction == 3)
-                        transitionEnd.Y += 4;
+                    // GetWalkingSpawn includes the 2D ladder offsets. The
+                    // ocarina branch does not call it, retaining its old offsets.
+                    if (MapManager.ObjLink.CurrentState == ObjLink.State.OcarinaTeleport)
+                        transitionEnd.Y += _direction == 1 ? -4 : _direction == 3 ? 4 : 0;
                 }
             }
             else if (_mode == 2)

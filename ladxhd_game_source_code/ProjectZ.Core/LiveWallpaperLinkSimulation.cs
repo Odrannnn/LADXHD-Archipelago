@@ -249,6 +249,20 @@ namespace ProjectZ
         private Vector2 _airMoveVelocity;
         private LiveWallpaperJourneyPlan _journeyPlan;
         private LiveWallpaperMap _currentJourneyMap;
+        private LiveWallpaperMap _navigationSourceMap;
+        private LiveWallpaperMap _navigationMap;
+        private bool _replanAfterBlockMove;
+
+        private LiveWallpaperMap GetNavigationMap(LiveWallpaperMap map)
+        {
+            if (_navigationMap == null || !ReferenceEquals(_navigationSourceMap, map))
+            {
+                _navigationSourceMap = map;
+                _navigationMap = map?.WithMovedBlocksForNavigation(
+                    _moveStones, _relocatedMoveStones);
+            }
+            return _navigationMap;
+        }
         private int _journeyPointIndex;
         private int _journeyVariant;
         private long _nextJourneyAt;
@@ -399,6 +413,8 @@ namespace ProjectZ
             _liftedStones.Clear();
             _liftedStoneTimes.Clear();
             _moveStones.Clear();
+            _navigationMap = null;
+            _replanAfterBlockMove = false;
             _relocatedMoveStones.Clear();
             _fallenMoveStones.Clear();
             _activeMoveStoneKey = -1;
@@ -479,7 +495,7 @@ namespace ProjectZ
             float targetPixelY)
         {
             var plan = LiveWallpaperJourneyPlanner.CreateToPoint(
-                map, viewport, _position.X, _position.Y,
+                GetNavigationMap(map), viewport, _position.X, _position.Y,
                 targetPixelX, targetPixelY);
             if (plan.Points.Count < 2)
                 return false;
@@ -597,6 +613,24 @@ namespace ProjectZ
             var frameScale = Math.Clamp(
                 elapsedDelta / (1000f / 60f), 0f, 6f);
             UpdateMoveStoneMotion(map, elapsedMilliseconds);
+            if (_replanAfterBlockMove)
+            {
+                _replanAfterBlockMove = false;
+                // The old route assumed the block stayed at its original tile.
+                // Preserve a tapped goal when still reachable; otherwise choose
+                // another route using the completed push's actual collision.
+                var goal = _journeyPlan?.Points.Count > 0
+                    ? _journeyPlan.Points[^1] : default;
+                if (!_manualDestinationActive ||
+                    !TryWalkTo(map, viewport, goal.PixelX, goal.PixelY))
+                {
+                    _journeyVariant++;
+                    StartJourney(map, viewport, scene, allowIslandLife,
+                        elapsedMilliseconds, continueFromCurrentPosition: true,
+                        followLoadingZones: followLoadingZones,
+                        allowViewportFollow: allowViewportFollow);
+                }
+            }
             // Hole absorption is physical state, not journey state. Process it
             // before the no-route fallback so an unavailable path cannot bypass
             // a fall that has already begun under Link's body.
@@ -1412,7 +1446,7 @@ namespace ProjectZ
             if (followLoadingZones && continueFromCurrentPosition)
                 RememberCurrentField();
             _journeyPlan = LiveWallpaperJourneyPlanner.Create(
-                map, viewport, scene, _journeyVariant, allowIslandLife,
+                GetNavigationMap(map), viewport, scene, _journeyVariant, allowIslandLife,
                 continueFromCurrentPosition ? _position.X : null,
                 continueFromCurrentPosition ? _position.Y : null,
                 edgeStartOnly, followLoadingZones,
@@ -1427,7 +1461,7 @@ namespace ProjectZ
                 _journeyPlan.Points.Count == 0)
             {
                 _journeyPlan = LiveWallpaperJourneyPlanner.Create(
-                    map, viewport, scene, _journeyVariant, allowIslandLife,
+                    GetNavigationMap(map), viewport, scene, _journeyVariant, allowIslandLife,
                     continueFromCurrentPosition ? _position.X : null,
                     continueFromCurrentPosition ? _position.Y : null,
                     edgeStartOnly, followLoadingZones,
@@ -2393,13 +2427,13 @@ namespace ProjectZ
             long elapsedMilliseconds, bool journeyAction)
         {
             if (map == null || _activeMoveStoneKey >= 0 ||
+                _relocatedMoveStones.Contains(moveStoneKey) ||
                 !map.TryGetMoveStone(
                     moveStoneKey, out var originX, out var originY,
                     out var allowedDirections))
                 return false;
             var pushDirection = ResolveDirection(direction, _lastRouteDirection);
-            if (allowedDirections != -1 &&
-                (allowedDirections & (1 << pushDirection)) == 0)
+            if (!GetNavigationMap(map).CanPushMoveStone(moveStoneKey, pushDirection))
                 return false;
             var start = _moveStones.TryGetValue(moveStoneKey, out var moved)
                 ? moved
@@ -2477,6 +2511,8 @@ namespace ProjectZ
             }
             _activeMoveStoneKey = -1;
             _moveStonePushStartedAt = 0L;
+            _navigationMap = null;
+            _replanAfterBlockMove = true;
             if (_moveStoneJourneyAction)
                 _journeyPointIndex++;
             _moveStoneJourneyAction = false;

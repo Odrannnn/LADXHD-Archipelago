@@ -356,10 +356,24 @@ namespace ProjectZ
 
         public bool ShouldActivateAt(
             float linkPixelX, float linkPixelY,
-            float inputMoveY, int linkDirection)
+            float inputMoveY, int linkDirection,
+            bool is2dMap = false, bool grounded = true)
         {
             if (IsHoleTeleporter)
                 return false;
+            if (Mode == 1)
+            {
+                // ObjDoor activates grounded Link on collision with the inset
+                // stair trigger, not on proximity to a grid-snapped route node.
+                if (!grounded && !is2dMap)
+                    return false;
+                var trigger = DoorGameplayGeometry.GetTrigger(
+                    PixelX, PixelY, Width, Height, Mode, is2dMap);
+                return linkPixelX - 4f < trigger.Right &&
+                       linkPixelX + 4f > trigger.Left &&
+                       linkPixelY - 10f < trigger.Bottom &&
+                       linkPixelY > trigger.Top;
+            }
             // ObjDoor2d waits for upward input after Link has entered its narrow
             // collider. The wallpaper can reach the exact terminal point in one
             // update, at which point movement is zero but the retained direction
@@ -389,6 +403,8 @@ namespace ProjectZ
         {
             if (Is2DDoor)
                 return PixelX + 8f;
+            if (Mode is 0 or 1)
+                return GetWalkingSpawn(is2dMap).X;
             var offset = Mode == 1 && !is2dMap ? 4f : 0f;
             return Direction switch
             {
@@ -402,6 +418,8 @@ namespace ProjectZ
         {
             if (Is2DDoor)
                 return PixelY + 16f;
+            if (Mode is 0 or 1)
+                return GetWalkingSpawn(is2dMap).Y;
             var offset = Mode == 1 && !is2dMap ? 4f : 0f;
             return Direction switch
             {
@@ -410,6 +428,12 @@ namespace ProjectZ
                 _ => PixelY + Height / 2f + 5f
             };
         }
+
+        private Microsoft.Xna.Framework.Vector2 GetWalkingSpawn(bool is2dMap) =>
+            DoorGameplayGeometry.GetWalkingSpawn(
+                DoorGameplayGeometry.GetTrigger(
+                    PixelX, PixelY, Width, Height, Mode, is2dMap),
+                Direction, Mode, is2dMap, 8f, 10f);
     }
 
     public readonly struct LiveWallpaperMapHookshotTarget
@@ -443,6 +467,23 @@ namespace ProjectZ
         private readonly int[,,] _tiles;
         private readonly List<CollisionRectangle>[,] _collisionGrid;
         private readonly LiveWallpaperMapTerrain[,] _terrain;
+        private IReadOnlyDictionary<int, Microsoft.Xna.Framework.Vector2> _navigationMovedBlocks;
+        private IReadOnlySet<int> _navigationRelocatedBlocks;
+
+        // A route-only view: installed geometry/assets are shared unchanged.
+        // Created once after a push, never per frame. Moved blocks are solid:
+        // ObjMoveStone's moved state cannot be pushed again until it resets.
+        public LiveWallpaperMap WithMovedBlocksForNavigation(
+            IReadOnlyDictionary<int, Microsoft.Xna.Framework.Vector2> positions,
+            IReadOnlySet<int> relocated)
+        {
+            if (relocated.Count == 0)
+                return this;
+            var navigation = (LiveWallpaperMap)MemberwiseClone();
+            navigation._navigationMovedBlocks = new Dictionary<int, Microsoft.Xna.Framework.Vector2>(positions);
+            navigation._navigationRelocatedBlocks = new HashSet<int>(relocated);
+            return navigation;
+        }
 
         private LiveWallpaperMap(
             string tilesetPath, int mapOffsetX, int mapOffsetY,
@@ -797,6 +838,16 @@ namespace ProjectZ
             if (_collisionGrid == null)
                 return false;
 
+            if (_navigationMovedBlocks != null)
+            {
+                foreach (var position in _navigationMovedBlocks.Values)
+                {
+                    if (x < position.X + TileSize && x + width > position.X &&
+                        y < position.Y + TileSize && y + height > position.Y)
+                        return true;
+                }
+            }
+
             var startX = Math.Clamp((int)MathF.Floor(x / TileSize), 0, Width - 1);
             var startY = Math.Clamp((int)MathF.Floor(y / TileSize), 0, Height - 1);
             var endX = Math.Clamp((int)MathF.Floor((x + width - 0.001f) / TileSize),
@@ -823,6 +874,8 @@ namespace ProjectZ
                         if (entry.Kind == CollisionKind.MoveStone &&
                             ((!includeMoveStones && IsPushableMoveStone(
                                   GetMoveStoneKey(entry.X, entry.Y))) ||
+                             _navigationRelocatedBlocks?.Contains(
+                                 GetMoveStoneKey(entry.X, entry.Y)) == true ||
                              ignoredMoveStones?.Contains(
                                  GetMoveStoneKey(entry.X, entry.Y)) == true))
                             continue;
@@ -1030,25 +1083,60 @@ namespace ProjectZ
             out int moveStoneKey,
             IReadOnlySet<int> ignoredMoveStones = null)
         {
-            foreach (var mapObject in Objects)
-            {
-                if (!IsMoveStoneTemplate(mapObject.Template) ||
-                    x >= mapObject.PixelX + TileSize || x + width <= mapObject.PixelX ||
-                    y >= mapObject.PixelY + TileSize || y + height <= mapObject.PixelY)
-                    continue;
-                var key = GetMoveStoneKey(mapObject.PixelX, mapObject.PixelY);
-                if (ignoredMoveStones?.Contains(key) == true)
-                    continue;
-                moveStoneKey = key;
-                return true;
-            }
             moveStoneKey = -1;
+            if (width <= 0 || height <= 0 || _collisionGrid == null)
+                return false;
+            var minX = Math.Clamp((int)MathF.Floor(x / TileSize), 0, Width - 1);
+            var minY = Math.Clamp((int)MathF.Floor(y / TileSize), 0, Height - 1);
+            var maxX = Math.Clamp((int)MathF.Floor((x + width - .001f) / TileSize), 0, Width - 1);
+            var maxY = Math.Clamp((int)MathF.Floor((y + height - .001f) / TileSize), 0, Height - 1);
+            for (var tileY = minY; tileY <= maxY; tileY++)
+            for (var tileX = minX; tileX <= maxX; tileX++)
+            {
+                var entries = _collisionGrid[tileX, tileY];
+                if (entries == null) continue;
+                foreach (var entry in entries)
+                {
+                    if (entry.Kind != CollisionKind.MoveStone ||
+                        !entry.Intersects(x, y, width, height))
+                        continue;
+                    var key = GetMoveStoneKey(entry.X, entry.Y);
+                    if (ignoredMoveStones?.Contains(key) == true ||
+                        _navigationRelocatedBlocks?.Contains(key) == true)
+                        continue;
+                    moveStoneKey = key;
+                    return true;
+                }
+            }
             return false;
         }
 
         public bool IsPushableMoveStone(int moveStoneKey) =>
             TryGetMoveStone(moveStoneKey, out _, out _, out var directions) &&
             directions != 0;
+
+        public bool CanPushMoveStone(int key, int direction)
+        {
+            if (_navigationRelocatedBlocks?.Contains(key) == true ||
+                !TryGetMoveStone(key, out var x, out var y, out var allowed) ||
+                (allowed != -1 && (allowed & (1 << direction)) == 0))
+                return false;
+            x += direction == 0 ? -TileSize : direction == 2 ? TileSize : 0;
+            y += direction == 1 ? -TileSize : direction == 3 ? TileSize : 0;
+            // ObjMoveStone.OnPush tests the complete destination tile against
+            // Normal | Passageway collision. Holes and water permit a push.
+            if (IntersectsVoid(x, y, TileSize, TileSize) ||
+                IntersectsCollision(x, y, TileSize, TileSize, includeHoles: false))
+                return false;
+            foreach (var portal in Portals)
+            {
+                if (!portal.Is2DDoor && !portal.IsHoleTeleporter &&
+                    x < portal.PixelX + portal.Width && x + TileSize > portal.PixelX &&
+                    y < portal.PixelY + portal.Height && y + TileSize > portal.PixelY)
+                    return false;
+            }
+            return true;
+        }
 
         private static bool IsMoveStoneTemplate(string template) =>
             template is "moveStone" or "moveStoneCave" or
