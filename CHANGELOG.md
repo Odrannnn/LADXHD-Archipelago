@@ -1,5 +1,13 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.80**
+### Archipelago connection warning and wallpaper touch fixes
+  * Added the Archipelago icon and a persistent "Archipelago not connected" HUD banner for bound AP saves while disconnected or connecting. It clears after a validated login, returns on connection loss, and never appears in vanilla saves.
+  * Corrected wallpaper edge-scroll thresholds to use the actual drawing projection, including portrait/landscape sizes, centred cave views, parallax and fractional scrolling.
+  * Reused exhausted path-search results for unreachable wallpaper taps and skipped duplicate fallback destinations, avoiding repeated searches of the same disconnected area without changing collision or item-assisted traversal rules.
+  * Added connection-state, HUD-layout, embedded-icon and wallpaper routing/edge regressions. The universal assetless APK includes all four Android ABIs and advances the version code beyond device-test builds.
+  * No asset-format, save-format, APWorld rule or seed-manifest changes. Update in place; existing assets, saves, settings and AP profiles can be reused without a new seed or asset rebuild.
+
 ## **v2.0.77**
 ### Public lighting, navigation and stability update
   * Published the accumulated improvements since v2.0.65: installed object shadows, spatial day-cycle lighting, a wider camera and lower-allocation rendering with cached shadow/light updates.
