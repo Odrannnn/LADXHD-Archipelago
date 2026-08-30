@@ -77,6 +77,7 @@ WallpaperIndoorNavigationTests.Run();
 WallpaperTouchRoutingTests.Run();
 GameplayCrashRegressionTests.Run();
 MapTransitionArrivalTests.Run();
+ArchipelagoConnectionWarningTests.Run();
 
 const string wallpaperAnimationData = """
 1

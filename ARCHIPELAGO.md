@@ -10,6 +10,10 @@ This branch contains the first native Archipelago integration slice for LADXHD. 
 - Per-save seed/slot binding, received-item index persistence, and immediate saves after received items.
 - Background network callbacks with all game-state mutation moved to the MonoGame update thread.
 - Automatic reconnect, replay de-duplication, offline check recovery, and goal reporting.
+- A persistent in-game **Archipelago not connected** warning with the Archipelago icon
+  for bound AP saves while disconnected, waking a room, or logging in. It disappears
+  after a validated connection succeeds and returns if the connection drops. Vanilla
+  saves do not show it. The banner follows the normal HUD's visibility and fading.
 - A persistent Android Magpie Tracker overlay plus a WebSocket bridge for inventory, check,
   slot-setting, and position autotracking.
 - Central AP-to-LADXHD item translation, including progressive equipment and dungeon-bounded items.

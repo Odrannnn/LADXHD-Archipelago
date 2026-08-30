@@ -105,6 +105,10 @@ namespace ProjectZ.InGame.Archipelago
         public bool IsBoundSave => IsActive || HasSaveBinding(
             _gameManager.SaveManager.GetString(SaveSeedName),
             _gameManager.SaveManager.GetString(SaveSlotName));
+        // _session is published only after login and seed validation succeed.
+        // Do not infer connectivity from Status: it also describes item/check events.
+        public bool IsConnected => GetConnectedSession() != null;
+        public bool ShowConnectionWarning => ShouldShowConnectionWarning(IsBoundSave, IsConnected);
         public bool CanShowEmbeddedTracker => IsActive && Game1.MagpieTrackerService.IsAvailable;
         public string Status => _status;
         public ArchipelagoSeedManifest Seed => _seed;
@@ -113,6 +117,9 @@ namespace ProjectZ.InGame.Archipelago
         {
             return !string.IsNullOrWhiteSpace(seedName) && !string.IsNullOrWhiteSpace(slotName);
         }
+
+        public static bool ShouldShowConnectionWarning(bool boundSave, bool connected) =>
+            boundSave && !connected;
 
         public static string GetReceivedItemSaveKey(int index)
         {

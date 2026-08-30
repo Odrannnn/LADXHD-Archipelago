@@ -29,6 +29,9 @@ namespace ProjectZ.InGame.Overlay
         private const int FadeOffset = 13;
 
         private const int SaveIconTime = 1000;
+        internal const string ConnectionWarningText = "Archipelago not connected";
+        private const int ConnectionIconSize = 16;
+        private const int ConnectionWarningPadding = 4;
         private float _saveIconTransparency;
         private float _saveIconCounter;
 
@@ -227,6 +230,56 @@ namespace ProjectZ.InGame.Overlay
             // Draw the hearts sprites and rectangle.
             if (custom_heart_show)
                 ItemDrawHelper.DrawHearts(spriteBatch, _heartPosition - new Point((int)(fadePercentage * FadeOffset * _heartScale), 0), _heartScale, Color.White * transparency);
+
+            DrawConnectionWarning(spriteBatch, transparency);
+        }
+
+        private void DrawConnectionWarning(SpriteBatch spriteBatch, float transparency)
+        {
+            if (transparency <= 0 ||
+                Game1.GameManager.ArchipelagoManager.ShowConnectionWarning != true)
+                return;
+
+            var textSize = DrawHelper.MeasureString(ConnectionWarningText);
+            var (bounds, scale) = GetConnectionWarningLayout(_gameUiWindow, textSize, Game1.UiScale);
+            if (scale <= 0)
+                return;
+
+            // A persistent, non-interactive banner below the top HUD row. It
+            // shares HUD fading and leaves item/achievement toasts independent.
+            spriteBatch.Draw(Resources.SprWhite, bounds, new Color(25, 20, 12, 230) * transparency);
+            spriteBatch.Draw(Resources.SprWhite,
+                new Rectangle(bounds.X, bounds.Y, bounds.Width, Math.Max(1, (int)scale)),
+                new Color(255, 195, 70) * transparency);
+            var iconBounds = new Rectangle(
+                bounds.X + (int)(ConnectionWarningPadding * scale),
+                bounds.Y + (bounds.Height - (int)(ConnectionIconSize * scale)) / 2,
+                (int)(ConnectionIconSize * scale), (int)(ConnectionIconSize * scale));
+            spriteBatch.Draw(Resources.ArchipelagoIcon, iconBounds, Color.White * transparency);
+            var textPosition = new Vector2(
+                bounds.X + (ConnectionWarningPadding * 2 + ConnectionIconSize) * scale,
+                bounds.Y + (bounds.Height - textSize.Y * scale) / 2f);
+            DrawHelper.DrawString(spriteBatch, ConnectionWarningText, textPosition,
+                new Color(255, 225, 150) * transparency, 0, Vector2.Zero, scale, SpriteEffects.None, 0);
+        }
+
+        internal static (Rectangle Bounds, float Scale) GetConnectionWarningLayout(
+            Rectangle hudBounds, Vector2 textSize, float preferredScale)
+        {
+            if (hudBounds.Width <= 0 || hudBounds.Height <= 0)
+                return (Rectangle.Empty, 0);
+
+            var width = ConnectionIconSize + ConnectionWarningPadding * 3 + textSize.X;
+            var height = ConnectionWarningPadding * 2 + Math.Max(ConnectionIconSize, textSize.Y);
+            var scale = Math.Min(Math.Max(1, preferredScale),
+                Math.Min(hudBounds.Width / (width + 8f), hudBounds.Height / (height + 8f)));
+            var margin = (int)MathF.Ceiling(ConnectionWarningPadding * scale);
+            var boxWidth = (int)MathF.Ceiling(width * scale);
+            var boxHeight = (int)MathF.Ceiling(height * scale);
+            var y = Math.Clamp(hudBounds.Y + (int)(40 * scale), hudBounds.Y,
+                Math.Max(hudBounds.Y, hudBounds.Bottom - boxHeight - margin));
+            return (new Rectangle(hudBounds.X + (hudBounds.Width - boxWidth) / 2,
+                y, boxWidth, boxHeight), scale);
         }
 
         public void ShowSaveIcon()

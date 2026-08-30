@@ -44,6 +44,7 @@ namespace ProjectZ.InGame.Things
 
         // The texture used by the optional onscreen controller.
         public static Texture2D SprButtons;
+        public static Texture2D ArchipelagoIcon;
 
         public static SpriteFont EditorFont, EditorFontMonoSpace, EditorFontSmallMonoSpace;
         public static SpriteFont GameHeaderFont;
@@ -321,6 +322,15 @@ namespace ProjectZ.InGame.Things
         public static void LoadTextures(GraphicsDevice graphics, ContentManager content)
         {
             LoadTilesetSizes();
+
+            // This redistribution-safe UI icon belongs to the application, not
+            // the user's migrated game data. Load once with the other textures.
+            using (var iconStream = typeof(Resources).Assembly.GetManifestResourceStream("ProjectZ.Archipelago.icon.png"))
+            {
+                ArchipelagoIcon?.Dispose();
+                ArchipelagoIcon = Texture2D.FromStream(graphics, iconStream ??
+                    throw new InvalidDataException("The embedded Archipelago icon is missing."));
+            }
 
             // Load the editor icons.
             LoadTexture(out _, Path.Combine(Values.PathDataFolder, "Editor", "editorIcons4x.png"));

@@ -11,6 +11,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\third_party\ArchipelagoAssets\icon.png" LogicalName="ProjectZ.Archipelago.icon.png" />
+    <EmbeddedResource Include="..\..\third_party\ArchipelagoAssets\LICENSE" LogicalName="ProjectZ.Archipelago.icon.LICENSE" />
     <ProjectReference Include="..\..\third_party\Archipelago.MultiClient.Net\Archipelago.MultiClient.Net.csproj" />
     <PackageReference Include="MonoGame.Framework.Native" Version="3.8.5.1" PrivateAssets="all" />
     <PackageReference Include="MonoGame.Extended" Version="6.1.1" />
