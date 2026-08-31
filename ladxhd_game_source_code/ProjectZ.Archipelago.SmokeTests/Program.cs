@@ -73,6 +73,7 @@ WallpaperSceneEffectsTests.Run();
 WallpaperDayCycleTests.Run();
 WallpaperDecorationDrawingTests.Run();
 WallpaperCameraResizeTests.Run();
+WallpaperInteriorCameraTests.Run();
 WallpaperIndoorNavigationTests.Run();
 WallpaperTouchRoutingTests.Run();
 WallpaperPathingRecoveryTests.Run();
@@ -2088,8 +2089,10 @@ using (var installedOverworldReader = File.OpenText(installedOverworldPath))
                Math.Abs(matchingHouseEntry.GetLinkSpawnY(
                             installedHouseOne.Is2DMap) - 120f) < 0.001f &&
                Math.Abs(houseOneEntryScreenX - 540f) < 0.001f &&
-               Math.Abs(houseOneEntryScreenY - 1200f) < 0.001f,
-               "A real overworld door must resolve its matching interior entry, exact ObjDoor spawn, and centered camera.");
+               houseOneEntryScreenY > 1200f && houseOneEntryScreenY < 2400f &&
+               Math.Abs(houseOneViewport.Top + installedHouseOne.Height / 2f *
+                   houseOneViewport.TileSize - 1200f) < 0.001f,
+               "A real overworld door must resolve its matching interior entry and exact ObjDoor spawn, with the whole room centered and the exit visible.");
         var houseExitPlan = LiveWallpaperJourneyPlanner.CreateToPoint(
             installedHouseOne, houseOneViewport,
             80f, 120f,

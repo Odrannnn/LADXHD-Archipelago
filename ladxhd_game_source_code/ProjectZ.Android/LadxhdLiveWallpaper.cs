@@ -1983,7 +1983,8 @@ namespace ProjectZ.Android
             }
             if (atTarget)
             {
-                var roomBasedCamera = _activeMapName?.StartsWith(
+                var sideView = _overworldMap.Map.Is2DMap;
+                var roomBasedCamera = !sideView && _activeMapName?.StartsWith(
                     "dungeon", StringComparison.OrdinalIgnoreCase) == true;
                 var hasScrollTarget = roomBasedCamera
                     ? viewport.TryGetRoomScrollTarget(
@@ -1994,7 +1995,8 @@ namespace ProjectZ.Android
                         out var targetX, out var targetY)
                     : viewport.TryGetEdgeScrollTarget(
                         link.MapX * 16f, link.MapY * 16f,
-                        link.Input.Move.X, link.Input.Move.Y,
+                        sideView ? _linkSimulation.Body.VelocityTarget.X : link.Input.Move.X,
+                        sideView ? _linkSimulation.Body.VelocityTarget.Y + _linkSimulation.Body.Velocity.Y : link.Input.Move.Y,
                         _overworldMap.Map.Width, _overworldMap.Map.Height,
                         out targetX, out targetY);
                 if (hasScrollTarget)

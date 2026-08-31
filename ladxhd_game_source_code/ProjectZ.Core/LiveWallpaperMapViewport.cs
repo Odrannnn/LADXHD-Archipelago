@@ -11,7 +11,7 @@ namespace ProjectZ
             int originX, int originY, int columns, int rows,
             float tileSize, float left, float top, float groundY,
             float cameraOriginX, float cameraOriginY,
-            int screenWidth, int screenHeight)
+            int screenWidth, int screenHeight, bool centered = false)
         {
             OriginX = originX;
             OriginY = originY;
@@ -25,6 +25,7 @@ namespace ProjectZ
             CameraOriginY = cameraOriginY;
             ScreenWidth = screenWidth;
             ScreenHeight = screenHeight;
+            _centered = centered;
         }
 
         public int OriginX { get; }
@@ -39,6 +40,7 @@ namespace ProjectZ
         public float CameraOriginY { get; }
         public int ScreenWidth { get; }
         public int ScreenHeight { get; }
+        private readonly bool _centered;
 
         public LiveWallpaperMapViewport WithOrigin(
             int originX, int originY, int mapWidth, int mapHeight) =>
@@ -62,14 +64,18 @@ namespace ProjectZ
                 baseLeft - (cameraX - tileOriginX) * TileSize,
                 baseTop - (cameraY - tileOriginY) * TileSize,
                 baseGroundY - (cameraY - tileOriginY) * TileSize,
-                cameraX, cameraY, ScreenWidth, ScreenHeight);
+                cameraX, cameraY, ScreenWidth, ScreenHeight, _centered);
         }
 
         public void ClampCameraTarget(int mapWidth, int mapHeight,
             ref float targetX, ref float targetY)
         {
-            targetX = Math.Clamp(targetX, 0f, Math.Max(0, mapWidth - Columns));
-            targetY = Math.Clamp(targetY, 0f, Math.Max(0, mapHeight - Rows));
+            // Interior draw-cache overscan is not visible camera coverage. Using
+            // Columns/Rows here makes the last two map tiles impossible to reveal.
+            var visibleColumns = _centered && TileSize > 0 ? ScreenWidth / TileSize : Columns;
+            var visibleRows = _centered && TileSize > 0 ? ScreenHeight / TileSize : Rows;
+            targetX = Math.Clamp(targetX, 0f, Math.Max(0, mapWidth - visibleColumns));
+            targetY = Math.Clamp(targetY, 0f, Math.Max(0, mapHeight - visibleRows));
         }
 
         public bool TryMoveToAdjacentField(
@@ -150,17 +156,16 @@ namespace ProjectZ
             else if (movementX > 0.1f &&
                      screenX >= ScreenWidth - horizontalEdgeInset)
                 targetOriginX += 10f;
-            else if (movementY < -0.1f &&
+            // A clamped horizontal edge must not suppress vertical following
+            // when Link moves diagonally along an interior's outer wall.
+            if (movementY < -0.1f &&
                      screenY <= verticalEdgeInset)
                 targetOriginY -= 8f;
             else if (movementY > 0.1f &&
                      screenY >= ScreenHeight - verticalEdgeInset)
                 targetOriginY += 8f;
 
-            targetOriginX = Math.Clamp(
-                targetOriginX, 0f, Math.Max(0, mapWidth - Columns));
-            targetOriginY = Math.Clamp(
-                targetOriginY, 0f, Math.Max(0, mapHeight - Rows));
+            ClampCameraTarget(mapWidth, mapHeight, ref targetOriginX, ref targetOriginY);
             return MathF.Abs(targetOriginX - CameraOriginX) > 0.001f ||
                    MathF.Abs(targetOriginY - CameraOriginY) > 0.001f;
         }
@@ -191,14 +196,15 @@ namespace ProjectZ
                 (linkTileY - mapOffsetY) / fieldRows) * fieldRows +
                 mapOffsetY;
 
-            // Dungeon cameras are room-based in the game. Centre the phone crop
-            // on that room, while retaining the larger portrait view around it.
-            targetOriginX = Math.Clamp(
-                roomOriginX + fieldColumns / 2f - Columns / 2f,
-                0f, Math.Max(0, mapWidth - Columns));
-            targetOriginY = Math.Clamp(
-                roomOriginY + fieldRows / 2f - Rows / 2f,
-                0f, Math.Max(0, mapHeight - Rows));
+            // Project the room through the same anchors used by drawing/taps.
+            // Cache dimensions include overscan and cannot identify screen centre.
+            var baseLeft = Left + (CameraOriginX - OriginX) * TileSize;
+            var baseTop = Top + (CameraOriginY - OriginY) * TileSize;
+            targetOriginX = roomOriginX + fieldColumns / 2f -
+                (ScreenWidth / 2f - baseLeft) / TileSize;
+            targetOriginY = roomOriginY + fieldRows / 2f -
+                (ScreenHeight / 2f - baseTop) / TileSize;
+            ClampCameraTarget(mapWidth, mapHeight, ref targetOriginX, ref targetOriginY);
             return MathF.Abs(targetOriginX - CameraOriginX) > 0.001f ||
                    MathF.Abs(targetOriginY - CameraOriginY) > 0.001f;
         }
@@ -257,28 +263,27 @@ namespace ProjectZ
             var columns = visibleColumns + horizontalOverscan;
             var rows = (int)MathF.Ceiling(height / tileSize) + 2;
             var cameraX = Math.Clamp(
-                centerPixelX / 16f - columns / 2f,
-                0f, Math.Max(0, mapWidth - columns));
+                centerPixelX / 16f - width / (2f * tileSize),
+                0f, Math.Max(0, mapWidth - width / tileSize));
             var cameraY = Math.Clamp(
-                centerPixelY / 16f - rows / 2f,
-                0f, Math.Max(0, mapHeight - rows));
+                centerPixelY / 16f - height / (2f * tileSize),
+                0f, Math.Max(0, mapHeight - height / tileSize));
             var originX = (int)MathF.Floor(cameraX);
             var originY = (int)MathF.Floor(cameraY);
-            // Interior maps can be smaller than the tall wallpaper viewport. A
-            // clamped camera origin alone would leave their real entry door near
-            // an edge. Anchor the requested map position at screen centre, then
-            // retain only the wallpaper's small horizontal parallax adjustment.
-            var left = width * 0.5f -
-                       (centerPixelX / 16f - originX) * tileSize +
-                       (0.5f - Math.Clamp(xOffset, 0f, 1f)) * tileSize;
-            var top = height * 0.5f -
-                      (centerPixelY / 16f - originY) * tileSize;
+            // Keep a stable, map-bounded projection rather than anchoring every
+            // redraw to the entrance. Small maps are centred as a whole. Larger
+            // maps scroll to their actual edges; launcher parallax must not move
+            // those bounds or crop an otherwise visible interior doorway.
+            var left = Math.Max(0f, (width - mapWidth * tileSize) / 2f) -
+                       (cameraX - originX) * tileSize;
+            var top = Math.Max(0f, (height - mapHeight * tileSize) / 2f) -
+                      (cameraY - originY) * tileSize;
             viewport = new LiveWallpaperMapViewport(
                 originX, originY, columns, rows, tileSize,
                 left,
                 top,
                 height * 0.5f,
-                cameraX, cameraY, width, height);
+                cameraX, cameraY, width, height, centered: true);
             return true;
         }
     }

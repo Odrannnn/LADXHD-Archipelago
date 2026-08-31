@@ -127,6 +127,10 @@ Map-object drawing also caches sprite keys and atlas dimensions and rejects off-
 before unnecessary lookups, preserving placement, draw order and moved/removed object state.
 Pending camera scroll targets are constrained again after rotation or resizing, so an old target
 outside the new viewport bounds cannot prevent later scrolling.
+Interior cameras use a stable map projection rather than retaining an offset from the entrance.
+Small rooms stay fully centred, and larger interiors can scroll to their actual visible edges;
+the extra cached tiles no longer shorten the camera range. Dungeon room targets use screen centre,
+while side-view passages use edge following, including vertical falling motion.
 
 The wallpaper is silent and does not start a full hidden game engine,
 write gameplay saves, grant Archipelago items, or open an Archipelago connection. Its collected
