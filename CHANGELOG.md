@@ -1,5 +1,14 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.84**
+### Wallpaper side-view physics and navigation recovery
+  * Added gravity, feather jumps, swimming, ladder climbing and directional platform collisions to wallpaper 2D passages, sharing movement calculations with the game. Installed ladder/door triggers can lead Link out of side-view rooms, and arrival handling prevents immediate entrance loops.
+  * Preserved tapped destinations across camera changes, visibility resumes and multi-section 2D routes. Unreachable taps return to exploration, while a missing route no longer relocates Link to a preset position.
+  * Reused reachable-area results when choosing fallback routes and added bounded, temporary costs for recently stalled steps, favoring detours without making a sole valid passage impassable.
+  * Shared live NPC/enemy collision queries between movement and route planning. Moved residents and defeated enemies no longer leave stale route obstacles, and interaction/combat approaches use current positions and the correct side.
+  * Added side-view, route-recovery, live-body and approach-selection regressions. Published a universal four-ABI assetless APK with a version code above the local test builds.
+  * No asset-format, save-format, APWorld rule or seed-manifest changes. Install over the existing app; no new seed or asset rebuild is required. Wallpaper activity remains independent of gameplay saves and Archipelago progress.
+
 ## **v2.0.80**
 ### Archipelago connection warning and wallpaper touch fixes
   * Added the Archipelago icon and a persistent "Archipelago not connected" HUD banner for bound AP saves while disconnected or connecting. It clears after a validated login, returns on connection loss, and never appears in vanilla saves.
