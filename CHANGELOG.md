@@ -1,5 +1,13 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.86**
+### Wallpaper interior and dungeon scrolling
+  * Corrected the entrance-dependent camera offset in interiors. Small rooms are centred as a whole, and larger interiors can scroll to their actual visible edges without cached overscan shortening the camera range.
+  * Dungeon transitions target the centre of the screen using the same projection as drawing and taps. A clamped horizontal edge no longer blocks vertical scrolling during diagonal movement.
+  * Side-view passages use edge following rather than the top-down dungeon grid, including vertical motion while Link falls.
+  * Added camera regressions for entrances at opposite map edges, small rooms, narrow interiors, fractional redraws, portrait/landscape layouts, and adjacent dungeon rooms.
+  * Universal four-ABI assetless APK, version code 2135, above the local 2.0.85 test build. No asset rebuild, save migration, new seed, or APWorld rule changes are required; install over the existing app.
+
 ## **v2.0.84**
 ### Wallpaper side-view physics and navigation recovery
   * Added gravity, feather jumps, swimming, ladder climbing and directional platform collisions to wallpaper 2D passages, sharing movement calculations with the game. Installed ladder/door triggers can lead Link out of side-view rooms, and arrival handling prevents immediate entrance loops.
