@@ -248,6 +248,7 @@ namespace ProjectZ
         private float _committedJumpRemaining;
         private Vector2 _airMoveVelocity;
         private LiveWallpaperJourneyPlan _journeyPlan;
+        private bool _hasMapPosition;
         private LiveWallpaperMap _currentJourneyMap;
         private LiveWallpaperMap _navigationSourceMap;
         private LiveWallpaperMap _navigationMap;
@@ -267,6 +268,9 @@ namespace ProjectZ
         private int _journeyVariant;
         private long _nextJourneyAt;
         private bool _manualDestinationActive;
+        private Vector2 _manualDestination;
+        private Vector2 _manualRetryPosition;
+        private int _manualReplanAttempts;
         private long _journeyBlockedSince;
         private int _journeyProgressPointIndex = -1;
         private float _journeyBestTargetDistance = float.MaxValue;
@@ -379,6 +383,7 @@ namespace ProjectZ
         public void EnterMap(
             float pixelX, float pixelY, string entryPortalId = null)
         {
+            _hasMapPosition = true;
             _sideView = null;
             _sideViewMap = null;
             _position.Set(new Vector3(pixelX, pixelY, 0f));
@@ -532,6 +537,9 @@ namespace ProjectZ
                 : plan.Points.Count > 1 ? 1 : 0;
             _nextJourneyAt = 0;
             _manualDestinationActive = true;
+            _manualDestination = new Vector2(targetPixelX, targetPixelY);
+            _manualRetryPosition = _position.Position;
+            _manualReplanAttempts = 0;
             _journeyBlockedSince = 0;
             _journeyProgressPointIndex = -1;
             _journeyBestTargetDistance = float.MaxValue;
@@ -558,6 +566,19 @@ namespace ProjectZ
             _hitVelocity = Vector2.Zero;
             _airMoveVelocity = Vector2.Zero;
             return true;
+        }
+
+        private bool RetryManualDestination(LiveWallpaperMap map, LiveWallpaperMapViewport viewport)
+        {
+            if (!_manualDestinationActive) return false;
+            var attempts = Vector2.DistanceSquared(_position.Position, _manualRetryPosition) >= TileSize * TileSize
+                ? 0 : _manualReplanAttempts;
+            if (attempts >= 2) return false;
+            var goal = _manualDestination;
+            var planned = TryWalkTo(map, viewport, goal.X, goal.Y);
+            _manualRetryPosition = _position.Position;
+            _manualReplanAttempts = attempts + 1;
+            return planned;
         }
 
         public LiveWallpaperSimulatedLinkState UpdateJourney(
@@ -607,6 +628,7 @@ namespace ProjectZ
                         !allowViewportFollow;
             if (sceneChanged)
             {
+                if (!_continueFromCurrentOnReset) _hasMapPosition = false;
                 _visitedFieldKeys.Clear();
                 _lastRememberedFieldKey = -1;
                 _fieldTransitionsWithoutDiscovery = 0;
@@ -620,15 +642,24 @@ namespace ProjectZ
             {
                 _journeyVariant = (int)Math.Max(0, elapsedMilliseconds / 20_000L);
                 var continueThroughLoadingZone = _continueFromCurrentOnReset ||
+                                                 !sceneChanged && _hasMapPosition ||
                                                  followLoadingZones &&
                                                  _journeyExited;
-                StartJourney(
-                    map, viewport, scene, allowIslandLife, elapsedMilliseconds,
-                    continueFromCurrentPosition: continueThroughLoadingZone,
-                    followLoadingZones: followLoadingZones,
-                    allowViewportFollow: allowViewportFollow);
+                // Rotation, camera bounds and resuming visibility are not a new
+                // user destination. Replan the outstanding tap from the real
+                // position before switching back to autonomous exploration.
+                if (sceneChanged && !_continueFromCurrentOnReset || !_manualDestinationActive ||
+                    !TryWalkTo(map, viewport, _manualDestination.X, _manualDestination.Y))
+                    StartJourney(
+                        map, viewport, scene, allowIslandLife, elapsedMilliseconds,
+                        continueFromCurrentPosition: continueThroughLoadingZone,
+                        followLoadingZones: followLoadingZones,
+                        allowViewportFollow: allowViewportFollow);
+                _journeyIslandLife = allowIslandLife;
+                _journeyFollowLoadingZones = followLoadingZones;
+                _journeyAllowViewportFollow = allowViewportFollow;
                 _continueFromCurrentOnReset = false;
-                if (!animated || activityMode == 1)
+                if ((!animated || activityMode == 1) && !continueThroughLoadingZone)
                     PlaceAtJourneyRestPoint(viewport);
                 elapsedDelta = 0;
             }
@@ -642,10 +673,8 @@ namespace ProjectZ
                 // The old route assumed the block stayed at its original tile.
                 // Preserve a tapped goal when still reachable; otherwise choose
                 // another route using the completed push's actual collision.
-                var goal = _journeyPlan?.Points.Count > 0
-                    ? _journeyPlan.Points[^1] : default;
                 if (!_manualDestinationActive ||
-                    !TryWalkTo(map, viewport, goal.PixelX, goal.PixelY))
+                    !TryWalkTo(map, viewport, _manualDestination.X, _manualDestination.Y))
                 {
                     _journeyVariant++;
                     StartJourney(map, viewport, scene, allowIslandLife,
@@ -691,9 +720,30 @@ namespace ProjectZ
                     }
                     else
                     {
-                    var fallback = LiveWallpaperLinkActivity.ResolveForScene(
-                        activityMode, scene, elapsedMilliseconds, animated);
-                    return Update(scene, fallback, elapsedMilliseconds, animated, map);
+                        if (map != null && _hasMapPosition)
+                        {
+                            // No route is not permission to restart a preset at
+                            // another position, especially inside an interior.
+                            // Keep the actual body here for the bounded retry.
+                            _body.VelocityTarget = Vector2.Zero;
+                            return new LiveWallpaperSimulatedLinkState(
+                                _position.X / TileSize, _position.Y / TileSize, _position.Z,
+                                _lastRouteDirection, IsSwimming(map, _position.X, _position.Y)
+                                    ? LiveWallpaperLinkRouteAction.Swim : LiveWallpaperLinkRouteAction.Stand,
+                                new LiveWallpaperLinkInput(Vector2.Zero, false),
+                                cutBushes: _cutBushes, cutVegetationTimes: _cutVegetationTimes,
+                                vegetationDrops: _vegetationDrops,
+                                vegetationDropDirections: _vegetationDropDirections,
+                                collectedVegetationDropTimes: _collectedVegetationDropTimes,
+                                liftedStones: _liftedStones, openedChests: _openedChests,
+                                collectedRupees: _collectedRupees, collectedHearts: _collectedHearts,
+                                moveStones: _moveStones, fallenMoveStones: _fallenMoveStones);
+                        }
+                        var fallback = LiveWallpaperLinkActivity.ResolveForScene(
+                            activityMode, scene, elapsedMilliseconds, animated);
+                        var fallbackState = Update(scene, fallback, elapsedMilliseconds, animated, map);
+                        _hasMapPosition = map != null;
+                        return fallbackState;
                     }
                 }
             }
@@ -713,7 +763,7 @@ namespace ProjectZ
                     _journeyVariant++;
                     var insideViewport = !_journeyExited &&
                                          IsInsideJourneyBounds(viewport);
-                    var continueFromCurrentPosition = insideViewport ||
+                    var continueFromCurrentPosition = insideViewport || allowViewportFollow ||
                                                       followLoadingZones &&
                                                       _journeyExited;
                     StartJourney(
@@ -1392,12 +1442,13 @@ namespace ProjectZ
                     else
                     {
                         _journeyVariant++;
-                        StartJourney(
-                            map, viewport, scene, allowIslandLife,
-                            elapsedMilliseconds,
-                            continueFromCurrentPosition: true,
-                            followLoadingZones: followLoadingZones,
-                            allowViewportFollow: allowViewportFollow);
+                        if (!RetryManualDestination(map, viewport))
+                            StartJourney(
+                                map, viewport, scene, allowIslandLife,
+                                elapsedMilliseconds,
+                                continueFromCurrentPosition: true,
+                                followLoadingZones: followLoadingZones,
+                                allowViewportFollow: allowViewportFollow);
                         action = LiveWallpaperLinkRouteAction.Stand;
                     }
                     inputMove = Vector2.Zero;
@@ -1513,6 +1564,7 @@ namespace ProjectZ
             // into that collider and stand there forever without swinging.
             if (_journeyPlan.Points.Count > 0)
             {
+                _hasMapPosition = true;
                 var firstPoint = _journeyPlan.Points[0];
                 _journeyPointIndex = firstPoint.Action ==
                                      LiveWallpaperJourneyAction.CutBush ||

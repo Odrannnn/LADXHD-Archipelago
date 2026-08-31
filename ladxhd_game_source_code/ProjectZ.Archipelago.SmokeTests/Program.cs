@@ -75,6 +75,7 @@ WallpaperDecorationDrawingTests.Run();
 WallpaperCameraResizeTests.Run();
 WallpaperIndoorNavigationTests.Run();
 WallpaperTouchRoutingTests.Run();
+WallpaperPathingRecoveryTests.Run();
 WallpaperSideViewTests.Run();
 GameplayCrashRegressionTests.Run();
 MapTransitionArrivalTests.Run();

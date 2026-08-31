@@ -425,6 +425,8 @@ namespace ProjectZ
             if (candidates.Count == 0)
                 return new LiveWallpaperJourneyPlan([]);
             var offset = PositiveHash(startX, variant, 113) % candidates.Count;
+            var reachable = new HashSet<Point>();
+            var filteredToReachable = false;
             for (var attempt = 0;
                  attempt < Math.Min(candidates.Count, 48);
                  attempt++)
@@ -436,9 +438,23 @@ namespace ProjectZ
                     includeHoles: true, includeBushes: false,
                     includeStones: false, includeMoveStones: false,
                     allowDiagonal: true,
-                    penalizeVisibleEdges: true);
+                    penalizeVisibleEdges: true,
+                    reachableWhenNoPath: reachable);
                 if (path.Count < 2)
+                {
+                    // A failed A* has already exhausted Link's connected
+                    // component. Reuse it instead of trying dozens of targets
+                    // in other rooms and potentially never trying his own.
+                    if (!filteredToReachable && reachable.Count > 0)
+                    {
+                        candidates.RemoveAll(point => !reachable.Contains(point));
+                        if (candidates.Count == 0) break;
+                        offset = PositiveHash(startX, variant, 113) % candidates.Count;
+                        attempt = -1;
+                        filteredToReachable = true;
+                    }
                     continue;
+                }
                 return AddPegasusDash(
                     TryCreateTraversableObjectPlan(
                         map, path, out var objectPlan)

@@ -73,6 +73,10 @@ residents and enemies remain local to their map; Marin's notes, BowWow's chain, 
 combat, swimming, jumping, rock lifting/throwing, pushable blocks, bush drops, and chest
 presentation reuse gameplay calculations and original sprites. Routes favor unexplored areas,
 recover from stalled targets, and account for supported obstacles and item-assisted crossings.
+Tapped destinations survive camera changes and visibility resumes. When blocked, Link retries the
+same goal a bounded number of times before returning to exploration; real progress renews that
+retry budget. Fallback searches reuse the already discovered reachable area instead of repeatedly
+searching disconnected rooms. A missing route does not relocate Link to a preset position.
 Side-view passages use gravity, feather jumps, swimming, ladders and directional platforms instead
 of top-down routes. Their bounded route search replays button inputs through the same lightweight
 physics used during movement; gravity, steering, jump and ladder calculations are shared with the
