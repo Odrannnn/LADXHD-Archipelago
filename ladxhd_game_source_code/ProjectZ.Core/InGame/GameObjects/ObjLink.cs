@@ -551,7 +551,7 @@ namespace ProjectZ.InGame.GameObjects
                 Drag = 0.72f,
                 DragAir = 0.72f,
                 Gravity = LinkGameplayMotion.Gravity,
-                Gravity2D = 0.1f,
+                Gravity2D = SideViewGameplayMotion.Gravity,
                 AbsorbStop = 0.25f,
                 AbsorbPercentage = 1f,
                 HoleOnPull = OnHolePull,

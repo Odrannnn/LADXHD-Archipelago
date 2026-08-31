@@ -361,6 +361,9 @@ namespace ProjectZ
         {
             if (IsHoleTeleporter)
                 return false;
+            if (is2dMap)
+                return TouchesSideViewTrigger(linkPixelX, linkPixelY) &&
+                    (!Is2DDoor || grounded && inputMoveY < 0);
             if (Mode == 1)
             {
                 // ObjDoor activates grounded Link on collision with the inset
@@ -383,6 +386,15 @@ namespace ProjectZ
             var deltaX = linkPixelX - LinkTargetX;
             var deltaY = linkPixelY - LinkTargetY;
             return deltaX * deltaX + deltaY * deltaY <= 2.25f;
+        }
+
+        public bool TouchesSideViewTrigger(float x, float y)
+        {
+            var trigger = Is2DDoor
+                ? new Microsoft.Xna.Framework.Rectangle(PixelX + 6, PixelY, 4, Height)
+                : DoorGameplayGeometry.GetTrigger(PixelX, PixelY, Width, Height, Mode, true);
+            return x - 4 < trigger.Right && x + 4 > trigger.Left &&
+                   y - 10 < trigger.Bottom && y > trigger.Top;
         }
 
         // Mirrors ObjDoor's overworld transition target for Link's real 8x10 body.
@@ -455,7 +467,7 @@ namespace ProjectZ
         public float CenterY => Y + Height / 2f;
     }
 
-    public sealed class LiveWallpaperMap
+    public sealed partial class LiveWallpaperMap
     {
         private const int MaximumWidth = 512;
         private const int MaximumHeight = 512;
@@ -697,7 +709,7 @@ namespace ProjectZ
                 foreach (var entry in entries)
                 {
                     if (!seen.Add((entry.X, entry.Y, entry.Width, entry.Height,
-                            entry.Kind)) || entry.Kind == CollisionKind.NpcWall ||
+                            entry.Kind)) || entry.Kind is CollisionKind.NpcWall or CollisionKind.Ladder or CollisionKind.LadderTop ||
                         entry.Kind == CollisionKind.Hole && !includeHoles ||
                         entry.Kind == CollisionKind.Bush &&
                         (!includeBushes || ignoredBushes?.Contains(
@@ -785,7 +797,7 @@ namespace ProjectZ
                              GetMoveStoneKey(entry.X, entry.Y)) ||
                          ignoredMoveStones?.Contains(
                              GetMoveStoneKey(entry.X, entry.Y)) == true);
-                    if (entry.Kind == CollisionKind.NpcWall ||
+                    if (entry.Kind is CollisionKind.NpcWall or CollisionKind.Ladder or CollisionKind.LadderTop ||
                         entry.Kind == CollisionKind.Hole && !includeHoles ||
                         entry.Kind == CollisionKind.Bush &&
                         (!includeBushes || ignoredBushes?.Contains(
@@ -879,7 +891,7 @@ namespace ProjectZ
                              ignoredMoveStones?.Contains(
                                  GetMoveStoneKey(entry.X, entry.Y)) == true))
                             continue;
-                        if (entry.Kind != CollisionKind.NpcWall &&
+                        if (entry.Kind is not (CollisionKind.NpcWall or CollisionKind.Ladder or CollisionKind.LadderTop) &&
                             (entry.Kind != CollisionKind.Hole || includeHoles) && entry.Intersects(
                                 x, y, width, height))
                             return true;
@@ -2172,6 +2184,17 @@ namespace ProjectZ
             ref int hazardCount,
             ref int npcWallCount)
         {
+            if (template is "dungeonLadder" or "dungeonLadderTop")
+            {
+                var top = template == "dungeonLadderTop";
+                var bounds = SideViewGameplayMotion.LadderBounds(positionX, positionY, top);
+                AddCollision(grid, mapWidth, mapHeight,
+                    new CollisionRectangle(bounds.X, bounds.Y, bounds.Width, bounds.Height,
+                        top ? CollisionKind.LadderTop : CollisionKind.Ladder),
+                    ref collisionCount, ref hazardCount, ref npcWallCount);
+                return;
+            }
+
             if (template is "hole" or "visiblehole" or "fullHole")
             {
                 var fullTile = template == "fullHole";
@@ -2316,7 +2339,9 @@ namespace ProjectZ
                 AddCollision(grid, mapWidth, mapHeight,
                     new CollisionRectangle(
                         positionX + rectangle.X, positionY + rectangle.Y,
-                        rectangle.Width, rectangle.Height, kind),
+                        rectangle.Width, rectangle.Height, kind,
+                        template == "oneWayBridge0" ? 0 : template == "oneWayBridge2" ? 2 :
+                        template is "oneWayFlatTop" or "oneWayFlatTop-14" ? 3 : -1),
                     ref collisionCount, ref hazardCount, ref npcWallCount);
             }
         }
@@ -2481,13 +2506,15 @@ namespace ProjectZ
         private readonly struct CollisionRectangle
         {
             public CollisionRectangle(
-                int x, int y, int width, int height, CollisionKind kind)
+                int x, int y, int width, int height, CollisionKind kind,
+                int direction = -1)
             {
                 X = x;
                 Y = y;
                 Width = width;
                 Height = height;
                 Kind = kind;
+                Direction = direction;
             }
 
             public int X { get; }
@@ -2495,6 +2522,7 @@ namespace ProjectZ
             public int Width { get; }
             public int Height { get; }
             public CollisionKind Kind { get; }
+            public int Direction { get; }
 
             public bool Intersects(float x, float y, float width, float height) =>
                 x < X + Width && x + width > X &&
@@ -2508,7 +2536,9 @@ namespace ProjectZ
             Stone,
             MoveStone,
             Hole,
-            NpcWall
+            NpcWall,
+            Ladder,
+            LadderTop
         }
 
         private static bool TryReadInt(TextReader reader, out int value) =>

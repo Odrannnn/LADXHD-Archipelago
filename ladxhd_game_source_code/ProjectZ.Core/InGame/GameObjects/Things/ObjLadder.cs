@@ -23,10 +23,8 @@ namespace ProjectZ.InGame.GameObjects.Things
             EntitySize = new Rectangle(5, 0, 6, 16);
             _isTop = isTop;
 
-            if (isTop)
-                _collisionRectangle = new Box(posX, posY, 0, 16, 16, 8);
-            else
-                _collisionRectangle = new Box(posX + 4, posY, 0, 8, 16, 8);
+            var bounds = SideViewGameplayMotion.LadderBounds(posX, posY, isTop);
+            _collisionRectangle = new Box(bounds.X, bounds.Y, 0, bounds.Width, bounds.Height, 8);
 
             AddComponent(CollisionComponent.Index, new CollisionComponent(Collision)
             {
@@ -38,7 +36,7 @@ namespace ProjectZ.InGame.GameObjects.Things
         private bool Collision(Box box, int dir, int level, ref Box collidingBox)
         {
             // only collide if the entity was on top of the ladder the frame before
-            if ((!_isTop || dir == 3) && _collisionRectangle.Intersects(box))
+            if (SideViewGameplayMotion.LadderCollides(_isTop, dir) && _collisionRectangle.Intersects(box))
             {
                 collidingBox = _collisionRectangle;
                 return true;

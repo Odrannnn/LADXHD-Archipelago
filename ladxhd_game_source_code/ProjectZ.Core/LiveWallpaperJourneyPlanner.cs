@@ -163,7 +163,7 @@ namespace ProjectZ
             string excludedPortalEntryId = null,
             IReadOnlySet<int> openedChests = null)
         {
-            if (map == null || viewport.Columns <= 0 || viewport.Rows <= 0)
+            if (map == null || map.Is2DMap || viewport.Columns <= 0 || viewport.Rows <= 0)
                 return new LiveWallpaperJourneyPlan([]);
 
             int minX;
@@ -456,7 +456,7 @@ namespace ProjectZ
             float targetPixelX,
             float targetPixelY)
         {
-            if (map == null || viewport.Columns <= 0 || viewport.Rows <= 0)
+            if (map == null || map.Is2DMap || viewport.Columns <= 0 || viewport.Rows <= 0)
                 return new LiveWallpaperJourneyPlan([]);
             GetBounds(map, viewport,
                 out var minX, out var minY, out var maxX, out var maxY);

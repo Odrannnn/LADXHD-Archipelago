@@ -376,6 +376,7 @@ namespace ProjectZ
         }
 
         public int CurrentFrameIndex => _animator.CurrentFrameIndex;
+        public bool IsPlaying => _animator.IsPlaying;
 
         public void Restart(long elapsedMilliseconds)
         {

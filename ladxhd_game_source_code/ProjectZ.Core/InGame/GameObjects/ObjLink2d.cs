@@ -23,14 +23,14 @@ namespace ProjectZ.InGame.GameObjects
         public bool NoDropSound;
 
         // Swimming Values
-        private float MaxSwimSpeed2D = 0.50f;
+        private float MaxSwimSpeed2D = SideViewGameplayMotion.SwimSpeed;
         private float _swimAnimationMult;
         private int _swimDirection;
         private bool _inWater;
         private bool _wasInWater;
 
         // Climbing Values
-        private float ClimbSpeed = 0.7f;
+        private float ClimbSpeed = SideViewGameplayMotion.ClimbSpeed;
         private float _lastClimbY;
         private bool _isClimbing;
         private bool _wasClimbing;
@@ -435,7 +435,7 @@ namespace ProjectZ.InGame.GameObjects
             var vectorDirection = ToDirection(walkVelocity);
 
             // start climbing?
-            if (_ladderCollision && ((walkVelocity.Y != 0 && Math.Abs(walkVelocity.X) <= Math.Abs(walkVelocity.Y)) || _tryClimbing) && _jumpStartTime + 175 < Game1.TotalGameTime)
+            if (_ladderCollision && ((walkVelocity.Y != 0 && Math.Abs(walkVelocity.X) <= Math.Abs(walkVelocity.Y)) || _tryClimbing) && _jumpStartTime + SideViewGameplayMotion.LadderJumpDelayMilliseconds < Game1.TotalGameTime)
             {
                 _isClimbing = true;
                 _tryClimbing = false;
@@ -518,16 +518,8 @@ namespace ProjectZ.InGame.GameObjects
             {
                 walkVelocity.Y = 0;
 
-                var distance = (_lastMoveVelocity - walkVelocity * _currentWalkSpeed).Length();
-
-                if (distance > 0 && walkVelocity != Vector2.Zero)
-                {
-                    // we make sure that when walkVelocity is pointing in the same direction as _lastMoveVelocity we do not decrease the velocity if walkVelocity is smaller
-                    var direction = walkVelocity;
-                    direction.Normalize();
-                    var speed = Math.Max(walkVelocity.Length(), _lastMoveVelocity.Length());
-                    _lastMoveVelocity = AnimationHelper.MoveToTarget(_lastMoveVelocity, direction * speed, 0.05f * Game1.TimeMultiplier);
-                }
+                _lastMoveVelocity = SideViewGameplayMotion.AirMovement(
+                    _lastMoveVelocity, walkVelocity, _currentWalkSpeed, Game1.TimeMultiplier);
                 _moveVector2D = _lastMoveVelocity;
 
                 // update the direction if the player goes left or right in the air
@@ -675,9 +667,8 @@ namespace ProjectZ.InGame.GameObjects
                 moveVector *= moveVectorLength;
 
                 // accelerate to the target velocity
-                var distance = (moveVector - _swimVelocity).Length();
-                var lerpPercentage = MathF.Min(1, (0.0225f * Game1.TimeMultiplier) / distance);
-                _swimVelocity = Vector2.Lerp(_swimVelocity, moveVector, lerpPercentage);
+                _swimVelocity = SideViewGameplayMotion.SwimMovement(
+                    _swimVelocity, moveVector, MaxSwimSpeed2D, Game1.TimeMultiplier);
 
                 _swimAnimationMult = moveVector.Length() / MaxSwimSpeed2D;
 
@@ -689,9 +680,8 @@ namespace ProjectZ.InGame.GameObjects
             else
             {
                 // slows down and stop
-                var distance = _swimVelocity.Length();
-                var lerpPercentage = MathF.Min(1, (0.0225f / distance) * Game1.TimeMultiplier);
-                _swimVelocity = Vector2.Lerp(_swimVelocity, Vector2.Zero, lerpPercentage);
+                _swimVelocity = SideViewGameplayMotion.SwimMovement(
+                    _swimVelocity, Vector2.Zero, MaxSwimSpeed2D, Game1.TimeMultiplier);
 
                 _swimAnimationMult = Math.Max(0.35f, _swimVelocity.Length() / MaxSwimSpeed2D);
             }
@@ -848,7 +838,7 @@ namespace ProjectZ.InGame.GameObjects
                 else
                 {
                     CurrentState = State.Jumping;
-                    _body.Velocity.Y = -0.75f;
+                    _body.Velocity.Y = SideViewGameplayMotion.WaterExitVelocity;
                     _playedJumpAnimation = true;
                     _waterJump = true;
                 }
@@ -924,11 +914,7 @@ namespace ProjectZ.InGame.GameObjects
 
             // If climbing, jump velocity is reduced. When standing still, velocity  
             // is a fair bit stronger. When walking, use the maximum jump velocity.
-            _body.Velocity.Y = _isClimbing 
-                ? -1.5f 
-                : _isWalking
-                    ? -2.10f 
-                    : -1.95f;
+            _body.Velocity.Y = SideViewGameplayMotion.FeatherVelocity(_isClimbing, _isWalking);
 
             // Set up the supporting values.
             _body.IsGrounded = false;
@@ -967,31 +953,8 @@ namespace ProjectZ.InGame.GameObjects
         {
             // When letting go of the jump button, the jump should end. Instead of an immediate
             // drop off, the velocity is instead greatly reduced to reduce the pull of gravity.
-            if (!_jump2DHold && _jump2DHeld)
-            {
-                // "Threshold" is current Z velocity while "setY" is replacement velocity.
-                float threshold = -1.00f;
-                float setY = -0.50f;
-
-                // Check velocity threshold over three iterations.
-                for (int i = 0; i < 3; i++)
-                {
-                    // If currently velocity is greater than current threshold.
-                    if (_body.Velocity.Y > threshold)
-                    {
-                        // Reduce the velocity.
-                        _body.Velocity.Y = setY;
-                        _jump2DHeld = false;
-                        break;
-                    }
-                    // Adjust the values for the next iteration.
-                    threshold -= 0.15f;
-                    setY += 0.15f;
-                }
-            }
-            // When velocity falls below the amount it sets, don't apply it anymore.
-            if (_body.Velocity.Y >= -0.50)
-                _jump2DHeld = false;
+            SideViewGameplayMotion.ReleaseFeather(
+                ref _body.Velocity.Y, ref _jump2DHeld, _jump2DHold);
 
             // Boots knockback variable height: releasing the boots button mid-bounce cuts the
             // upward velocity so it peaks lower. Holding the whole time gives max height.
@@ -1052,7 +1015,7 @@ namespace ProjectZ.InGame.GameObjects
                     else
                     {
                         _body.IsGrounded = true;
-                        _body.Velocity.Y = -0.50f;
+                        _body.Velocity.Y = SideViewGameplayMotion.LadderTopVelocity;
                         CurrentState = initState;
                     }
                 }

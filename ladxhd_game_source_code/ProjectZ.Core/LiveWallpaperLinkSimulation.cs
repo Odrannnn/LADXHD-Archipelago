@@ -370,11 +370,17 @@ namespace ProjectZ
         }
 
         public BodyComponent Body => _body;
+        private LiveWallpaperSideViewSimulation _sideView;
+        private LiveWallpaperMap _sideViewMap;
+        public bool CanActivatePortal(LiveWallpaperMap map, LiveWallpaperMapPortal portal) =>
+            !map.Is2DMap || _sideView?.CanActivate(portal) != false;
         public int VisitedOverworldFieldCount => _visitedFieldKeys.Count;
 
         public void EnterMap(
             float pixelX, float pixelY, string entryPortalId = null)
         {
+            _sideView = null;
+            _sideViewMap = null;
             _position.Set(new Vector3(pixelX, pixelY, 0f));
             _holeResetPosition = new Vector2(pixelX, pixelY);
             _holeResetField = GetHoleResetField(pixelX, pixelY);
@@ -494,6 +500,12 @@ namespace ProjectZ
             float targetPixelX,
             float targetPixelY)
         {
+            if (map?.Is2DMap == true)
+            {
+                EnsureSideView(map);
+                _sideView.WalkTo(new Vector2(targetPixelX, targetPixelY));
+                return true;
+            }
             var plan = LiveWallpaperJourneyPlanner.CreateToPoint(
                 GetNavigationMap(map), viewport, _position.X, _position.Y,
                 targetPixelX, targetPixelY);
@@ -562,6 +574,17 @@ namespace ProjectZ
             long holeFallAnimationMilliseconds = 0L)
         {
             _currentJourneyMap = map;
+            if (map?.Is2DMap == true)
+            {
+                EnsureSideView(map);
+                var sideViewState = _sideView.Update(elapsedMilliseconds, animated && activityMode != 1);
+                _position.Set(new Vector3(sideViewState.MapX * TileSize, sideViewState.MapY * TileSize, 0));
+                _body.IsGrounded = _sideView.Body.Grounded;
+                _body.Velocity = new Vector3(0, _sideView.Body.FallVelocity, 0);
+                _body.VelocityTarget = _sideView.Body.Movement;
+                _lastElapsed = elapsedMilliseconds;
+                return sideViewState;
+            }
             if (stoneThrowAnimationMilliseconds > 0L)
                 _stoneThrowAnimationMilliseconds =
                     stoneThrowAnimationMilliseconds;
@@ -1430,6 +1453,15 @@ namespace ProjectZ
                 chestItemShowAnimation: chestItemShowAnimation,
                 moveStones: _moveStones,
                 fallenMoveStones: _fallenMoveStones);
+        }
+
+        private void EnsureSideView(LiveWallpaperMap map)
+        {
+            if (_sideView == null || !ReferenceEquals(_sideViewMap, map))
+            {
+                _sideViewMap = map;
+                _sideView = new LiveWallpaperSideViewSimulation(map, _position.Position, _entryPortalIdToAvoid);
+            }
         }
 
         private void StartJourney(

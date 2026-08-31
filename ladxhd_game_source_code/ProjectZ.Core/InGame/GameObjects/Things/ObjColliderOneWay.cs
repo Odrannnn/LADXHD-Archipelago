@@ -55,8 +55,10 @@ namespace ProjectZ.InGame.GameObjects.Things
                     return true;
                 }
                 // On 2D Maps, when Link is below the top, "teleport" him to the top of the collision.
-                if (Math.Abs(Link.EntityPosition.Y - _collisionBox.Y) > 0.1f)
-                    Link.SetPosition(new Vector2(Link.EntityPosition.X, _collisionBox.Y - 1));
+                var pushedY = SideViewGameplayMotion.OneWayPusherY(
+                    Link.Is2DMode, Link.EntityPosition.Y, Body.Velocity.Y, _collisionBox.Y);
+                if (pushedY.HasValue)
+                    Link.SetPosition(new Vector2(Link.EntityPosition.X, pushedY.Value));
 
                 // Force Link into the walking state from the jumping state after the teleport.
                 if (Link.CurrentState == ObjLink.State.Jumping)

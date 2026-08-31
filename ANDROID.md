@@ -73,6 +73,15 @@ residents and enemies remain local to their map; Marin's notes, BowWow's chain, 
 combat, swimming, jumping, rock lifting/throwing, pushable blocks, bush drops, and chest
 presentation reuse gameplay calculations and original sprites. Routes favor unexplored areas,
 recover from stalled targets, and account for supported obstacles and item-assisted crossings.
+Side-view passages use gravity, feather jumps, swimming, ladders and directional platforms instead
+of top-down routes. Their bounded route search replays button inputs through the same lightweight
+physics used during movement; gravity, steering, jump and ladder calculations are shared with the
+game. Ladder exits use the installed door triggers, including upward-input doors, and an arrival
+latch prevents immediate return through the entrance. Taps request physically reachable routes;
+an unreachable target does not turn air into walkable floor. Planning is incremental while visible,
+and the physics advances at 60 Hz independently of the selected rendering frame rate.
+Long side-view tap routes retain their destination across bounded planning sections. Unreachable
+taps eventually return to autonomous navigation instead of disabling it for the rest of the room.
 This is an ambient simulation, not a complete autonomous playthrough or a replacement for the game.
 
 Choose **15 FPS** for lower power use, **30 FPS** for balanced motion, or **High FPS (60 FPS)** for

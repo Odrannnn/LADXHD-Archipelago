@@ -205,22 +205,12 @@ namespace ProjectZ.InGame.GameObjects.Base.Systems
             {
                 body.IsGrounded = (collisionType & Values.BodyCollision.Vertical) != 0 && body.Velocity.Y > 0;
 
-                if (body.IsGrounded)
-                {
-                    // bounce of the ground
-                    if (!body.WasGrounded && body.Velocity.Y * body.Bounciness2D > 0.4f)
-                        body.Velocity.Y = -body.Velocity.Y * body.Bounciness2D;
-                    else
-                        body.Velocity.Y = 0;
-                }
-
-                if (!body.IgnoresZ && (body.CurrentFieldState & MapStates.FieldStates.Init) == 0)
-                {
-                    if (!body.IgnoresZ && (body.CurrentFieldState & MapStates.FieldStates.DeepWater) == 0)
-                        body.Velocity.Y += body.Gravity2D * Game1.TimeMultiplier;
-                    else if (!body.IgnoresZ && (body.CurrentFieldState & MapStates.FieldStates.DeepWater) != 0)
-                        body.Velocity.Y += body.Gravity2DWater * Game1.TimeMultiplier;
-                }
+                var gravity = body.IgnoresZ || (body.CurrentFieldState & MapStates.FieldStates.Init) != 0
+                    ? 0f : (body.CurrentFieldState & MapStates.FieldStates.DeepWater) == 0
+                        ? body.Gravity2D : body.Gravity2DWater;
+                body.Velocity.Y = SideViewGameplayMotion.VerticalVelocity(
+                    body.Velocity.Y, body.IsGrounded, body.WasGrounded,
+                    body.Bounciness2D, gravity, Game1.TimeMultiplier);
             }
 
             var drag = body.IsGrounded ? body.Drag : body.DragAir;

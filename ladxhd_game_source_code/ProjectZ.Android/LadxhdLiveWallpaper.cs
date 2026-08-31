@@ -1124,6 +1124,9 @@ namespace ProjectZ.Android
         private readonly SpriteAsset[] _linkStanding = new SpriteAsset[4];
         private readonly SpriteAsset[] _linkJumping = new SpriteAsset[4];
         private readonly SpriteAsset[] _linkSwimming = new SpriteAsset[4];
+        private readonly SpriteAsset[] _linkSideViewSwimming = new SpriteAsset[4];
+        private readonly SpriteAsset[] _linkSideViewFalling = new SpriteAsset[4];
+        private SpriteAsset _sideViewJumpAsset;
         private readonly SpriteAsset[] _linkPushing = new SpriteAsset[4];
         private readonly SpriteAsset[] _linkCarrying = new SpriteAsset[4];
         private readonly SpriteAsset[] _linkLifting = new SpriteAsset[4];
@@ -1277,6 +1280,12 @@ namespace ProjectZ.Android
                     context, "Objects/spear.ani", [direction.ToString()]);
                 _roosterDirections[direction] = LoadSprite(
                     context, "NPCs/cock.ani", [$"stand_{direction}"]);
+            }
+            for (var direction = 0; direction < 4; direction++)
+            {
+                _linkSideViewFalling[direction] = LoadSprite(context, "link0.ani", [$"fall_{direction}"]);
+                if (direction % 2 == 0)
+                    _linkSideViewSwimming[direction] = LoadSprite(context, "link0.ani", [$"swim_2d_{direction}"]);
             }
             _linkFalling = LoadSprite(context, "link0.ani", ["fall"]);
             _linkShowingItem[1] = LoadSprite(context, "link0.ani", ["show1"]);
@@ -1551,7 +1560,9 @@ namespace ProjectZ.Android
             var linkPixelY = link.MapY * 16f;
             foreach (var portal in sourceMap.Portals)
             {
-                if (!portal.HasDestination || portal.Mode is not (0 or 1))
+                if (!portal.HasDestination ||
+                    (portal.Mode is not (0 or 1) && !(sourceMap.Is2DMap && portal.Mode == 3)) ||
+                    !_linkSimulation.CanActivatePortal(sourceMap, portal))
                     continue;
                 var deltaX = linkPixelX - portal.LinkTargetX;
                 var deltaY = linkPixelY - portal.LinkTargetY;
@@ -1576,7 +1587,7 @@ namespace ProjectZ.Android
                     if (!portal.ShouldActivateAt(
                             linkPixelX, linkPixelY,
                             link.Input.Move.Y, link.Direction,
-                            sourceMap.Is2DMap, link.Height <= 0f))
+                            sourceMap.Is2DMap, sourceMap.Is2DMap ? _linkSimulation.Body.IsGrounded : link.Height <= 0f))
                         continue;
                 }
 
@@ -1606,6 +1617,7 @@ namespace ProjectZ.Android
                 PrepareActiveMapAssets(_context);
                 _linkSimulation.EnterMap(
                     spawnX, spawnY, destination.EntryId);
+                _sideViewJumpAsset = null;
                 if (LiveWallpaperMapViewport.TryCreateCentered(
                         width, height, nextMap.Map.Width, nextMap.Map.Height,
                         spawnX, spawnY, xOffset, out var viewport))
@@ -2876,6 +2888,9 @@ namespace ProjectZ.Android
         {
             if (simulated.Action == LiveWallpaperLinkRouteAction.Hidden)
                 return;
+            var sideView = _overworldMap?.Map.Is2DMap == true;
+            if (_collectingShadows && sideView)
+                return;
             var damageVisible = _linkSimulation.IsDamageVisible(elapsed);
             var direction = simulated.Direction;
             var asset = simulated.Action switch
@@ -2886,6 +2901,9 @@ namespace ProjectZ.Android
                 // ordinary feather-jump pose.
                 LiveWallpaperLinkRouteAction.PegasusJump => _linkWalking[direction],
                 LiveWallpaperLinkRouteAction.Swim => _linkSwimming[direction],
+                LiveWallpaperLinkRouteAction.SideViewSwim => _linkSideViewSwimming[direction],
+                LiveWallpaperLinkRouteAction.SideViewFall => _linkSideViewFalling[direction],
+                LiveWallpaperLinkRouteAction.Climb => _linkWalking[1],
                 LiveWallpaperLinkRouteAction.Pushing => _linkPushing[direction],
                 LiveWallpaperLinkRouteAction.LiftStone => _linkLifting[direction],
                 LiveWallpaperLinkRouteAction.CarryStone => _linkCarrying[direction],
@@ -2911,6 +2929,20 @@ namespace ProjectZ.Android
                 _ => _linkStanding[direction]
             };
             asset ??= _linkStanding[direction] ?? _linkWalking[direction];
+            if (sideView && simulated.Action is LiveWallpaperLinkRouteAction.FeatherJump or LiveWallpaperLinkRouteAction.SideViewFall)
+            {
+                // ObjLink2d plays the real jump animation once, then fall_DIR
+                // when that Animator finishes; the apex is not an animation timer.
+                if (_sideViewJumpAsset == null)
+                {
+                    _sideViewJumpAsset = _linkJumping[direction];
+                    _sideViewJumpAsset?.EngineAnimation.Restart(elapsed);
+                }
+                asset = _sideViewJumpAsset?.EngineAnimation.IsPlaying == true
+                    ? _sideViewJumpAsset : _linkSideViewFalling[direction];
+            }
+            else
+                _sideViewJumpAsset = null;
             if (asset == null)
                 return;
             var placement = LiveWallpaperLinkPlacement.Resolve(viewport, simulated);
@@ -2923,6 +2955,10 @@ namespace ProjectZ.Android
             var animationSpeed = pegasus
                 ? LinkGameplayMotion.PegasusBootsSpeed
                 : 1f;
+            if (simulated.Action == LiveWallpaperLinkRouteAction.Climb && simulated.Input.Move.LengthSquared() == 0)
+                animationSpeed = 0;
+            if (simulated.Action == LiveWallpaperLinkRouteAction.SideViewSwim && simulated.Input.Move.LengthSquared() == 0)
+                animationSpeed = Math.Max(.35f, _linkSimulation.Body.VelocityTarget.Length() / SideViewGameplayMotion.SwimSpeed);
             if (attacking && _lastLinkAction != LiveWallpaperLinkRouteAction.Attack)
             {
                 asset.EngineAnimation.Restart(elapsed);

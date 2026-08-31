@@ -24,7 +24,10 @@ namespace ProjectZ
         RoosterFly,
         RoosterThrow,
         Falling,
-        Hidden
+        Hidden,
+        Climb,
+        SideViewFall,
+        SideViewSwim
     }
 
     public readonly struct LiveWallpaperLinkRouteState
