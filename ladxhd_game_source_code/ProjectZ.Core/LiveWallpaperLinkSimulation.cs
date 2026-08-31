@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using ProjectZ.InGame.GameObjects.Base.CObjects;
 using ProjectZ.InGame.GameObjects.Base.Components;
@@ -258,9 +259,14 @@ namespace ProjectZ
         {
             if (_navigationMap == null || !ReferenceEquals(_navigationSourceMap, map))
             {
+                if (_navigationSourceMap != null && !ReferenceEquals(_navigationSourceMap, map))
+                    _failedJourneySteps.Clear();
                 _navigationSourceMap = map;
-                _navigationMap = map?.WithMovedBlocksForNavigation(
-                    _moveStones, _relocatedMoveStones);
+                _navigationMap = map?.WithNavigationState(
+                    _moveStones, _relocatedMoveStones,
+                    ReferenceEquals(_liveActorMap, map) ? _liveActors : null,
+                    ReferenceEquals(_liveEnemyMap, map) ? _liveEnemies : null,
+                    _failedJourneySteps);
             }
             return _navigationMap;
         }
@@ -271,6 +277,9 @@ namespace ProjectZ
         private Vector2 _manualDestination;
         private Vector2 _manualRetryPosition;
         private int _manualReplanAttempts;
+        private readonly Dictionary<(Point From, Point To), long> _failedJourneySteps = new();
+        private const int MaximumFailedJourneySteps = 8;
+        private const long FailedJourneyStepLifetime = 15_000L;
         private long _journeyBlockedSince;
         private int _journeyProgressPointIndex = -1;
         private float _journeyBestTargetDistance = float.MaxValue;
@@ -384,6 +393,7 @@ namespace ProjectZ
             float pixelX, float pixelY, string entryPortalId = null)
         {
             _hasMapPosition = true;
+            _failedJourneySteps.Clear();
             _sideView = null;
             _sideViewMap = null;
             _position.Set(new Vector3(pixelX, pixelY, 0f));
@@ -441,6 +451,7 @@ namespace ProjectZ
             {
                 _liveEnemyMap = map;
                 _liveEnemies.Clear();
+                _navigationMap = null;
             }
             if (enemyIndex >= 0 && map != null && enemyIndex < map.Enemies.Count)
                 _liveEnemies[enemyIndex] = state;
@@ -455,11 +466,13 @@ namespace ProjectZ
             {
                 _liveEnemyMap = map;
                 _liveEnemies.Clear();
+                _navigationMap = null;
             }
             if (!ReferenceEquals(_liveActorMap, map))
             {
                 _liveActorMap = map;
                 _liveActors.Clear();
+                _navigationMap = null;
             }
         }
 
@@ -470,6 +483,7 @@ namespace ProjectZ
             {
                 _liveActorMap = map;
                 _liveActors.Clear();
+                _navigationMap = null;
             }
             if (actorIndex >= 0 && map != null && actorIndex < map.Actors.Count)
                 _liveActors[actorIndex] = state;
@@ -581,6 +595,48 @@ namespace ProjectZ
             return planned;
         }
 
+        private void RememberFailedJourneyStep(Vector2 target, long elapsedMilliseconds)
+        {
+            var step = LiveWallpaperJourneyPlanner.GridStep;
+            var from = new Point((int)MathF.Round(_position.X / step) * step,
+                (int)MathF.Round(_position.Y / step) * step);
+            var to = new Point((int)MathF.Round(target.X / step) * step,
+                (int)MathF.Round(target.Y / step) * step);
+            // Remember only the next local step, never the whole span of a
+            // jump/hookshot route or a different part of the map.
+            to = new Point(from.X + Math.Clamp(to.X - from.X, -step, step),
+                from.Y + Math.Clamp(to.Y - from.Y, -step, step));
+            if (from == to)
+            {
+                var remaining = target - _position.Position;
+                if (remaining.LengthSquared() <= 0.0001f) return;
+                // A body can stall in the final few pixels before a waypoint.
+                // Rounding both ends to that node must not erase the failed
+                // approach; remember its incoming grid step instead.
+                from = new Point(to.X - Math.Sign(remaining.X) * step,
+                    to.Y - Math.Sign(remaining.Y) * step);
+            }
+            if (!_failedJourneySteps.ContainsKey((from, to)) &&
+                _failedJourneySteps.Count >= MaximumFailedJourneySteps)
+            {
+                var oldest = _failedJourneySteps.MinBy(pair => pair.Value).Key;
+                _failedJourneySteps.Remove(oldest);
+            }
+            _failedJourneySteps[(from, to)] = elapsedMilliseconds + FailedJourneyStepLifetime;
+        }
+
+        private void ExpireFailedJourneySteps(long elapsedMilliseconds)
+        {
+            List<(Point From, Point To)> expired = null;
+            foreach (var pair in _failedJourneySteps)
+            {
+                if (pair.Value > elapsedMilliseconds) continue;
+                (expired ??= new()).Add(pair.Key);
+            }
+            if (expired != null)
+                foreach (var step in expired) _failedJourneySteps.Remove(step);
+        }
+
         public LiveWallpaperSimulatedLinkState UpdateJourney(
             int scene,
             int activityMode,
@@ -620,6 +676,8 @@ namespace ProjectZ
                                   _journeyColumns != viewport.Columns ||
                                   _journeyRows != viewport.Rows;
             var sceneChanged = _scene != scene;
+            if (sceneChanged || elapsedDelta < 0) _failedJourneySteps.Clear();
+            else ExpireFailedJourneySteps(elapsedMilliseconds);
             var reset = sceneChanged || elapsedDelta < 0 || elapsedDelta > 1000 ||
                         _journeyPlan == null || _journeyIslandLife != allowIslandLife ||
                         _journeyFollowLoadingZones != followLoadingZones ||
@@ -1441,6 +1499,7 @@ namespace ProjectZ
                     }
                     else
                     {
+                        RememberFailedJourneyStep(movementTarget, elapsedMilliseconds);
                         _journeyVariant++;
                         if (!RetryManualDestination(map, viewport))
                             StartJourney(
@@ -2028,7 +2087,7 @@ namespace ProjectZ
             var actorY = actor.BodyY + actor.BodyHeight / 2f;
             if (ReferenceEquals(_liveActorMap, map) &&
                 _liveActors.TryGetValue(actorIndex, out var state) &&
-                TryGetLiveActorBody(actor, state, out var liveBody))
+                LiveWallpaperMap.TryGetLiveActorBody(actor, state, out var liveBody))
             {
                 actorX = liveBody.X + liveBody.Width / 2f;
                 actorY = liveBody.Y + liveBody.Height / 2f;
@@ -2074,20 +2133,16 @@ namespace ProjectZ
             var bodyY = state.PixelY + enemy.BodyY - enemy.EntityY;
             var centerX = bodyX + enemy.BodyWidth / 2f;
             var centerY = bodyY + enemy.BodyHeight / 2f;
-            var originalCenterX = enemy.BodyX + enemy.BodyWidth / 2f;
-            var originalCenterY = enemy.BodyY + enemy.BodyHeight / 2f;
             var distances = new[]
             {
                 Vector2.DistanceSquared(fallback,
-                    new Vector2(enemy.BodyX - 12f, originalCenterY + 5f)),
+                    new Vector2(bodyX - 12f, centerY + 5f)),
                 Vector2.DistanceSquared(fallback,
-                    new Vector2(enemy.BodyX + enemy.BodyWidth + 12f,
-                        originalCenterY + 5f)),
+                    new Vector2(bodyX + enemy.BodyWidth + 12f, centerY + 5f)),
                 Vector2.DistanceSquared(fallback,
-                    new Vector2(originalCenterX, enemy.BodyY - 6f)),
+                    new Vector2(centerX, bodyY - 6f)),
                 Vector2.DistanceSquared(fallback,
-                    new Vector2(originalCenterX,
-                        enemy.BodyY + enemy.BodyHeight + 14f))
+                    new Vector2(centerX, bodyY + enemy.BodyHeight + 14f))
             };
             var side = 0;
             for (var index = 1; index < distances.Length; index++)
@@ -2112,7 +2167,7 @@ namespace ProjectZ
                 !_liveActors.TryGetValue(actorIndex, out var state))
                 return fallback;
             var actor = map.Actors[actorIndex];
-            if (!TryGetLiveActorBody(actor, state, out _))
+            if (!LiveWallpaperMap.TryGetLiveActorBody(actor, state, out _))
                 return fallback;
             return LiveWallpaperActorSimulation.ResolveInteractionApproach(
                 actor, state, fallback);
@@ -2225,55 +2280,16 @@ namespace ProjectZ
                     new LiveWallpaperCollisionBounds(
                         pair.Value.X, pair.Value.Y, TileSize, TileSize));
             }
+            var navigation = GetNavigationMap(map);
             for (var actorIndex = 0; actorIndex < map.Actors.Count; actorIndex++)
-            {
-                var actor = map.Actors[actorIndex];
-                if (actor.BodyWidth <= 0 || actor.BodyHeight <= 0)
-                    continue;
-                if (ReferenceEquals(_liveActorMap, map) &&
-                    _liveActors.TryGetValue(actorIndex, out var liveState) &&
-                    !liveState.BlocksMovement)
-                    continue;
-                var collision = new LiveWallpaperCollisionBounds(
-                    actor.BodyX, actor.BodyY, actor.BodyWidth, actor.BodyHeight);
-                if (ReferenceEquals(_liveActorMap, map) &&
-                    _liveActors.TryGetValue(actorIndex, out liveState) &&
-                    TryGetLiveActorBody(actor, liveState, out var liveBody))
-                    collision = new LiveWallpaperCollisionBounds(
-                        liveBody.X, liveBody.Y, liveBody.Width, liveBody.Height);
-                overlapArea += GetRectangleOverlapArea(
-                    bodyX, bodyY, _body.Width, _body.Height, collision);
-            }
+                if (navigation.TryGetActorBody(actorIndex, out var actorBody))
+                    overlapArea += GetRectangleOverlapArea(
+                        bodyX, bodyY, _body.Width, _body.Height, actorBody);
             if (includeEnemies)
-            {
-                if (!ReferenceEquals(_liveEnemyMap, map) || _liveEnemies.Count == 0)
-                {
-                    foreach (var enemy in map.Enemies)
-                    {
+                for (var enemyIndex = 0; enemyIndex < map.Enemies.Count; enemyIndex++)
+                    if (navigation.TryGetEnemyBody(enemyIndex, out var enemyBody))
                         overlapArea += GetRectangleOverlapArea(
-                            bodyX, bodyY, _body.Width, _body.Height,
-                            new LiveWallpaperCollisionBounds(
-                                enemy.BodyX, enemy.BodyY,
-                                enemy.BodyWidth, enemy.BodyHeight));
-                    }
-                }
-                else
-                {
-                    foreach (var pair in _liveEnemies)
-                    {
-                        if (!pair.Value.Visible || pair.Key < 0 ||
-                            pair.Key >= map.Enemies.Count)
-                            continue;
-                        var enemy = map.Enemies[pair.Key];
-                        overlapArea += GetRectangleOverlapArea(
-                            bodyX, bodyY, _body.Width, _body.Height,
-                            new LiveWallpaperCollisionBounds(
-                                pair.Value.PixelX + enemy.BodyX - enemy.EntityX,
-                                pair.Value.PixelY + enemy.BodyY - enemy.EntityY,
-                                enemy.BodyWidth, enemy.BodyHeight));
-                    }
-                }
-            }
+                            bodyX, bodyY, _body.Width, _body.Height, enemyBody);
             return MathF.Min(overlapArea, _body.Width * _body.Height);
         }
 
@@ -2301,56 +2317,16 @@ namespace ProjectZ
                         bodyX, bodyY, _body.Width, _body.Height, collision) > 0f)
                     return true;
             }
+            var navigation = GetNavigationMap(map);
             for (var actorIndex = 0; actorIndex < map.Actors.Count; actorIndex++)
-            {
-                var actor = map.Actors[actorIndex];
-                if (actor.BodyWidth <= 0 || actor.BodyHeight <= 0)
-                    continue;
-                if (ReferenceEquals(_liveActorMap, map) &&
-                    _liveActors.TryGetValue(actorIndex, out var liveState) &&
-                    !liveState.BlocksMovement)
-                    continue;
-                collision = new LiveWallpaperCollisionBounds(
-                    actor.BodyX, actor.BodyY, actor.BodyWidth, actor.BodyHeight);
-                if (ReferenceEquals(_liveActorMap, map) &&
-                    _liveActors.TryGetValue(actorIndex, out liveState) &&
-                    TryGetLiveActorBody(actor, liveState, out var liveBody))
-                    collision = new LiveWallpaperCollisionBounds(
-                        liveBody.X, liveBody.Y, liveBody.Width, liveBody.Height);
-                if (GetRectangleOverlapArea(
-                        bodyX, bodyY, _body.Width, _body.Height, collision) > 0f)
+                if (navigation.TryGetActorBody(actorIndex, out collision) &&
+                    GetRectangleOverlapArea(bodyX, bodyY, _body.Width, _body.Height, collision) > 0f)
                     return true;
-            }
-            if (includeEnemies && ReferenceEquals(_liveEnemyMap, map) &&
-                _liveEnemies.Count > 0)
-            {
-                foreach (var pair in _liveEnemies)
-                {
-                    if (!pair.Value.Visible || pair.Key < 0 ||
-                        pair.Key >= map.Enemies.Count)
-                        continue;
-                    var enemy = map.Enemies[pair.Key];
-                    collision = new LiveWallpaperCollisionBounds(
-                        pair.Value.PixelX + enemy.BodyX - enemy.EntityX,
-                        pair.Value.PixelY + enemy.BodyY - enemy.EntityY,
-                        enemy.BodyWidth, enemy.BodyHeight);
-                    if (GetRectangleOverlapArea(
-                            bodyX, bodyY, _body.Width, _body.Height, collision) > 0f)
+            if (includeEnemies)
+                for (var enemyIndex = 0; enemyIndex < map.Enemies.Count; enemyIndex++)
+                    if (navigation.TryGetEnemyBody(enemyIndex, out collision) &&
+                        GetRectangleOverlapArea(bodyX, bodyY, _body.Width, _body.Height, collision) > 0f)
                         return true;
-                }
-            }
-            else if (includeEnemies)
-            {
-                foreach (var enemy in map.Enemies)
-                {
-                    collision = new LiveWallpaperCollisionBounds(
-                        enemy.BodyX, enemy.BodyY,
-                        enemy.BodyWidth, enemy.BodyHeight);
-                    if (GetRectangleOverlapArea(
-                            bodyX, bodyY, _body.Width, _body.Height, collision) > 0f)
-                        return true;
-                }
-            }
             collision = default;
             return false;
         }
@@ -2935,80 +2911,12 @@ namespace ProjectZ
         }
 
         private bool IntersectsLiveActor(
-            LiveWallpaperMap map, float x, float y, float width, float height)
-        {
-            for (var actorIndex = 0; actorIndex < map.Actors.Count; actorIndex++)
-            {
-                var actor = map.Actors[actorIndex];
-                if (actor.BodyWidth <= 0 || actor.BodyHeight <= 0)
-                    continue;
-                if (ReferenceEquals(_liveActorMap, map) &&
-                    _liveActors.TryGetValue(actorIndex, out var state) &&
-                    !state.BlocksMovement)
-                    continue;
-                var bodyX = (float)actor.BodyX;
-                var bodyY = (float)actor.BodyY;
-                var bodyWidth = (float)actor.BodyWidth;
-                var bodyHeight = (float)actor.BodyHeight;
-                if (ReferenceEquals(_liveActorMap, map) &&
-                    _liveActors.TryGetValue(actorIndex, out state) &&
-                    TryGetLiveActorBody(actor, state, out var liveBody))
-                {
-                    bodyX = liveBody.X;
-                    bodyY = liveBody.Y;
-                    bodyWidth = liveBody.Width;
-                    bodyHeight = liveBody.Height;
-                }
-                if (x < bodyX + bodyWidth && x + width > bodyX &&
-                    y < bodyY + bodyHeight && y + height > bodyY)
-                    return true;
-            }
-            return false;
-        }
-
-        private static bool TryGetLiveActorBody(
-            LiveWallpaperMapActor actor,
-            LiveWallpaperActorState state,
-            out (float X, float Y, float Width, float Height) body)
-        {
-            var spawnEntityX = actor.PixelX + 8f;
-            var spawnEntityY = actor.PixelY + 16f;
-            if (actor.Kind == LiveWallpaperMapActorKind.BowWow)
-                spawnEntityX = actor.PixelX;
-            if (actor.Kind is not (LiveWallpaperMapActorKind.Dog or
-                LiveWallpaperMapActorKind.Bird or
-                LiveWallpaperMapActorKind.BowWow or
-                LiveWallpaperMapActorKind.Owl))
-            {
-                body = default;
-                return false;
-            }
-            body = (
-                state.EntityX + actor.BodyX - spawnEntityX,
-                state.EntityY + actor.BodyY - spawnEntityY,
-                actor.BodyWidth,
-                actor.BodyHeight);
-            return true;
-        }
+            LiveWallpaperMap map, float x, float y, float width, float height) =>
+            GetNavigationMap(map).IntersectsActor(x, y, width, height);
 
         private bool IntersectsLiveEnemy(
-            LiveWallpaperMap map, float x, float y, float width, float height)
-        {
-            if (!ReferenceEquals(_liveEnemyMap, map) || _liveEnemies.Count == 0)
-                return map.IntersectsEnemy(x, y, width, height);
-            foreach (var pair in _liveEnemies)
-            {
-                if (!pair.Value.Visible || pair.Key < 0 || pair.Key >= map.Enemies.Count)
-                    continue;
-                var enemy = map.Enemies[pair.Key];
-                var bodyX = pair.Value.PixelX + enemy.BodyX - enemy.EntityX;
-                var bodyY = pair.Value.PixelY + enemy.BodyY - enemy.EntityY;
-                if (x < bodyX + enemy.BodyWidth && x + width > bodyX &&
-                    y < bodyY + enemy.BodyHeight && y + height > bodyY)
-                    return true;
-            }
-            return false;
-        }
+            LiveWallpaperMap map, float x, float y, float width, float height) =>
+            GetNavigationMap(map).IntersectsEnemy(x, y, width, height);
 
         private bool TryStartBlockingEnemyAttack(
             LiveWallpaperMap map, Vector2 movement, long elapsedMilliseconds,

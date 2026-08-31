@@ -77,6 +77,7 @@ WallpaperIndoorNavigationTests.Run();
 WallpaperTouchRoutingTests.Run();
 WallpaperPathingRecoveryTests.Run();
 WallpaperSideViewTests.Run();
+WallpaperLiveNavigationTests.Run();
 GameplayCrashRegressionTests.Run();
 MapTransitionArrivalTests.Run();
 ArchipelagoConnectionWarningTests.Run();
@@ -1023,8 +1024,10 @@ Assert(Math.Abs(fairyFloatPeak - 16f) < 0.001f &&
            grandmotherRightLink, 5) &&
        !LiveWallpaperActorSimulation.IsInteraction(
            grandmotherRightLink, 4) &&
-       Math.Abs(dogLiveApproach.X - dogStaticApproach.X - 24f) < 0.001f &&
-       Math.Abs(dogLiveApproach.Y - dogStaticApproach.Y - 8f) < 0.001f,
+       // The moved dog's left side is now nearest to the old target; do not
+       // carry the original right-side choice through the dog's displacement.
+       Math.Abs(dogLiveApproach.X - (dogActor.BodyX + 24f - 8f)) < 0.001f &&
+       Math.Abs(dogLiveApproach.Y - (dogActor.BodyY + 8f + dogActor.BodyHeight / 2f + 5f)) < 0.001f,
        "Installed NPC ambience must retain the fairy float, grandmother facing, raccoon laugh trigger, and interaction targeting from gameplay.");
 var visualObjectMapData =
     "3\n0\n0\noverworld.png\n8\n2\n1\n0,0,0,0,0,0,0,0\n0,0,0,0,0,0,0,0\n" +

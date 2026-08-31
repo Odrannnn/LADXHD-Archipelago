@@ -487,13 +487,27 @@ namespace ProjectZ
         // ObjMoveStone's moved state cannot be pushed again until it resets.
         public LiveWallpaperMap WithMovedBlocksForNavigation(
             IReadOnlyDictionary<int, Microsoft.Xna.Framework.Vector2> positions,
-            IReadOnlySet<int> relocated)
+            IReadOnlySet<int> relocated) =>
+            WithNavigationState(positions, relocated, null, null, null);
+
+        internal LiveWallpaperMap WithNavigationState(
+            IReadOnlyDictionary<int, Microsoft.Xna.Framework.Vector2> positions,
+            IReadOnlySet<int> relocated,
+            IReadOnlyDictionary<int, LiveWallpaperActorState> actors,
+            IReadOnlyDictionary<int, LiveWallpaperEnemyState> enemies,
+            IReadOnlyDictionary<(Microsoft.Xna.Framework.Point From, Microsoft.Xna.Framework.Point To), long> failedSteps)
         {
-            if (relocated.Count == 0)
+            if (relocated.Count == 0 && actors == null && enemies == null && failedSteps == null)
                 return this;
             var navigation = (LiveWallpaperMap)MemberwiseClone();
             navigation._navigationMovedBlocks = new Dictionary<int, Microsoft.Xna.Framework.Vector2>(positions);
             navigation._navigationRelocatedBlocks = new HashSet<int>(relocated);
+            // Live states are owned and updated on the wallpaper thread. Keep
+            // references so route queries see movement/death without cloning
+            // the map or scheduling a search on every rendered frame.
+            navigation._navigationActors = actors;
+            navigation._navigationEnemies = enemies;
+            navigation._navigationFailedSteps = failedSteps;
             return navigation;
         }
 
@@ -1304,13 +1318,10 @@ namespace ProjectZ
             {
                 if (index == ignoredActorIndex)
                     continue;
-                var actor = Actors[index];
-                if (ignoreOwl && actor.Kind == LiveWallpaperMapActorKind.Owl)
+                if (!TryGetActorBody(index, out var body, ignoreOwl))
                     continue;
-                if (actor.BodyWidth <= 0 || actor.BodyHeight <= 0)
-                    continue;
-                if (x < actor.BodyX + actor.BodyWidth && x + width > actor.BodyX &&
-                    y < actor.BodyY + actor.BodyHeight && y + height > actor.BodyY)
+                if (x < body.Right && x + width > body.X &&
+                    y < body.Bottom && y + height > body.Y)
                     return true;
             }
             return false;
@@ -1321,13 +1332,23 @@ namespace ProjectZ
         {
             if (width <= 0 || height <= 0)
                 return false;
+            if (_navigationEnemies?.Count > 0)
+            {
+                foreach (var pair in _navigationEnemies)
+                    if (pair.Key != ignoredEnemyIndex && TryGetEnemyBody(pair.Key, out var liveBody) &&
+                        x < liveBody.Right && x + width > liveBody.X &&
+                        y < liveBody.Bottom && y + height > liveBody.Y)
+                        return true;
+                return false;
+            }
             for (var index = 0; index < Enemies.Count; index++)
             {
                 if (index == ignoredEnemyIndex)
                     continue;
-                var enemy = Enemies[index];
-                if (x < enemy.BodyX + enemy.BodyWidth && x + width > enemy.BodyX &&
-                    y < enemy.BodyY + enemy.BodyHeight && y + height > enemy.BodyY)
+                if (!TryGetEnemyBody(index, out var body))
+                    continue;
+                if (x < body.Right && x + width > body.X &&
+                    y < body.Bottom && y + height > body.Y)
                     return true;
             }
             return false;

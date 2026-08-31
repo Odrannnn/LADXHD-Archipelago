@@ -99,33 +99,25 @@ namespace ProjectZ
             LiveWallpaperActorState state,
             Vector2 fallback)
         {
-            if (actor.BodyWidth <= 0 || actor.BodyHeight <= 0 ||
-                actor.Kind is not (LiveWallpaperMapActorKind.Dog or
-                    LiveWallpaperMapActorKind.Bird or
-                    LiveWallpaperMapActorKind.BowWow))
+            if (!Session.IsMobile(actor.Kind) ||
+                !LiveWallpaperMap.TryGetLiveActorBody(actor, state, out var body))
                 return fallback;
-            var spawnEntityX = actor.Kind == LiveWallpaperMapActorKind.BowWow
-                ? actor.PixelX
-                : actor.PixelX + 8f;
-            var spawnEntityY = actor.PixelY + 16f;
-            var bodyX = state.EntityX + actor.BodyX - spawnEntityX;
-            var bodyY = state.EntityY + actor.BodyY - spawnEntityY;
+            var bodyX = body.X;
+            var bodyY = body.Y;
             var centerX = bodyX + actor.BodyWidth / 2f;
             var centerY = bodyY + actor.BodyHeight / 2f;
-            var originalCenterX = actor.BodyX + actor.BodyWidth / 2f;
-            var originalCenterY = actor.BodyY + actor.BodyHeight / 2f;
+            // The planner already uses live positions. Select an approach
+            // relative to this body, not its original spawn across the room.
             var distances = new[]
             {
                 Vector2.DistanceSquared(fallback,
-                    new Vector2(actor.BodyX - 8f, originalCenterY + 5f)),
+                    new Vector2(bodyX - 8f, centerY + 5f)),
                 Vector2.DistanceSquared(fallback,
-                    new Vector2(actor.BodyX + actor.BodyWidth + 8f,
-                        originalCenterY + 5f)),
+                    new Vector2(bodyX + actor.BodyWidth + 8f, centerY + 5f)),
                 Vector2.DistanceSquared(fallback,
-                    new Vector2(originalCenterX, actor.BodyY - 2f)),
+                    new Vector2(centerX, bodyY - 2f)),
                 Vector2.DistanceSquared(fallback,
-                    new Vector2(originalCenterX,
-                        actor.BodyY + actor.BodyHeight + 12f))
+                    new Vector2(centerX, bodyY + actor.BodyHeight + 12f))
             };
             var side = 0;
             for (var index = 1; index < distances.Length; index++)
@@ -220,7 +212,7 @@ namespace ProjectZ
                     runtime.Direction, runtime.Action);
             }
 
-            private static bool IsMobile(LiveWallpaperMapActorKind kind) =>
+            internal static bool IsMobile(LiveWallpaperMapActorKind kind) =>
                 kind is LiveWallpaperMapActorKind.Dog or
                     LiveWallpaperMapActorKind.Butterfly or
                     LiveWallpaperMapActorKind.Bird or

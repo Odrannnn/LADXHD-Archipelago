@@ -77,6 +77,12 @@ Tapped destinations survive camera changes and visibility resumes. When blocked,
 same goal a bounded number of times before returning to exploration; real progress renews that
 retry budget. Fallback searches reuse the already discovered reachable area instead of repeatedly
 searching disconnected rooms. A missing route does not relocate Link to a preset position.
+Route searches and movement share live NPC/enemy body queries, so moved residents and defeated
+enemies no longer leave their original footprint in planned routes. Combat and interaction detours
+also use those current positions. Searches run when needed, not on every actor update. Recently
+stalled steps receive a temporary routing cost (at most eight steps, expiring after fifteen seconds),
+favoring available detours without turning the only usable passage into an impassable wall.
+This short-term memory resets on map entry and does not change collision or item rules.
 Side-view passages use gravity, feather jumps, swimming, ladders and directional platforms instead
 of top-down routes. Their bounded route search replays button inputs through the same lightweight
 physics used during movement; gravity, steering, jump and ladder calculations are shared with the

@@ -97,7 +97,7 @@ namespace ProjectZ
     /// </summary>
     public static class LiveWallpaperJourneyPlanner
     {
-        private const int GridStep = 8;
+        internal const int GridStep = 8;
         private const int VisibleRouteMargin = 32;
         private const float LinkBodyOffsetX = -4f;
         private const float LinkBodyOffsetY = -10f;
@@ -749,9 +749,9 @@ namespace ProjectZ
             var enemies = new List<int>();
             for (var index = 0; index < map.Enemies.Count; index++)
             {
-                var enemy = map.Enemies[index];
-                var centerX = enemy.BodyX + enemy.BodyWidth / 2;
-                var centerY = enemy.BodyY + enemy.BodyHeight / 2;
+                if (!map.TryGetEnemyBody(index, out var enemy)) continue;
+                var centerX = enemy.X + enemy.Width / 2;
+                var centerY = enemy.Y + enemy.Height / 2;
                 if (centerX >= minX && centerX <= maxX &&
                     centerY >= minY && centerY <= maxY)
                     enemies.Add(index);
@@ -763,7 +763,8 @@ namespace ProjectZ
             for (var enemyAttempt = 0; enemyAttempt < enemies.Count; enemyAttempt++)
             {
                 var enemyIndex = enemies[(enemyOffset + enemyAttempt) % enemies.Count];
-                var approaches = GetEnemyApproaches(map.Enemies[enemyIndex]);
+                if (!map.TryGetEnemyBody(enemyIndex, out var enemyBody)) continue;
+                var approaches = GetEnemyApproaches(enemyBody);
                 for (var approachAttempt = 0; approachAttempt < approaches.Length;
                      approachAttempt++)
                 {
@@ -804,16 +805,18 @@ namespace ProjectZ
             return false;
         }
 
-        private static Point[] GetEnemyApproaches(LiveWallpaperMapEnemy enemy)
+        private static Point[] GetEnemyApproaches(LiveWallpaperCollisionBounds body)
         {
-            var centerX = enemy.BodyX + enemy.BodyWidth / 2;
-            var centerY = enemy.BodyY + enemy.BodyHeight / 2;
+            var enemy = new Rectangle((int)MathF.Round(body.X), (int)MathF.Round(body.Y),
+                (int)body.Width, (int)body.Height);
+            var centerX = enemy.X + enemy.Width / 2;
+            var centerY = enemy.Y + enemy.Height / 2;
             return
             [
-                new Point(enemy.BodyX - 12, centerY + 5),
-                new Point(enemy.BodyX + enemy.BodyWidth + 12, centerY + 5),
-                new Point(centerX, enemy.BodyY - 6),
-                new Point(centerX, enemy.BodyY + enemy.BodyHeight + 14)
+                new Point(enemy.X - 12, centerY + 5),
+                new Point(enemy.Right + 12, centerY + 5),
+                new Point(centerX, enemy.Y - 6),
+                new Point(centerX, enemy.Bottom + 14)
             ];
         }
 
@@ -879,8 +882,9 @@ namespace ProjectZ
                     actor.Kind is LiveWallpaperMapActorKind.Butterfly or
                         LiveWallpaperMapActorKind.Owl)
                     continue;
-                var centerX = actor.BodyX + actor.BodyWidth / 2;
-                var centerY = actor.BodyY + actor.BodyHeight / 2;
+                if (!map.TryGetActorBody(index, out var actorBody)) continue;
+                var centerX = actorBody.X + actorBody.Width / 2;
+                var centerY = actorBody.Y + actorBody.Height / 2;
                 if (centerX >= minX && centerX <= maxX && centerY >= minY && centerY <= maxY)
                     actors.Add(index);
             }
@@ -891,7 +895,8 @@ namespace ProjectZ
             for (var actorAttempt = 0; actorAttempt < actors.Count; actorAttempt++)
             {
                 var actorIndex = actors[(actorOffset + actorAttempt) % actors.Count];
-                var approaches = GetActorApproaches(map.Actors[actorIndex]);
+                if (!map.TryGetActorBody(actorIndex, out var actorBody)) continue;
+                var approaches = GetActorApproaches(actorBody);
                 for (var approachAttempt = 0; approachAttempt < approaches.Length; approachAttempt++)
                 {
                     var approach = approaches[(approachAttempt + behavior) % approaches.Length];
@@ -945,16 +950,18 @@ namespace ProjectZ
             return nearestIndex;
         }
 
-        private static Point[] GetActorApproaches(LiveWallpaperMapActor actor)
+        private static Point[] GetActorApproaches(LiveWallpaperCollisionBounds body)
         {
-            var centerX = actor.BodyX + actor.BodyWidth / 2;
-            var centerY = actor.BodyY + actor.BodyHeight / 2;
+            var actor = new Rectangle((int)MathF.Round(body.X), (int)MathF.Round(body.Y),
+                (int)body.Width, (int)body.Height);
+            var centerX = actor.X + actor.Width / 2;
+            var centerY = actor.Y + actor.Height / 2;
             return
             [
-                new Point(actor.BodyX - 8, centerY + 5),
-                new Point(actor.BodyX + actor.BodyWidth + 8, centerY + 5),
-                new Point(centerX, actor.BodyY - 2),
-                new Point(centerX, actor.BodyY + actor.BodyHeight + 12)
+                new Point(actor.X - 8, centerY + 5),
+                new Point(actor.Right + 8, centerY + 5),
+                new Point(centerX, actor.Y - 2),
+                new Point(centerX, actor.Bottom + 12)
             ];
         }
 
@@ -1985,7 +1992,13 @@ namespace ProjectZ
                             pixelX, pixelY, minX, minY, maxX, maxY,
                             next == endIndex) * (allowDiagonal ? 10 : 1)
                         : 0;
-                    var nextCost = cost[current] + stepCost + edgePenalty;
+                    // A recently stalled step is less attractive, not solid.
+                    // Keep a sole valid passage available and retain all of
+                    // the ordinary collision/item checks above.
+                    var failurePenalty = map.GetNavigationStepPenalty(
+                        new Point(minX + currentX * GridStep, minY + currentY * GridStep),
+                        new Point(pixelX, pixelY)) * stepCost;
+                    var nextCost = cost[current] + stepCost + edgePenalty + failurePenalty;
                     if (nextCost >= cost[next])
                         continue;
                     cost[next] = nextCost;
