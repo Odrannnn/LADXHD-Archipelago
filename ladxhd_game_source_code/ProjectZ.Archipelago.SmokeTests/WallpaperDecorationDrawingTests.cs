@@ -1,5 +1,7 @@
 using Microsoft.Xna.Framework;
 using ProjectZ;
+using System.IO;
+using System.Text;
 
 internal static class WallpaperDecorationDrawingTests
 {
@@ -65,6 +67,96 @@ internal static class WallpaperDecorationDrawingTests
         }
         if (GC.GetAllocatedBytesForCurrentThread() != allocated)
             throw new InvalidOperationException("Decoration key/visibility queries must not allocate per frame.");
+
+        CheckAnimatedTileGrid();
+        CheckDecorationGrid();
+    }
+
+    private static void CheckAnimatedTileGrid()
+    {
+        var text = new StringBuilder("3\n0\n0\noverworld.png\n4\n3\n1\n");
+        for (var row = 0; row < 3; row++)
+            text.AppendLine("0,0,0,0");
+        text.Append("2\nwave1\nflower\n4\n")
+            .AppendLine("0;0;0")
+            .AppendLine("1;16;0")
+            .AppendLine("0;16;0")
+            .AppendLine("1;48;32");
+        if (!LiveWallpaperMap.TryLoad(
+                new StringReader(text.ToString()), out var map))
+            throw new InvalidOperationException("Animated-tile grid fixture must load.");
+
+        var first = map.GetAnimatedTilesAt(0, 0);
+        var shared = map.GetAnimatedTilesAt(1, 0);
+        var last = map.GetAnimatedTilesAt(3, 2);
+        if (map.AnimatedTiles.Count != 4 || first.Length != 1 ||
+            first[0].SpriteId != "water_0" || shared.Length != 2 ||
+            shared[0].SpriteId != "flower_0" ||
+            shared[1].SpriteId != "water_0" || last.Length != 1 ||
+            last[0].SpriteId != "flower_0" ||
+            !map.GetAnimatedTilesAt(-1, 0).IsEmpty ||
+            !map.GetAnimatedTilesAt(4, 2).IsEmpty)
+            throw new InvalidOperationException(
+                "Animated-tile cells must preserve every installed object and same-cell draw order.");
+
+        for (var index = 0; index < 100; index++)
+            _ = map.GetAnimatedTilesAt(index & 3, index % 3).Length;
+        var allocated = GC.GetAllocatedBytesForCurrentThread();
+        var count = 0;
+        for (var index = 0; index < 10000; index++)
+        {
+            foreach (var tile in map.GetAnimatedTilesAt(index & 3, index % 3))
+                count += tile.FrameCount;
+        }
+        if (GC.GetAllocatedBytesForCurrentThread() != allocated || count <= 0)
+            throw new InvalidOperationException(
+                "Animated-tile cell queries must be allocation-free per frame.");
+    }
+
+    private static void CheckDecorationGrid()
+    {
+        var text = new StringBuilder("3\n0\n0\noverworld.png\n5\n4\n1\n");
+        for (var row = 0; row < 4; row++)
+            text.AppendLine("0,0,0,0,0");
+        text.Append("3\ntree0\nmoveStone\ndungeonSwitch\n4\n")
+            .AppendLine("0;0;0")
+            .AppendLine("1;32;16")
+            .AppendLine("2;48;0")
+            .AppendLine("0;0;0");
+        if (!LiveWallpaperMap.TryLoad(
+                new StringReader(text.ToString()), out var map))
+            throw new InvalidOperationException(
+                "Decoration-grid fixture must load.");
+
+        var trees = map.GetDecorationIndicesAtDrawCell(1, 1);
+        var block = map.GetDecorationIndicesAtDrawCell(2, 1);
+        var offsetObject = map.GetDecorationIndicesAtDrawCell(3, 0);
+        if (map.Decorations.Count != 4 || trees.Length != 2 ||
+            trees[0] != 2 || trees[1] != 3 || block.Length != 1 ||
+            block[0] != 0 || offsetObject.Length != 1 ||
+            offsetObject[0] != 1 || map.MovableDecorationIndices.Count != 1 ||
+            map.MovableDecorationIndices[0] != 0 ||
+            !map.GetDecorationIndicesAtDrawCell(-1, 0).IsEmpty ||
+            !map.GetDecorationIndicesAtDrawCell(5, 3).IsEmpty)
+            throw new InvalidOperationException(
+                "Decoration cells must use final draw anchors, preserve source order, and retain movable-block indices. " +
+                $"decorations={map.Decorations.Count}, " +
+                $"trees=[{string.Join(',', trees.ToArray())}], " +
+                $"block=[{string.Join(',', block.ToArray())}], " +
+                $"offset=[{string.Join(',', offsetObject.ToArray())}], " +
+                $"movable=[{string.Join(',', map.MovableDecorationIndices)}]");
+
+        for (var index = 0; index < 100; index++)
+            _ = map.GetDecorationIndicesAtDrawCell(index % 5, index & 3).Length;
+        var allocated = GC.GetAllocatedBytesForCurrentThread();
+        var count = 0;
+        for (var index = 0; index < 10000; index++)
+            foreach (var decorationIndex in
+                     map.GetDecorationIndicesAtDrawCell(index % 5, index & 3))
+                count += decorationIndex + 1;
+        if (GC.GetAllocatedBytesForCurrentThread() != allocated || count <= 0)
+            throw new InvalidOperationException(
+                "Decoration-cell queries must be allocation-free per frame.");
     }
 
     private static void Compare(LiveWallpaperMapDecoration decoration, LiveWallpaperMapViewport viewport,

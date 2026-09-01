@@ -37,6 +37,7 @@ namespace ProjectZ
         public const float Gravity = -0.075f;
         public const float GroundDrag = 0.85f;
         public const float ThrownAirDrag = 0.975f;
+        public const float CarryAnimationSpeedMultiplier = 2f;
         public const long PullMilliseconds =
             (long)LinkGameplayMotion.PullMilliseconds;
         public const long PreCarryMilliseconds =

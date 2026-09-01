@@ -29,7 +29,7 @@ namespace ProjectZ.InGame.GameObjects.Enemies
         private float _shotCooldown = 2000;
         private int _direction;
         private int _lives = EnemyLives.Octorok;
-        private int _dropIndex = 2;
+        private int _dropIndex = EnemyDeathGameplay.OctorokDrop;
 
         public bool IsVisible { get; internal set; }
 

@@ -34,8 +34,8 @@ ZIP.
   A wider, rotation-stable camera, installed object shadows and map lighting, a local-clock sun
   cycle with directional shadows and separate ambient/sun/lamp illumination,
   cached tiles and effects, smooth following, visibility-based suspension, and
-  selectable 15/30/60 FPS balance animation and battery use. Wallpaper activity is independent of
-  saves and Archipelago progress.
+  selectable adaptive 15-60 FPS or fixed 15/30/60 FPS balance animation and battery use.
+  Wallpaper activity is independent of saves and Archipelago progress.
 - A phone-native, transactional game-data builder: select the original v1.0.0 ZIP on first launch,
   then let the app verify, patch, stage, and activate the Android assets locally.
 - A separate Android identity, `com.zelda.ladxhd.archipelago`, so this build can coexist with the

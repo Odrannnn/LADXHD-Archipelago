@@ -46,6 +46,35 @@ away from the untouched v1.0.0 release.
 
 ## Release checklist
 
+For the local ARM64 candidate used during development, run the repository-owned pinned workflow:
+
+```powershell
+pwsh -File tools/build_android_arm64.ps1 -OutputDirectory .local/build/android-arm64
+```
+
+The workflow verifies the public-source boundary, restores only the ARM64 and smoke graphs,
+compiles the Android platform project as a distinct fail-fast step, runs the regression suite,
+publishes the assetless APK, rejects stale/missing output, and validates the APK contents. This
+separate Android compile is required even after Core and smoke builds pass because Android binding
+members and cross-assembly visibility are only checked by the platform project. The output remains
+unsigned release input: align and sign only after the complete workflow succeeds. The paired
+`-SkipRestore -SkipSmoke` options are only for repeated local compilation after the same revision
+has already completed the full workflow and its Android assets file is still valid. Neither option
+is allowed for an installable or release candidate.
+
+The .NET Android target initially emits an APK named `*-Signed.apk`; that name only describes its
+framework packaging and does **not** mean it carries this project's release signing lineage. The
+script requires that fresh output, then renames it to `*-framework.apk`. Only
+`tools/sign_android_release.ps1` may turn that verified framework package into an installable
+release APK.
+
+Sign only that refreshed unsigned output with `tools/sign_android_release.ps1`. The script requires
+explicit build-tools, keystore, password-file and lineage paths; it never stores those values in
+the repository. It aligns to the Android 16-KiB page requirement, applies the legacy/permanent
+proof-of-rotation lineage, verifies API 24-27 and API 28+ independently, checks the public permanent
+certificate fingerprint, removes its temporary unsigned file, and prints the final SHA-256. Never
+publish its inputs, password files, lineage, temporary material or an `.idsig` file.
+
 1. Build and run the Core/Archipelago smoke tests, including a migration with the canonical ZIP.
 2. Build the Android Release APK without the content-generation import.
 3. Align and sign it with the permanent release key and recorded signing lineage.

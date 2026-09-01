@@ -24,6 +24,9 @@ namespace ProjectZ
         // collision/animated-tile templates are not read or used by this class.
         private static readonly Lazy<Dictionary<string, GameObjectTemplate>> Definitions =
             new(() => GameObjectTemplates.CreateDefinitions(_ => Rectangle.Empty));
+        private int _shadowGridWidth;
+        private int _shadowGridHeight;
+        private int[][] _shadowGrid = [];
 
         public bool UseShadows { get; private set; } = true;
         public float ShadowHeight { get; private set; } = Values.ShadowHeightDefault;
@@ -32,6 +35,16 @@ namespace ProjectZ
         public Color Ambient { get; private set; } = Color.White;
         public List<LiveWallpaperMapShadow> Shadows { get; } = new();
         public List<LiveWallpaperSceneLight> Lights { get; } = new();
+
+        public ReadOnlySpan<int> GetShadowIndicesAt(int tileX, int tileY)
+        {
+            if (tileX < 0 || tileX >= _shadowGridWidth ||
+                tileY < 0 || tileY >= _shadowGridHeight ||
+                _shadowGrid.Length == 0)
+                return ReadOnlySpan<int>.Empty;
+            var cell = _shadowGrid[tileY * _shadowGridWidth + tileX];
+            return cell == null ? ReadOnlySpan<int>.Empty : cell;
+        }
 
         internal static bool TryResolve(LiveWallpaperMapObject mapObject,
             out GameObjectTemplate definition, out object[] parameters)
@@ -115,7 +128,29 @@ namespace ProjectZ
             var sortedLights = scene.Lights.OrderBy(light => light.Layer).ToArray();
             scene.Lights.Clear();
             scene.Lights.AddRange(sortedLights);
+            scene.BuildShadowGrid(map.Width, map.Height);
             return scene;
+        }
+
+        private void BuildShadowGrid(int width, int height)
+        {
+            _shadowGridWidth = width;
+            _shadowGridHeight = height;
+            var cells = new List<int>[checked(width * height)];
+            for (var index = 0; index < Shadows.Count; index++)
+            {
+                var shadow = Shadows[index];
+                var tileX = Math.Clamp(
+                    (int)MathF.Floor(shadow.EntityX / 16f), 0, width - 1);
+                var tileY = Math.Clamp(
+                    (int)MathF.Floor(shadow.EntityY / 16f), 0, height - 1);
+                var cellIndex = tileY * width + tileX;
+                (cells[cellIndex] ??= new List<int>()).Add(index);
+            }
+            _shadowGrid = new int[cells.Length][];
+            for (var index = 0; index < cells.Length; index++)
+                if (cells[index] != null)
+                    _shadowGrid[index] = cells[index].ToArray();
         }
     }
 }

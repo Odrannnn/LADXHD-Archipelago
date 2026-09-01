@@ -94,7 +94,8 @@ namespace ProjectZ.InGame.GameObjects.Things
             else
                 _sourceRectangle = baseItem.SourceRectangle.Value;
 
-            EntityPosition = new CPosition(posX + 8, posY + 8 + 3, 0);
+            var itemPosition = DroppedItemMotion.ItemPosition(posX, posY);
+            EntityPosition = new CPosition(itemPosition.X, itemPosition.Y, itemPosition.Z);
             EntitySize = new Rectangle(-9, -16, 18, 18);
 
             // The heart container piece needs additional offset on the Y axis.
@@ -104,7 +105,8 @@ namespace ProjectZ.InGame.GameObjects.Things
                 EntityPosition.Y += 3;
 
             // Add sound for the bounces.
-            _body = new BodyComponent(EntityPosition, -4, -8, 8, 8, 8)
+            _body = new BodyComponent(EntityPosition, DroppedItemMotion.ItemBodyOffsetX,
+                DroppedItemMotion.ItemBodyOffsetY, DroppedItemMotion.ItemBodyWidth, DroppedItemMotion.ItemBodyHeight, 8)
             {
                 RestAdditionalMovement = false,
                 Drag = DroppedItemMotion.GroundDrag,
@@ -126,7 +128,7 @@ namespace ProjectZ.InGame.GameObjects.Things
 
             // Despawn after 15 seconds, but only if it was jumping or fall from the sky.
             if (string.IsNullOrEmpty(saveKey) && !_isFlying && !Collectable)
-                stateIdle.Trigger.Add(new AiTriggerCountdown(15000, null, ToFading));
+                stateIdle.Trigger.Add(new AiTriggerCountdown(DroppedItemMotion.UncollectedDespawnMilliseconds, null, ToFading));
 
             var stateDelay = new AiState();
             var stateHoleFall = new AiState();
@@ -253,7 +255,7 @@ namespace ProjectZ.InGame.GameObjects.Things
                 {
                     IsJumping = true;
                     if (!Map.Is2dMap)
-                        _body.Velocity.Z = 1f;
+                        _body.Velocity.Z = DroppedItemMotion.ItemJumpVelocity;
                     else
                     {
                         Collectable = true;
@@ -265,7 +267,7 @@ namespace ProjectZ.InGame.GameObjects.Things
                 else if (strType == "d")
                 {
                     IsJumping = true;
-                    EntityPosition.Z = 60;
+                    EntityPosition.Z = DroppedItemMotion.ItemDropHeight;
                     _body.IsGrounded = false;
                     _body.RestAdditionalMovement = true;
 
@@ -339,26 +341,15 @@ namespace ProjectZ.InGame.GameObjects.Things
             // Fall into the water.
             if (!_isSwimming && !Map.Is2dMap)
             {
-                if (_body.IsGrounded && _body.CurrentFieldState.HasFlag(MapStates.FieldStates.DeepWater))
+                if (DroppedItemMotion.AdvanceDeepWater(ref _deepWaterCounter, _body.IsGrounded,
+                    _body.CurrentFieldState.HasFlag(MapStates.FieldStates.DeepWater), Game1.DeltaTime))
                 {
-                    _deepWaterCounter -= Game1.DeltaTime;
-
-                    if (_deepWaterCounter <= 0)
-                    {
-                        // Spawn splash effect.
-                        var fallAnimation = new ObjAnimator(Map,
-                            (int)(_body.Position.X + _body.OffsetX + _body.Width / 2.0f),
-                            (int)(_body.Position.Y + _body.OffsetY + _body.Height / 2.0f),
-                            Values.LayerPlayer, "Particles/fishingSplash", "idle", true);
-
-                        Map.Objects.SpawnObject(fallAnimation);
-                        Map.Objects.DeleteObjects.Add(this);
-                        RemoveSpriteShadow();
-                    }
-                }
-                else
-                {
-                    _deepWaterCounter = 125;
+                    var splashPosition = DroppedItemMotion.WaterSplashPosition(_body.Position.X, _body.Position.Y);
+                    var fallAnimation = new ObjAnimator(Map, splashPosition.X, splashPosition.Y,
+                        Values.LayerPlayer, DroppedItemMotion.WaterLossAnimation, "idle", true);
+                    Map.Objects.SpawnObject(fallAnimation);
+                    Map.Objects.DeleteObjects.Add(this);
+                    RemoveSpriteShadow();
                 }
             }
 

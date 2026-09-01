@@ -20,7 +20,7 @@ namespace ProjectZ.InGame.GameObjects.Enemies
 
         private int _currentDirection;
         private int _lives = EnemyLives.Crab;
-        private int _dropIndex = 4;
+        private int _dropIndex = EnemyDeathGameplay.CrabDrop;
 
         public EnemyCrab() : base("crab") { }
 

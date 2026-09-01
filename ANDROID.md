@@ -83,6 +83,56 @@ also use those current positions. Searches run when needed, not on every actor u
 stalled steps receive a temporary routing cost (at most eight steps, expiring after fifteen seconds),
 favoring available detours without turning the only usable passage into an impassable wall.
 This short-term memory resets on map entry and does not change collision or item rules.
+Enemy-contact knockback advances independently of route availability, matching normal body
+physics; if Link and a pursuing enemy meet while no path can initially be planned, the hit
+separates their bodies before the bounded route retry instead of leaving both actors frozen.
+After arriving through top-down stairs, route endpoint selection excludes the entrance using
+the same body/trigger test as movement, including endpoints at viewport edges. Other stairs
+remain available. Block pushes reject doorway and stair passageways using the full destination
+tile, as in gameplay. Dungeon doors now use their installed sprites, direction, opening/closing
+crop and full-tile collision. Map key setters and conditions initialize their state; matching
+pushable-block keys update them at the game's push-start/completion points. Door collision clears
+at the native half-open threshold. Installed small-key and nightmare-key chests award their keys
+after the normal chest-opening delay, respecting dungeon binding, duplicate chest keys and the
+nine-small-key cap. Link approaches reachable locks and holds the native push interaction;
+small keys are consumed one per lock, while nightmare-key ownership is retained. Conditional
+locks use their installed push flag and condition rather than bypassing other prerequisites.
+Routes are recalculated after the door collision clears, preserving a pending tapped destination.
+Keys, chests and doors are private to the wallpaper and reset together on map entry. Top-down
+loose small-key objects and item spawners use their exact installed key/value conditions,
+one-shot/despawn flags and pickup save keys. They use the native sky-drop/jump physics, atlas
+placement, collection rectangle and fade; a key is not collectible until it lands. Unsupported
+combat/dialog-script prerequisites remain unset. In particular, recognizing a key spawner does
+not mean its room puzzle is solved: script-created keys and general puzzle solving remain pending.
+Installed cave, house and dungeon breaking floors begin with their exact intact floor sprites.
+Grounded Link contact uses the native 670 ms collapse timer before hiding the floor and activating
+its owned inset hole; the floor respawns after the native 15-second non-classic delay.
+Installed indoor phones, tables, beds, vases, bananas, NPC bags and library books use their native
+atlas entries, entity anchors, layers and collision. Installed floor buttons, color jump tiles and
+dungeon switches likewise retain their native starting sprites and draw order; buttons and switches
+also keep their exact collision boxes without running their save-backed puzzle state. Installed
+spikes and ice blocks use their original synchronized idle animations; intact ice blocks keep their
+native full-cell collision without simulating Magic Rod puzzle state. The exact `ulrira` booth and
+`ulrira_telephone` house
+triggers are interactive; when
+Link uses it, his wallpaper tunic cycles green, blue and red through the game's Archipelago tunic
+rule. This visual session state remains separate from saves and does not grant tunic items.
+Authored `jump` objects are solid one-way ledges: Link can follow their native rail-jump landing,
+height, speed and inertia, but pathing cannot traverse them backwards as climbable terrain.
+
+Confirmed enemy deaths now show the installed explosion animation at the native body-box centre,
+above the player layer. Hurt flashes and temporarily hidden enemies do not create death effects
+or repeated loot. Ordinary drops of rupees and hearts use the same per-enemy drop table as gameplay,
+normal-health probabilities, native jump/collection/fade and timed expiry. Landed pickups can
+become exploration targets without replacing an outstanding tap. The wallpaper does not run
+the saved-game health/powerup counters. Top-down drops landing in deep water stop bouncing,
+use the native grounded-water removal timer, and disappear with the installed splash animation;
+shallow water retains ordinary bouncing and collection. Collected items cannot splash later,
+and lost items leave no collectible or shadow behind. The water probe, body centre and animation
+placement follow the native item body, with elapsed-time updates independent of the chosen FPS.
+Ghini fairy actors, powerups, pit-specific item loss and Red Zol's Gel offspring are not yet simulated.
+Drops into pits are omitted rather than left as stationary collectibles, and no replacement drops
+are invented for unsupported actors.
 Side-view passages use gravity, feather jumps, swimming, ladders and directional platforms instead
 of top-down routes. Their bounded route search replays button inputs through the same lightweight
 physics used during movement; gravity, steering, jump and ladder calculations are shared with the
@@ -94,13 +144,26 @@ Long side-view tap routes retain their destination across bounded planning secti
 taps eventually return to autonomous navigation instead of disabling it for the rest of the room.
 This is an ambient simulation, not a complete autonomous playthrough or a replacement for the game.
 
-Choose **15 FPS** for lower power use, **30 FPS** for balanced motion, or **High FPS (60 FPS)** for
-smoother motion with increased battery consumption and possible device heating. Animation timing
-uses elapsed time rather than making gameplay run faster at the higher frame rate. Static tile
+Choose **Adaptive battery (15-60 FPS)** to use 60 FPS briefly after a touch and while the camera is
+moving, 30 FPS during ordinary exploration, and 15 FPS while Link is resting or hidden. The existing fixed
+choices remain available: **15 FPS** for minimum power use, **30 FPS** for balanced motion, or
+**High FPS (60 FPS)** for consistently smoother motion with increased battery consumption and
+possible device heating. Animation timing uses elapsed time rather than making gameplay run faster
+at the higher frame rate. Static tile
 rendering is cached; animation-off mode redraws once per second while visible, with immediate
 redraws for touch or launcher movement. Rendering stops when Android marks the wallpaper hidden.
+The static shadow coverage cache uses a native 8-bit alpha surface, reducing graphics memory
+without lowering shadow resolution. CPU-blurred masks retain their required packed pixel format.
+When Android hides the wallpaper, derived full-screen map, shadow, scroll and lighting targets are
+released immediately; installed sprites and Link's journey state stay resident and rendering
+rebuilds the exact targets when the wallpaper becomes visible again.
 The wallpaper supplies scene-color hints to Android for system-bar contrast; the launcher/system
 decides whether to use them.
+The settings page exposes only controls used by the current installed-map renderer: animation,
+starting location, Link activity, room following, lighting and frame rate. Characters, enemies and
+wildlife come from the selected map, so the obsolete featured-character, placement and wildlife
+override controls are no longer shown. Existing wallpaper preferences for the remaining controls
+are preserved during updates.
 
 **Time of day → Follow system time** now drives spatial outdoor lighting: directional cast shadows
 attenuate direct sunlight, cooler ambient light remains in shaded areas, and installed lamp light
@@ -117,14 +180,28 @@ highlights in the sprites remain unchanged. Automatic solar parameters update in
 intervals while visible; changing the lighting mode or sunrise/sunset settings takes effect immediately.
 Settings are cached between changes, and sprite/shadow drawing reuses temporary rectangles.
 Light maps remain cached; distant moving shadows update separate small regions with the original
-blur margins, merging overlaps and falling back to one region in crowded scenes. The **Mabe Sunset**, **Forest
-Night**, and **Island Journey** presets remain available. Camera scrolling reuses overlapping blurred
-shadows and lighting where pixel alignment permits, refreshing exposed strips and blur borders;
+blur margins, merging overlaps and falling back to one region in crowded scenes. Camera scrolling
+reuses overlapping blurred shadows and lighting where pixel alignment permits, refreshing exposed
+strips and blur borders;
 map, zoom, static-object and solar-shadow changes still use a full refresh. Shadow pixel transfers
 use pooled buffers sized to each sampled region, retaining the same blur and lighting output.
 The blur reuses neighboring samples and row offsets without changing its filter or resolution.
+Crowded views retain up to 32 separate moving-shadow update regions before using the bounded
+fallback, preventing a ninth distant actor from forcing a large mostly unchanged area through the
+CPU blur while producing the same final shadow and lighting pixels.
+Static tree, bush, stone and building shadows use canonical entity-cell indexing when the camera
+crosses a tile boundary, and active actor/enemy indices are reused by simulation, shadow and player
+passes. Both retain installed ordering while avoiding repeated full-map array scans.
 Map-object drawing also caches sprite keys and atlas dimensions and rejects off-screen objects
 before unnecessary lookups, preserving placement, draw order and moved/removed object state.
+Installed animated map tiles use the same tile-cell spatial lookup as the native component draw
+pool, so each frame visits only the visible cells instead of scanning every animated water,
+flower and sand object in the full map. Cell queries are allocation-free and preserve native
+same-cell insertion order and elapsed-time animation frames.
+Static and player-layer decorations are indexed by their exact final draw anchors and collected
+only from visible cells. The small candidate set is restored to installed-map order before drawing,
+and relocated blocks are resolved from their live position, preserving overlap order and movement
+while avoiding full-map decoration scans.
 Pending camera scroll targets are constrained again after rotation or resizing, so an old target
 outside the new viewport bounds cannot prevent later scrolling.
 Interior cameras use a stable map projection rather than retaining an offset from the entrance.

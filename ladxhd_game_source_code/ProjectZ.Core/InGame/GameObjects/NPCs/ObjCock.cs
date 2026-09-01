@@ -492,7 +492,8 @@ namespace ProjectZ.InGame.GameObjects.NPCs
             _body.VelocityTarget = Vector2.Zero;
             _body.CollisionTypes = MapManager.ObjLink.Body.CollisionTypes;
 
-            _animator.SpeedMultiplier = 2.0f;
+            _animator.SpeedMultiplier =
+                RoosterGameplayMotion.CarryAnimationSpeedMultiplier;
             _aiComponent.ChangeState("pickedUp");
             EntityPosition.AddPositionListener(typeof(ObjCock), OnPositionChange);
 

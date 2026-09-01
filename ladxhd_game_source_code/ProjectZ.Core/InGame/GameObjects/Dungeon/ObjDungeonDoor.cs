@@ -30,7 +30,7 @@ namespace ProjectZ.InGame.GameObjects.Dungeon
 
         public ObjDungeonDoor(Map.Map map, int posX, int posY, int mode, string strKey, int direction, string strPushKey) : base(map)
         {
-            _sourceRectangle = Resources.SourceRectangle("dungeon_door");
+            _sourceRectangle = DungeonDoorGameplay.Variant(Resources.SourceRectangle("dungeon_door"), mode);
             
             _strKey = strKey;
             _strPushKey = strPushKey;
@@ -48,7 +48,7 @@ namespace ProjectZ.InGame.GameObjects.Dungeon
             _collisionComponent = new BoxCollisionComponent(new CBox(posX, posY, 0, 16, 16, 16), Values.CollisionTypes.Normal);
             _sprite = new CSprite(Resources.SprObjects, EntityPosition, Rectangle.Empty, new Vector2(8, 8));
             _sprite.Center = new Vector2(8, 8);
-            _sprite.Rotation = (float)(Math.PI / 2 * (direction + 1));
+            _sprite.Rotation = DungeonDoorGameplay.Rotation(direction);
 
             CRectangle grabBox = new CRectangle(EntityPosition, new Rectangle(1, 1, 14, 14));
 
@@ -59,17 +59,12 @@ namespace ProjectZ.InGame.GameObjects.Dungeon
             AddComponent(UpdateComponent.Index, new UpdateComponent(Update));
             AddComponent(DrawComponent.Index, new DrawCSpriteComponent(_sprite, Values.LayerBottom));
 
-            _sourceRectangle.X += mode * 16;
-
-            if (mode == 1)
-                _pushItem = "smallkey";
-            else if (mode == 3)
-                _pushItem = "nightmarekey";
+            _pushItem = DungeonDoorGameplay.RequiredItem(mode);
 
             if (mode == 1 || mode == 3)
             {
                 var pushBox = new CBox(EntityPosition, 0, 0, 16, 16, 8);
-                AddComponent(PushableComponent.Index, new PushableComponent(pushBox, OnPush) { InertiaTime = 100 });
+                AddComponent(PushableComponent.Index, new PushableComponent(pushBox, OnPush) { InertiaTime = DungeonDoorGameplay.UnlockPushMilliseconds });
             }
 
             _sprite.SourceRectangle = _sourceRectangle;
@@ -81,9 +76,9 @@ namespace ProjectZ.InGame.GameObjects.Dungeon
 
             if (_currentState == DoorStates.Opening)
             {
-                _doorState -= Game1.TimeMultiplier * 0.05f;
+                _doorState = DungeonDoorGameplay.Open(_doorState, Game1.TimeMultiplier);
 
-                if (_doorState <= 0.5f)
+                if (!DungeonDoorGameplay.BlocksWhileOpening(_doorState))
                 {
                     _collisionComponent.IsActive = false;
                     _carriableComponent.IsActive = false;
@@ -96,15 +91,14 @@ namespace ProjectZ.InGame.GameObjects.Dungeon
             }
             else if (_currentState == DoorStates.Closing)
             {
-                _doorState += Game1.TimeMultiplier * 0.1f;
+                _doorState = DungeonDoorGameplay.Close(_doorState, Game1.TimeMultiplier);
                 if (_doorState >= 1)
                 {
                     _doorState = 1;
                     _currentState = DoorStates.Closed;
                 }
             }
-            _sprite.SourceRectangle.Height = (int)Math.Round(16 * _doorState);
-            _sprite.SourceRectangle.Y = _sourceRectangle.Y + 16 - _sprite.SourceRectangle.Height;
+            _sprite.SourceRectangle = DungeonDoorGameplay.Source(_sourceRectangle, _doorState);
             _sprite.SpriteEffect = SpriteEffects.FlipHorizontally;
         }
 
@@ -118,7 +112,7 @@ namespace ProjectZ.InGame.GameObjects.Dungeon
             if (_pushItem == "nightmarekey")
             {
                 // If it's been collected, it will show up as "0" and not "null".
-                if (Game1.GameManager.GetItem(_pushItem)?.Count == null)
+                if (!DungeonDoorGameplay.HasRequiredKey(_mode, Game1.GameManager.GetItem(_pushItem)?.Count))
                 {
                     // Don't show the message if disable helper text is enabled.
                     if (GameSettings.NoHelperText)
@@ -163,7 +157,7 @@ namespace ProjectZ.InGame.GameObjects.Dungeon
             // open/close the door if it is not already in the right state
             // 1: open, 0: closed
             var value = Game1.GameManager.SaveManager.GetString(_strKey);
-            var openDoor = value != null && value != "0";
+            var openDoor = DungeonDoorGameplay.IsOpenKey(value);
 
             if (_wasUpdated)
             {

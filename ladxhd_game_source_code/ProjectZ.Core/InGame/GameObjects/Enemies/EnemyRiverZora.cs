@@ -27,7 +27,7 @@ namespace ProjectZ.InGame.GameObjects.Enemies
         private bool _stationary;
         private bool _playSplash = true;
         private int _lives = EnemyLives.RiverZora;
-        private int _dropIndex = 2;
+        private int _dropIndex = EnemyDeathGameplay.RiverZoraDrop;
 
         public EnemyRiverZora() : base("river zora") { }
 

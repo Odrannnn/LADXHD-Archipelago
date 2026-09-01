@@ -2799,8 +2799,8 @@ namespace ProjectZ.InGame.GameObjects
             _railJumpTargetPosition = goalPosition;
 
             // values for distance of 16
-            _railJumpSpeed = 0.045f * jumpSpeedMultiply;
-            _railJumpHeight = 12 * jumpHeightMultiply;
+            _railJumpSpeed = RailJumpGameplay.BaseSpeed * jumpSpeedMultiply;
+            _railJumpHeight = RailJumpGameplay.BaseHeight * jumpHeightMultiply;
             _railJumpPositionZ = goalPositionZ;
 
             _railJumpPercentage = 0;
@@ -5247,12 +5247,13 @@ namespace ProjectZ.InGame.GameObjects
 
                 // The player is "teleported" frame by frame by calculating their position.
                 _railJumpPercentage += Game1.TimeMultiplier * _railJumpSpeed;
-                var amount = MathF.Sin(_railJumpPercentage * (MathF.PI * 0.3f)) / MathF.Sin(MathF.PI * 0.3f);
+                var amount = RailJumpGameplay.GetProgressAmount(_railJumpPercentage);
                 var newPosition = Vector2.Lerp(_railJumpStartPosition, _railJumpTargetPosition, amount);
                 EntityPosition.Set(newPosition);
 
                 // Update the player's Z position.
-                EntityPosition.Z = MathF.Sin(_railJumpPercentage * MathF.PI) * _railJumpHeight + _railJumpPercentage * _railJumpPositionZ;
+                EntityPosition.Z = RailJumpGameplay.GetHeight(
+                    _railJumpPercentage, _railJumpHeight, _railJumpPositionZ);
 
                 // The rail jump has reached it's conclusion.
                 if (_railJumpPercentage >= 1)

@@ -36,7 +36,7 @@ namespace ProjectZ.InGame.GameObjects.Enemies
         private bool _mainGhini;
         private bool _spawnAnimation;
         private int _lives = EnemyLives.Ghini;
-        private int _dropIndex = 9;
+        private int _dropIndex = EnemyDeathGameplay.GhiniDrop;
 
         // Used by ObjMoveStone when simultaneously spawning a Ghini and pushing the gravestone.
         private bool _isBeingPushed;

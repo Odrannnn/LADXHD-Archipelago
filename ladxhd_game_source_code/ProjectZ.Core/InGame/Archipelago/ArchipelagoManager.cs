@@ -191,13 +191,8 @@ namespace ProjectZ.InGame.Archipelago
         }
 
         public static int GetNextTunic(int currentTunic, bool ownsBlueTunic, bool ownsRedTunic)
-        {
-            if (currentTunic == GameManager.CloakGreen && ownsBlueTunic)
-                return GameManager.CloakBlue;
-            if (currentTunic != GameManager.CloakRed && ownsRedTunic)
-                return GameManager.CloakRed;
-            return GameManager.CloakGreen;
-        }
+            => TunicGameplay.GetNext(
+                currentTunic, ownsBlueTunic, ownsRedTunic);
 
         public static bool ShouldUseGhostHouseShellPot(
             bool boundSave, string mapName, int positionX, int positionY)
@@ -255,7 +250,7 @@ namespace ProjectZ.InGame.Archipelago
 
         public bool TryCycleTunicAtTelephone(string dialogName)
         {
-            if (!IsActive || !string.Equals(dialogName, "ulrira", StringComparison.Ordinal))
+            if (!IsActive || !TunicGameplay.IsTelephoneDialog(dialogName))
                 return false;
 
             var ownsBlueTunic = _gameManager.GetItem("cloakBlue") != null;

@@ -29,7 +29,7 @@ namespace ProjectZ.InGame.GameObjects.Enemies
         private bool _spawnSmallZols = true;
         private bool _multipleHits = false;
         private int _lives = EnemyLives.RedZol;
-        private int _dropIndex = 2;
+        private int _dropIndex = EnemyDeathGameplay.RedZolDrop;
 
         public EnemyRedZol() : base("red zol") { }
 

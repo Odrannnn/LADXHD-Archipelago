@@ -32,7 +32,8 @@ namespace ProjectZ
         PhotoMouse,
         Fisherman,
         Mermaid,
-        Fairy
+        Fairy,
+        Telephone
     }
 
     public enum LiveWallpaperMapEnemyKind
@@ -115,6 +116,30 @@ namespace ProjectZ
         // them; otherwise Android's transparent cache exposes the black canvas.
         public bool RequiresOverworldOceanBase =>
             SpriteId is "wave_3" or "wave_4" or "wave_5";
+    }
+
+    public readonly struct LiveWallpaperMapAnimatedObject
+    {
+        public LiveWallpaperMapAnimatedObject(
+            string animationPath, int drawX, int drawY,
+            int entityX, int entityY, string animationName = "idle")
+        {
+            AnimationPath = animationPath;
+            AnimationName = animationName;
+            AnimationKey = animationPath + "\n" + animationName;
+            DrawX = drawX;
+            DrawY = drawY;
+            EntityX = entityX;
+            EntityY = entityY;
+        }
+
+        public string AnimationPath { get; }
+        public string AnimationName { get; }
+        public string AnimationKey { get; }
+        public int DrawX { get; }
+        public int DrawY { get; }
+        public int EntityX { get; }
+        public int EntityY { get; }
     }
 
     public readonly struct LiveWallpaperMapLamp
@@ -479,6 +504,8 @@ namespace ProjectZ
         private readonly int[,,] _tiles;
         private readonly List<CollisionRectangle>[,] _collisionGrid;
         private readonly LiveWallpaperMapTerrain[,] _terrain;
+        private readonly LiveWallpaperMapAnimatedTile[][] _animatedTileGrid;
+        private readonly int[][] _decorationDrawGrid;
         private IReadOnlyDictionary<int, Microsoft.Xna.Framework.Vector2> _navigationMovedBlocks;
         private IReadOnlySet<int> _navigationRelocatedBlocks;
 
@@ -525,6 +552,7 @@ namespace ProjectZ
             LiveWallpaperMapEnemy[] enemies,
             LiveWallpaperMapDecoration[] decorations,
             LiveWallpaperMapAnimatedTile[] animatedTiles,
+            LiveWallpaperMapAnimatedObject[] animatedObjects,
             LiveWallpaperMapLamp[] lamps,
             LiveWallpaperMapLight[] lights,
             LiveWallpaperMapObject[] objects)
@@ -546,10 +574,19 @@ namespace ProjectZ
             HookshotTargets = hookshotTargets ?? [];
             Enemies = enemies ?? [];
             Decorations = decorations ?? [];
+            _decorationDrawGrid = BuildDecorationDrawGrid(
+                Width, Height, Decorations);
+            MovableDecorationIndices = BuildMovableDecorationIndices(Decorations);
             AnimatedTiles = animatedTiles ?? [];
+            _animatedTileGrid = BuildAnimatedTileGrid(
+                Width, Height, AnimatedTiles);
+            AnimatedObjects = animatedObjects ?? [];
             Lamps = lamps ?? [];
             Lights = lights ?? [];
             Objects = objects ?? [];
+            Ledges = LiveWallpaperLedges.Parse(Objects);
+            DungeonDoors = new LiveWallpaperDungeonDoors(Objects);
+            BreakingFloors = new LiveWallpaperBreakingFloors(Objects);
             SceneEffects = LiveWallpaperSceneEffects.Create(this);
             IsHouse = Objects.Any(mapObject =>
                 string.Equals(mapObject.Template, "houseObject",
@@ -575,10 +612,15 @@ namespace ProjectZ
         public IReadOnlyList<LiveWallpaperMapHookshotTarget> HookshotTargets { get; }
         public IReadOnlyList<LiveWallpaperMapEnemy> Enemies { get; }
         public IReadOnlyList<LiveWallpaperMapDecoration> Decorations { get; }
+        public IReadOnlyList<int> MovableDecorationIndices { get; }
         public IReadOnlyList<LiveWallpaperMapAnimatedTile> AnimatedTiles { get; }
+        public IReadOnlyList<LiveWallpaperMapAnimatedObject> AnimatedObjects { get; }
         public IReadOnlyList<LiveWallpaperMapLamp> Lamps { get; }
         public IReadOnlyList<LiveWallpaperMapLight> Lights { get; }
         public IReadOnlyList<LiveWallpaperMapObject> Objects { get; }
+        public IReadOnlyList<LiveWallpaperLedge> Ledges { get; }
+        public LiveWallpaperDungeonDoors DungeonDoors { get; }
+        public LiveWallpaperBreakingFloors BreakingFloors { get; }
         public LiveWallpaperSceneEffects SceneEffects { get; }
 
         public bool IntersectsHoleTeleporter(
@@ -598,6 +640,28 @@ namespace ProjectZ
         }
         public bool IsHouse { get; }
         public bool Is2DMap { get; }
+
+        public ReadOnlySpan<LiveWallpaperMapAnimatedTile> GetAnimatedTilesAt(
+            int tileX, int tileY)
+        {
+            if (tileX < 0 || tileX >= Width || tileY < 0 || tileY >= Height ||
+                _animatedTileGrid == null)
+                return ReadOnlySpan<LiveWallpaperMapAnimatedTile>.Empty;
+            var cell = _animatedTileGrid[tileY * Width + tileX];
+            return cell == null
+                ? ReadOnlySpan<LiveWallpaperMapAnimatedTile>.Empty
+                : cell;
+        }
+
+        public ReadOnlySpan<int> GetDecorationIndicesAtDrawCell(
+            int tileX, int tileY)
+        {
+            if (tileX < 0 || tileX >= Width || tileY < 0 || tileY >= Height ||
+                _decorationDrawGrid == null)
+                return ReadOnlySpan<int>.Empty;
+            var cell = _decorationDrawGrid[tileY * Width + tileX];
+            return cell == null ? ReadOnlySpan<int>.Empty : cell;
+        }
 
         public int GetTile(int x, int y, int layer)
         {
@@ -722,9 +786,12 @@ namespace ProjectZ
                     continue;
                 foreach (var entry in entries)
                 {
+                    var activeHole = IsActiveHole(entry);
                     if (!seen.Add((entry.X, entry.Y, entry.Width, entry.Height,
                             entry.Kind)) || entry.Kind is CollisionKind.NpcWall or CollisionKind.Ladder or CollisionKind.LadderTop ||
-                        entry.Kind == CollisionKind.Hole && !includeHoles ||
+                        entry.Kind == CollisionKind.DungeonDoor && !DungeonDoors.BlocksAt(entry.X, entry.Y) ||
+                        entry.Kind == CollisionKind.BreakingFloor && !activeHole ||
+                        activeHole && !includeHoles ||
                         entry.Kind == CollisionKind.Bush &&
                         (!includeBushes || ignoredBushes?.Contains(
                             GetBushKey(entry.X, entry.Y)) == true) ||
@@ -805,6 +872,7 @@ namespace ProjectZ
                     continue;
                 foreach (var entry in entries)
                 {
+                    var activeHole = IsActiveHole(entry);
                     var ignoredMoveStone =
                         entry.Kind == CollisionKind.MoveStone &&
                         (!includeMoveStones && IsPushableMoveStone(
@@ -812,7 +880,9 @@ namespace ProjectZ
                          ignoredMoveStones?.Contains(
                              GetMoveStoneKey(entry.X, entry.Y)) == true);
                     if (entry.Kind is CollisionKind.NpcWall or CollisionKind.Ladder or CollisionKind.LadderTop ||
-                        entry.Kind == CollisionKind.Hole && !includeHoles ||
+                        entry.Kind == CollisionKind.DungeonDoor && !DungeonDoors.BlocksAt(entry.X, entry.Y) ||
+                        entry.Kind == CollisionKind.BreakingFloor && !activeHole ||
+                        activeHole && !includeHoles ||
                         entry.Kind == CollisionKind.Bush &&
                         (!includeBushes || ignoredBushes?.Contains(
                             GetBushKey(entry.X, entry.Y)) == true) ||
@@ -889,6 +959,7 @@ namespace ProjectZ
                         continue;
                     foreach (var entry in entries)
                     {
+                        var activeHole = IsActiveHole(entry);
                         if (entry.Kind == CollisionKind.Bush &&
                             (!includeBushes || ignoredBushes?.Contains(
                                 GetBushKey(entry.X, entry.Y)) == true))
@@ -905,8 +976,11 @@ namespace ProjectZ
                              ignoredMoveStones?.Contains(
                                  GetMoveStoneKey(entry.X, entry.Y)) == true))
                             continue;
+                        if (entry.Kind == CollisionKind.DungeonDoor && !DungeonDoors.BlocksAt(entry.X, entry.Y))
+                            continue;
                         if (entry.Kind is not (CollisionKind.NpcWall or CollisionKind.Ladder or CollisionKind.LadderTop) &&
-                            (entry.Kind != CollisionKind.Hole || includeHoles) && entry.Intersects(
+                            (entry.Kind != CollisionKind.BreakingFloor || activeHole) &&
+                            (!activeHole || includeHoles) && entry.Intersects(
                                 x, y, width, height))
                             return true;
                     }
@@ -1005,6 +1079,24 @@ namespace ProjectZ
             }
             vegetationKey = -1;
             return false;
+        }
+
+        public bool TryGetCuttableVegetationKeyAlongMovement(
+            float x, float y, float width, float height,
+            float movementX, float movementY, out int vegetationKey,
+            IReadOnlySet<int> ignoredVegetation = null)
+        {
+            if (movementX != 0f && TryGetCuttableVegetationKey(
+                    x + movementX, y, width, height, out vegetationKey,
+                    ignoredVegetation))
+                return true;
+            if (movementY != 0f && TryGetCuttableVegetationKey(
+                    x, y + movementY, width, height, out vegetationKey,
+                    ignoredVegetation))
+                return true;
+            return TryGetCuttableVegetationKey(
+                x + movementX, y + movementY, width, height,
+                out vegetationKey, ignoredVegetation);
         }
 
         public static bool IsGrassSprite(string spriteId) =>
@@ -1164,7 +1256,7 @@ namespace ProjectZ
             return true;
         }
 
-        private static bool IsMoveStoneTemplate(string template) =>
+        internal static bool IsMoveStoneTemplate(string template) =>
             template is "moveStone" or "moveStoneCave" or
                 "moveStoneFrogHouse" or "moveStoneD3";
 
@@ -1218,7 +1310,7 @@ namespace ProjectZ
             IntersectsKind(x, y, width, height, CollisionKind.NpcWall);
 
         public bool IntersectsHole(float x, float y, float width, float height) =>
-            IntersectsKind(x, y, width, height, CollisionKind.Hole);
+            IntersectsActiveHole(x, y, width, height);
 
         public float GetLinkHoleCoverage(float x, float y, float width, float height) =>
             GetLinkHoleContact(x, y, width, height).Coverage;
@@ -1251,7 +1343,7 @@ namespace ProjectZ
                     continue;
                 foreach (var entry in entries)
                 {
-                    if (entry.Kind != CollisionKind.Hole ||
+                    if (!IsActiveHole(entry) ||
                         !seen.Add((entry.X, entry.Y, entry.Width, entry.Height)))
                         continue;
                     var left = MathF.Max(x, entry.X);
@@ -1420,6 +1512,7 @@ namespace ProjectZ
                     out var npcWallCount, out var actors, out var portals,
                     out var hookshotTargets,
                     out var enemies, out var decorations, out var animatedTiles,
+                    out var animatedObjects,
                     out var lamps, out var lights,
                     out var objects))
                 return false;
@@ -1428,7 +1521,7 @@ namespace ProjectZ
                 tilesetPath, mapOffsetX, mapOffsetY, width, height, depth, tiles,
                 collisionGrid, terrain, collisionCount, hazardCount, npcWallCount,
                 actors, portals, hookshotTargets, enemies, decorations,
-                animatedTiles, lamps, lights, objects);
+                animatedTiles, animatedObjects, lamps, lights, objects);
             return true;
         }
 
@@ -1447,6 +1540,7 @@ namespace ProjectZ
             out LiveWallpaperMapEnemy[] enemies,
             out LiveWallpaperMapDecoration[] decorations,
             out LiveWallpaperMapAnimatedTile[] animatedTiles,
+            out LiveWallpaperMapAnimatedObject[] animatedObjects,
             out LiveWallpaperMapLamp[] lamps,
             out LiveWallpaperMapLight[] lights,
             out LiveWallpaperMapObject[] objects)
@@ -1461,6 +1555,7 @@ namespace ProjectZ
             enemies = [];
             decorations = [];
             animatedTiles = [];
+            animatedObjects = [];
             lamps = [];
             lights = [];
             objects = [];
@@ -1492,6 +1587,7 @@ namespace ProjectZ
             var parsedEnemies = new List<LiveWallpaperMapEnemy>();
             var parsedDecorations = new List<LiveWallpaperMapDecoration>();
             var parsedAnimatedTiles = new List<LiveWallpaperMapAnimatedTile>();
+            var parsedAnimatedObjects = new List<LiveWallpaperMapAnimatedObject>();
             var parsedLamps = new List<LiveWallpaperMapLamp>();
             var parsedLights = new List<LiveWallpaperMapLight>();
             var parsedObjects = new List<LiveWallpaperMapObject>();
@@ -1533,6 +1629,8 @@ namespace ProjectZ
                     terrain, width, height, templates[templateIndex], positionX, positionY);
                 TryAddAnimatedTile(
                     parsedAnimatedTiles, templates[templateIndex], positionX, positionY);
+                TryAddAnimatedObject(
+                    parsedAnimatedObjects, templates[templateIndex], positionX, positionY);
                 TryAddLamp(
                     parsedLamps, parsedObjects[^1]);
                 TryAddLight(
@@ -1550,6 +1648,7 @@ namespace ProjectZ
                 .ThenBy(decoration => decoration.EntityY)
                 .ToArray();
             animatedTiles = parsedAnimatedTiles.ToArray();
+            animatedObjects = parsedAnimatedObjects.ToArray();
             lamps = parsedLamps.ToArray();
             lights = parsedLights.ToArray();
             objects = parsedObjects.ToArray();
@@ -1655,6 +1754,92 @@ namespace ProjectZ
                 animation.Item2, animation.Item3));
         }
 
+        private static LiveWallpaperMapAnimatedTile[][] BuildAnimatedTileGrid(
+            int width, int height,
+            IReadOnlyList<LiveWallpaperMapAnimatedTile> animatedTiles)
+        {
+            var cellCount = checked(width * height);
+            var cells = new List<LiveWallpaperMapAnimatedTile>[cellCount];
+            foreach (var tile in animatedTiles)
+            {
+                var tileX = (int)MathF.Floor(tile.EntityX / (float)TileSize);
+                var tileY = (int)MathF.Floor(tile.EntityY / (float)TileSize);
+                if (tileX < 0 || tileX >= width || tileY < 0 || tileY >= height)
+                    continue;
+                var index = tileY * width + tileX;
+                (cells[index] ??= new List<LiveWallpaperMapAnimatedTile>()).Add(tile);
+            }
+
+            var grid = new LiveWallpaperMapAnimatedTile[cellCount][];
+            for (var index = 0; index < cells.Length; index++)
+                if (cells[index] != null)
+                    grid[index] = cells[index].ToArray();
+            return grid;
+        }
+
+        private static int[][] BuildDecorationDrawGrid(
+            int width, int height,
+            IReadOnlyList<LiveWallpaperMapDecoration> decorations)
+        {
+            var cellCount = checked(width * height);
+            var cells = new List<int>[cellCount];
+            for (var index = 0; index < decorations.Count; index++)
+            {
+                var decoration = decorations[index];
+                // Index the same final anchor used by TryGetDrawAnchor. This
+                // includes ObjSprite's component offset, not an approximation
+                // based on the source map object's top-left position.
+                var tileX = Math.Clamp((int)MathF.Floor(
+                    (decoration.EntityX + decoration.DrawOffsetX) /
+                    (float)TileSize), 0, width - 1);
+                var tileY = Math.Clamp((int)MathF.Floor(
+                    (decoration.EntityY + decoration.DrawOffsetY) /
+                    (float)TileSize), 0, height - 1);
+                var cellIndex = tileY * width + tileX;
+                (cells[cellIndex] ??= new List<int>()).Add(index);
+            }
+
+            var grid = new int[cellCount][];
+            for (var index = 0; index < cells.Length; index++)
+                if (cells[index] != null)
+                    grid[index] = cells[index].ToArray();
+            return grid;
+        }
+
+        private static int[] BuildMovableDecorationIndices(
+            IReadOnlyList<LiveWallpaperMapDecoration> decorations)
+        {
+            var indices = new List<int>();
+            for (var index = 0; index < decorations.Count; index++)
+                if (IsMoveStoneSprite(decorations[index].SpriteId))
+                    indices.Add(index);
+            return indices.ToArray();
+        }
+
+        private static void TryAddAnimatedObject(
+            List<LiveWallpaperMapAnimatedObject> animatedObjects,
+            string template, int positionX, int positionY)
+        {
+            if (template == "spikes")
+            {
+                // ObjSpikes uses CPosition(posX,posY) and a zero animation-
+                // component offset. Its animation is synchronized from the
+                // global elapsed time in gameplay.
+                animatedObjects.Add(new LiveWallpaperMapAnimatedObject(
+                    "Objects/spikes.ani", positionX, positionY,
+                    positionX, positionY));
+            }
+            else if (template == "iceBlock")
+            {
+                // ObjIceBlock uses CPosition(pos+8,pos+8) and a (-8,-8)
+                // AnimationComponent offset, leaving the draw anchor at the
+                // installed map cell while sorting/culling around its centre.
+                animatedObjects.Add(new LiveWallpaperMapAnimatedObject(
+                    "Objects/ice block.ani", positionX, positionY,
+                    positionX + 8, positionY + 8));
+            }
+        }
+
         private static void TryAddMapEnemy(
             List<LiveWallpaperMapEnemy> enemies,
             string template,
@@ -1712,6 +1897,62 @@ namespace ProjectZ
         {
             // These values are the sprite ids, entity offsets and layers declared by
             // GameObjectTemplates for the same installed-map objects.
+            if (template == "button")
+            {
+                // ObjButton suppresses this optional unmissables-only instance.
+                // The wallpaper has no gameplay-settings session, so retain the
+                // normal game's default placement rather than adding an NPC-era
+                // optional object to Kanalet Castle.
+                if (parts.Length > 3 && parts[3] == "ow_castle_button_2")
+                    return;
+                // ObjButton draws the first (unpressed) 16x16 atlas frame from
+                // its map position on Values.LayerBottom. Wallpaper state is
+                // intentionally independent of puzzle/save keys.
+                decorations.Add(new LiveWallpaperMapDecoration(
+                    "button", positionX, positionY,
+                    playerLayer: false, topLeft: true));
+                return;
+            }
+            if (template == "colorJumpTile")
+            {
+                // ObjColorJumpTile clamps the installed starting state to the
+                // three native atlas frames and draws it at the map position.
+                var state = Math.Clamp(GetOptionalInt(parts, 3, 0), 0, 2);
+                decorations.Add(new LiveWallpaperMapDecoration(
+                    "color_tile_" + state, positionX, positionY,
+                    playerLayer: false, topLeft: true));
+                return;
+            }
+            if (template == "dungeonSwitch")
+            {
+                // ObjDungeonSwitch sorts at CPosition(posX,posY+16), while its
+                // CSprite applies the separate (0,-16) component offset.
+                decorations.Add(new LiveWallpaperMapDecoration(
+                    "dungeon_switch", positionX, positionY + 16,
+                    playerLayer: true, topLeft: true,
+                    drawOffsetY: -16));
+                return;
+            }
+            if (template == "book")
+            {
+                var spriteIndex = Math.Clamp(GetOptionalInt(parts, 5, 0), 0, 3);
+                // ObjBook: CPosition(+8,+16), CSprite offset (-4,-11),
+                // Values.LayerBottom. Its atlas origin remains authoritative.
+                decorations.Add(new LiveWallpaperMapDecoration(
+                    "book_" + spriteIndex, positionX + 8, positionY + 16,
+                    playerLayer: false, drawOffsetX: -4, drawOffsetY: -11));
+                return;
+            }
+            if (LiveWallpaperBreakingFloors.TryGetSpriteId(
+                    template, out var breakingFloorSprite))
+            {
+                // ObjBreakingFloor's CPosition and zero draw offset use the
+                // atlas entry's (0,0) centre, placing the 16x16 sprite on-cell.
+                decorations.Add(new LiveWallpaperMapDecoration(
+                    breakingFloorSprite, positionX, positionY,
+                    playerLayer: false, topLeft: true));
+                return;
+            }
             if (template == "aquaticPlant")
             {
                 decorations.Add(new LiveWallpaperMapDecoration(
@@ -1728,6 +1969,14 @@ namespace ProjectZ
                 // (EntityX - 8, EntityY + 20), before the trade is complete.
                 decorations.Add(new LiveWallpaperMapDecoration(
                     "bananas", positionX, positionY + 36));
+                return;
+            }
+            if (template == "npc_bag")
+            {
+                // GameObjectTemplates uses the NPC atlas for this static bag.
+                decorations.Add(new LiveWallpaperMapDecoration(
+                    "npc_bag", positionX + 8, positionY + 14,
+                    atlasName: "npcs"));
                 return;
             }
             if (template is "armosStatue" or "armosDarkStatue")
@@ -1891,6 +2140,14 @@ namespace ProjectZ
                 // ObjPainting anchors the installed painting sprite at
                 // CPosition(posX + 8, posY + 16).
                 "painting" => ("painting", 8, 16, true),
+                // Canonical indoor ObjSprite furniture. These use the exact
+                // sprite ids and CPosition offsets from GameObjectTemplates.
+                "phone" => ("phone", 8, 14, true),
+                "cave_table" => ("cave_table", 0, 1, true),
+                "cave_bed" => ("cave_bed", 0, 0, true),
+                "vase_empty" => ("vase_empty", 8, 16, true),
+                "vase_flower" => ("vase_flower", 8, 16, true),
+                "banana" => ("bananas", 8, 16, true),
                 "itemShop" => ("itemShop", 8, 14, true),
                 _ => ((string)null, 0, 0, true)
             };
@@ -1946,6 +2203,9 @@ namespace ProjectZ
             int positionX,
             int positionY)
         {
+            var signText = template == "sign"
+                ? GetOptionalString(parts, 3)
+                : null;
             var kind = template switch
             {
                 "personNew" => LiveWallpaperMapActorKind.Person,
@@ -1974,6 +2234,10 @@ namespace ProjectZ
                 "fisherman" => LiveWallpaperMapActorKind.Fisherman,
                 "mermaid" => LiveWallpaperMapActorKind.Mermaid,
                 "fairy" => LiveWallpaperMapActorKind.Fairy,
+                // Installed booths use `ulrira`; the house telephone uses
+                // `ulrira_telephone`. Gameplay recognizes the same exact pair.
+                "sign" when TunicGameplay.IsTelephoneDialog(signText) =>
+                    LiveWallpaperMapActorKind.Telephone,
                 _ => (LiveWallpaperMapActorKind?)null
             };
             if (!kind.HasValue)
@@ -2071,6 +2335,10 @@ namespace ProjectZ
                     new LocalRectangle(positionX + 1, positionY + 6, 14, 10),
                 LiveWallpaperMapActorKind.Fairy =>
                     new LocalRectangle(positionX + 3, positionY, 10, 16),
+                // ObjSignpost's interaction cell coincides with the native
+                // phone ObjSprite collider (-8,-10,16,12) at (+8,+14).
+                LiveWallpaperMapActorKind.Telephone =>
+                    new LocalRectangle(positionX, positionY + 4, 16, 12),
                 _ => new LocalRectangle(0, 0, 0, 0)
             };
             var spriteOffset = kind == LiveWallpaperMapActorKind.LegacyPerson
@@ -2205,6 +2473,26 @@ namespace ProjectZ
             ref int hazardCount,
             ref int npcWallCount)
         {
+            if (template == "jump")
+            {
+                AddCollision(grid, mapWidth, mapHeight,
+                    new CollisionRectangle(
+                        positionX, positionY,
+                        GetOptionalPositiveInt(parts, 5, 16),
+                        GetOptionalPositiveInt(parts, 6, 16),
+                        CollisionKind.Ledge),
+                    ref collisionCount, ref hazardCount, ref npcWallCount);
+                return;
+            }
+            if (template == "ddoor")
+            {
+                // ObjDungeonDoor without a state key is dead, not a collider.
+                if (parts.Length > 4 && !string.IsNullOrEmpty(parts[4]))
+                    AddCollision(grid, mapWidth, mapHeight,
+                        new CollisionRectangle(positionX, positionY, 16, 16, CollisionKind.DungeonDoor),
+                        ref collisionCount, ref hazardCount, ref npcWallCount);
+                return;
+            }
             if (template is "dungeonLadder" or "dungeonLadderTop")
             {
                 var top = template == "dungeonLadderTop";
@@ -2236,13 +2524,13 @@ namespace ProjectZ
                 "dungeon2BreakingFloor" or "dungeon8BreakingFloor" or
                 "breakingFloorHouse")
             {
-                // ObjBreakingFloor owns an ObjHole with this exact rectangle.
-                // The lightweight map displays the underlying open-pit tile,
-                // so it must expose the owned hole instead of treating that
-                // visible pit as ordinary ground.
+                // ObjBreakingFloor begins intact. Its owned ObjHole uses this
+                // exact rectangle and becomes active only after the floor's
+                // native contact timer expires.
                 AddCollision(grid, mapWidth, mapHeight,
                     new CollisionRectangle(
-                        positionX, positionY + 1, 16, 14, CollisionKind.Hole),
+                        positionX, positionY + 1, 16, 14,
+                        CollisionKind.BreakingFloor),
                     ref collisionCount, ref hazardCount, ref npcWallCount);
                 return;
             }
@@ -2322,6 +2610,21 @@ namespace ProjectZ
                 "signpost" or "signpostWoods" =>
                     [new LocalRectangle(0, 4, 16, 12)],
                 "painting" => [new LocalRectangle(0, 4, 16, 12)],
+                // ObjButton and ObjDungeonSwitch retain their exact gameplay
+                // BoxCollisionComponent rectangles. The wallpaper does not
+                // simulate their puzzle keys, but routes must not cross them.
+                "button" => [new LocalRectangle(5, 3, 6, 3)],
+                "dungeonSwitch" => [new LocalRectangle(1, 4, 14, 12)],
+                // ObjIceBlock's active BoxCollisionComponent fills its exact
+                // 16x16 installed cell. The wallpaper keeps the ambient block
+                // intact instead of simulating Magic Rod puzzle state.
+                "iceBlock" => [new LocalRectangle(0, 0, 16, 16)],
+                // Canonical indoor ObjSprite collision rectangles.
+                "phone" => [new LocalRectangle(0, 4, 16, 12)],
+                "cave_table" => [new LocalRectangle(0, 0, 32, 16)],
+                "cave_bed" => [new LocalRectangle(0, 0, 16, 32)],
+                "banana" => [new LocalRectangle(0, 2, 16, 14)],
+                "npc_bag" => [new LocalRectangle(1, 6, 14, 10)],
                 // GameObjectTemplates.itemShop constructs ObjSprite at
                 // (posX + 8, posY + 14) with collision (-8,-10,16,12).
                 "itemShop" => [new LocalRectangle(0, 4, 16, 12)],
@@ -2379,6 +2682,9 @@ namespace ProjectZ
             ref int hazardCount,
             ref int npcWallCount)
         {
+            if (template == "button" && parts.Length > 3 &&
+                parts[3] == "ow_castle_button_2")
+                return true;
             var defaultPlacement = template switch
             {
                 "fence" => 15,
@@ -2444,6 +2750,7 @@ namespace ProjectZ
             switch (rectangle.Kind)
             {
                 case CollisionKind.Hole:
+                case CollisionKind.BreakingFloor:
                     hazardCount++;
                     break;
                 case CollisionKind.NpcWall:
@@ -2485,6 +2792,39 @@ namespace ProjectZ
             }
             return false;
         }
+
+        private bool IntersectsActiveHole(
+            float x, float y, float width, float height)
+        {
+            if (width <= 0 || height <= 0 || _collisionGrid == null)
+                return false;
+            if (x < 0 || y < 0 || x + width > Width * TileSize ||
+                y + height > Height * TileSize)
+                return true;
+            var startX = Math.Clamp((int)MathF.Floor(x / TileSize), 0, Width - 1);
+            var startY = Math.Clamp((int)MathF.Floor(y / TileSize), 0, Height - 1);
+            var endX = Math.Clamp((int)MathF.Floor((x + width - 0.001f) / TileSize),
+                0, Width - 1);
+            var endY = Math.Clamp((int)MathF.Floor((y + height - 0.001f) / TileSize),
+                0, Height - 1);
+            for (var tileY = startY; tileY <= endY; tileY++)
+            for (var tileX = startX; tileX <= endX; tileX++)
+            {
+                var entries = _collisionGrid[tileX, tileY];
+                if (entries == null)
+                    continue;
+                foreach (var entry in entries)
+                    if (IsActiveHole(entry) &&
+                        entry.Intersects(x, y, width, height))
+                        return true;
+            }
+            return false;
+        }
+
+        private bool IsActiveHole(CollisionRectangle entry) =>
+            entry.Kind == CollisionKind.Hole ||
+            entry.Kind == CollisionKind.BreakingFloor &&
+            BreakingFloors.IsBrokenAt(entry.X, entry.Y - 1);
 
         private static int GetOptionalPositiveInt(
             string[] parts, int index, int fallback)
@@ -2556,7 +2896,10 @@ namespace ProjectZ
             Bush,
             Stone,
             MoveStone,
+            Ledge,
+            DungeonDoor,
             Hole,
+            BreakingFloor,
             NpcWall,
             Ladder,
             LadderTop

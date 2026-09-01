@@ -39,7 +39,7 @@ namespace ProjectZ.InGame.GameObjects.Things
             _ignoreCollision = ignoreCollision;
             _moveOnTop = moveOnTop;
 
-            _direction = AnimationHelper.GetDirection(_offset);
+            _direction = RailJumpGameplay.GetDirection(_offset);
 
             var box = new CBox(EntityPosition, 0, 0, fieldWidth, fieldHeight, 16);
             AddComponent(PushableComponent.Index, _pushComponent = new PushableComponent(box, OnPush));
@@ -92,23 +92,12 @@ namespace ProjectZ.InGame.GameObjects.Things
             if (_pushComponent.InertiaCounter > 0 && !MapManager.ObjLink.IsDashing())
                 return false;
 
-            // calculate the goal position based on the offset, object position and the player position
             var playerBody = MapManager.ObjLink.Body;
-            var goalPosition = MapManager.ObjLink.Position;
-
-            if (cliffDir == 0)
-                goalPosition.X = EntityPosition.Position.X + EntitySize.Width + _offset.X - playerBody.Width / 2;
-            else if (cliffDir == 2)
-                goalPosition.X = EntityPosition.Position.X + _offset.X + playerBody.Width / 2;
-            else if (cliffDir == 1)
-                goalPosition.Y = EntityPosition.Position.Y + EntitySize.Height + _offset.Y;
-            else if (cliffDir == 3)
-                goalPosition.Y = EntityPosition.Position.Y + _offset.Y + playerBody.Height;
-
-            if (cliffDir % 2 != 0)
-                goalPosition.X += _offset.X;
-            if (cliffDir % 2 == 0)
-                goalPosition.Y += _offset.Y;
+            var goalPosition = RailJumpGameplay.GetGoal(
+                MapManager.ObjLink.Position,
+                EntityPosition.Position.X, EntityPosition.Position.Y,
+                EntitySize.Width, EntitySize.Height, _offset,
+                playerBody.Width, playerBody.Height);
 
             var goalPositionZ = 0f;
 
@@ -130,17 +119,8 @@ namespace ProjectZ.InGame.GameObjects.Things
                 }
             }
 
-            var offsetLength = _offset.Length();
-
-            var jumpMult = 1.0f;
-            if (offsetLength > 16)
-                jumpMult += (offsetLength - 16) / 32;
-            if (_offset.Y < -4)
-                jumpMult *= 0.75f;
-
-            var speedMult = 1.0f;
-            if (offsetLength > 16)
-                speedMult = 1 - (offsetLength - 16) / 80;
+            var jumpMult = RailJumpGameplay.GetHeightMultiplier(_offset);
+            var speedMult = RailJumpGameplay.GetSpeedMultiplier(_offset);
 
             MapManager.ObjLink.StartRailJump(goalPosition, jumpMult * _height, speedMult * _speed, goalPositionZ);
 

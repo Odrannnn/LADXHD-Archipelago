@@ -15,7 +15,7 @@ namespace ProjectZ.InGame.GameObjects.Effects
         private float light_fade   = 0.33f;
 
         public ObjDeathExplodeEffect(Map.Map map, int posX, int posY, int offsetX, int offsetY, bool pieceofpower = false)
-            : base(map, posX, posY, offsetX, offsetY, Values.LayerTop, pieceofpower ? "Particles/pieceOfPowerExplosion" : "Particles/explosion0", "run", deleteOnFinish: true)
+            : base(map, posX, posY, offsetX, offsetY, Values.LayerTop, pieceofpower ? "Particles/pieceOfPowerExplosion" : EnemyDeathGameplay.ExplosionAnimation, "run", deleteOnFinish: true)
         {
             // If a mod file exists load the values from it.
             string modFile = Path.Combine(Values.PathLAHDMods, "ObjDeathExplodeEffect.lahdmod");

@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 
+using ProjectZ.InGame.SaveLoad;
+
 namespace ProjectZ.InGame.Things
 {
     public class ItemManager
@@ -9,6 +11,13 @@ namespace ProjectZ.InGame.Things
         public GameItem this[string key] => key != null && _items.ContainsKey(key) ? _items[key] : null;
 
         private readonly Dictionary<string, GameItem> _items = new Dictionary<string, GameItem>();
+
+        // Ordinary drops can be described without loading textures, saves or a game session.
+        public static GameItem CreateOrdinaryDrop(string name, DictAtlasEntry sprite, bool swordCollect) => new(
+            sprite: sprite, name: name, count: 1, maxCount: 999,
+            soundEffectName: name == "heart" ? "D360-20-14" : "D370-05-05",
+            swordCollect: swordCollect, collectWidth: 8,
+            collectHeight: name == "heart" ? 7 : 14, collectOffsetX: -1);
 
         public void Load()
         {
@@ -21,26 +30,26 @@ namespace ProjectZ.InGame.Things
             _items.Add("smallkey", new GameItem(
                 sprite: Resources.GetSprite("smallkey"),
                 name: "smallkey",
-                count: 1,
-                maxCount: 9,
+                count: DungeonDoorGameplay.SmallKeyPickupCount,
+                maxCount: DungeonDoorGameplay.SmallKeyCapacity,
                 drawLength: 1,
                 soundEffectName: "D370-01-01",
                 swordCollect: GameSettings.SwGrabSmallKey,
-                collectWidth: 8,
-                collectHeight: 14,
-                collectOffsetX: -1
+                collectWidth: DungeonDoorGameplay.SmallKeyCollectWidth,
+                collectHeight: DungeonDoorGameplay.SmallKeyCollectHeight,
+                collectOffsetX: DungeonDoorGameplay.SmallKeyCollectOffsetX
             ));
             _items.Add("smallkeyChest", new GameItem(
                 sprite: Resources.GetSprite("smallkey"),
                 name: "smallkey",
                 pickUpDialog: "smallkey",
-                count: 1,
+                count: DungeonDoorGameplay.SmallKeyPickupCount,
                 drawLength: 1,
                 soundEffectName: "D360-01-01",
                 turnDownMusic: true,
-                collectWidth: 8,
-                collectHeight: 14,
-                collectOffsetX: -1
+                collectWidth: DungeonDoorGameplay.SmallKeyCollectWidth,
+                collectHeight: DungeonDoorGameplay.SmallKeyCollectHeight,
+                collectOffsetX: DungeonDoorGameplay.SmallKeyCollectOffsetX
             ));
             _items.Add("nightmarekey", new GameItem(
                 sprite: Resources.GetSprite("nightmarekey"),
@@ -494,17 +503,7 @@ namespace ProjectZ.InGame.Things
 
             // overworld
             // TODO: look into the colors
-            _items.Add("ruby", new GameItem(
-                sprite: Resources.GetSprite("rubyBlue"),
-                name: "ruby",
-                count: 1,
-                maxCount: 999,
-                soundEffectName: "D370-05-05",
-                swordCollect: GameSettings.SwGrabNormal,
-                collectWidth: 8,
-                collectHeight: 14,
-                collectOffsetX: -1
-            ));
+            _items.Add("ruby", CreateOrdinaryDrop("ruby", Resources.GetSprite("rubyBlue"), GameSettings.SwGrabNormal));
             _items.Add("rubyGreen", new GameItem(
                 sprite: Resources.GetSprite("rubyGreen"),
                 animateSprite: true,
@@ -587,17 +586,7 @@ namespace ProjectZ.InGame.Things
                 collectOffsetX: -1
             ));
 
-            _items.Add("heart", new GameItem(
-                sprite: Resources.GetSprite("heart"),
-                name: "heart",
-                count: 1,
-                maxCount: 999,
-                soundEffectName: "D360-20-14",
-                swordCollect: GameSettings.SwGrabNormal,
-                collectWidth: 8,
-                collectHeight: 7,
-                collectOffsetX: -1
-            ));
+            _items.Add("heart", CreateOrdinaryDrop("heart", Resources.GetSprite("heart"), GameSettings.SwGrabNormal));
             _items.Add("heart_1", new GameItem(
                 sprite: Resources.GetSprite("heart"),
                 name: "heart",

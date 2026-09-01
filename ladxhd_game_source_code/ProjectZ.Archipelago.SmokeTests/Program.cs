@@ -75,6 +75,9 @@ WallpaperDecorationDrawingTests.Run();
 WallpaperCameraResizeTests.Run();
 WallpaperInteriorCameraTests.Run();
 WallpaperIndoorNavigationTests.Run();
+WallpaperDungeonDoorTests.Run();
+WallpaperLoosePickupTests.Run();
+WallpaperEnemyDeathTests.Run();
 WallpaperTouchRoutingTests.Run();
 WallpaperPathingRecoveryTests.Run();
 WallpaperSideViewTests.Run();
@@ -344,6 +347,20 @@ for (var frame = 0; frame < 120 && !wellFell; frame++)
 }
 Assert(wellFell && !wellFoughtHolePull,
        "Once the well's canonical hole pull catches Link, journey movement must stop fighting it until the teleporter fall begins.");
+var breakingFloorTemplates = new[]
+{
+    "caveBreakingFloor", "caveBreakingFloor2", "caveBreakingFloor3",
+    "dungeonHole", "breakingFloorCastle", "dungeon5BreakingFloor",
+    "dungeon2BreakingFloor", "dungeon8BreakingFloor", "breakingFloorHouse"
+};
+for (var breakingFloorIndex = 0;
+     breakingFloorIndex < breakingFloorTemplates.Length;
+     breakingFloorIndex++)
+    Assert(LiveWallpaperBreakingFloors.TryGetSpriteId(
+               breakingFloorTemplates[breakingFloorIndex], out var floorSprite) &&
+           floorSprite == $"breaking_floor_{breakingFloorIndex}" &&
+           LiveWallpaperBreakingFloors.IsBreakingFloorSprite(floorSprite),
+           "Every ObjBreakingFloor template must reuse its exact installed floor atlas entry.");
 const string wallpaperPitChestMapData =
     "3\n0\n0\ncave.png\n4\n2\n1\n" +
     "0,0,0,0\n0,0,0,0\n" +
@@ -355,27 +372,30 @@ Assert(LiveWallpaperMap.TryLoad(
        pitChestMap.CollisionCount == 1 &&
        !pitChestMap.IntersectsCollision(
            20, 3, 8, 10, includeHoles: false) &&
-       pitChestMap.IntersectsCollision(
+       !pitChestMap.IntersectsCollision(
            20, 3, 8, 10, includeHoles: true) &&
-       Math.Abs(pitChestMap.GetLinkHoleCoverage(20, 3, 8, 10) - 1f) <
-           0.001f &&
+       pitChestMap.GetLinkHoleCoverage(20, 3, 8, 10) == 0f &&
        pitChestMap.IntersectsCollision(
            32, 3, 16, 11, includeHoles: false) &&
-       pitChestMap.Decorations.Count == 2 &&
-       pitChestMap.Decorations[0].SpriteId == "chest_back" &&
-       pitChestMap.Decorations[0].EntityX == 32 &&
-       pitChestMap.Decorations[0].EntityY == 13 &&
+       pitChestMap.Decorations.Count == 3 &&
+       pitChestMap.Decorations[0].SpriteId == "breaking_floor_0" &&
+       pitChestMap.Decorations[0].EntityX == 16 &&
+       pitChestMap.Decorations[0].EntityY == 0 &&
        pitChestMap.Decorations[0].TopLeft &&
-       pitChestMap.Decorations[0].DrawOffsetX == 0 &&
-       pitChestMap.Decorations[0].DrawOffsetY == -13 &&
-       pitChestMap.Decorations[0].SourceOffsetX == 32 &&
-       pitChestMap.Decorations[1].SpriteId == "chest_front" &&
+       pitChestMap.Decorations[1].SpriteId == "chest_back" &&
        pitChestMap.Decorations[1].EntityX == 32 &&
        pitChestMap.Decorations[1].EntityY == 13 &&
-       !pitChestMap.Decorations[1].TopLeft &&
+       pitChestMap.Decorations[1].TopLeft &&
        pitChestMap.Decorations[1].DrawOffsetX == 0 &&
-       pitChestMap.Decorations[1].DrawOffsetY == 0 &&
+       pitChestMap.Decorations[1].DrawOffsetY == -13 &&
        pitChestMap.Decorations[1].SourceOffsetX == 32 &&
+       pitChestMap.Decorations[2].SpriteId == "chest_front" &&
+       pitChestMap.Decorations[2].EntityX == 32 &&
+       pitChestMap.Decorations[2].EntityY == 13 &&
+       !pitChestMap.Decorations[2].TopLeft &&
+       pitChestMap.Decorations[2].DrawOffsetX == 0 &&
+       pitChestMap.Decorations[2].DrawOffsetY == 0 &&
+       pitChestMap.Decorations[2].SourceOffsetX == 32 &&
        LiveWallpaperChestItem.TryResolve("ruby50", out var rubyChestVisual) &&
        rubyChestVisual.SpriteId == "rubyBlue" &&
        rubyChestVisual.ShowAnimation == 1 &&
@@ -384,7 +404,34 @@ Assert(LiveWallpaperMap.TryLoad(
        powerChestVisual.SpriteId == "pieceOfPower" &&
        powerChestVisual.ShowAnimation == 2 &&
        !LiveWallpaperChestItem.TryResolve("greenZol", out _),
-       "Wallpaper cave pits must expose ObjBreakingFloor's owned hole, and chests must retain both canonical sprites, depth, offsets, and collision.");
+       "Wallpaper breaking floors must begin with their installed intact sprite and inactive owned hole, while chests retain both canonical sprites, depth, offsets, and collision.");
+Assert(!pitChestMap.BreakingFloors.Advance(
+           20, 3, 8, 10,
+           LiveWallpaperBreakingFloors.BreakMilliseconds - 1,
+           LiveWallpaperBreakingFloors.BreakMilliseconds - 1) &&
+       !pitChestMap.IntersectsHole(20, 3, 8, 10),
+       "ObjBreakingFloor must remain intact until its exact native contact timer expires.");
+Assert(pitChestMap.BreakingFloors.Advance(
+           20, 3, 8, 10, 1,
+           LiveWallpaperBreakingFloors.BreakMilliseconds) &&
+       pitChestMap.BreakingFloors.IsBrokenAt(16, 0) &&
+       pitChestMap.IntersectsHole(20, 3, 8, 10) &&
+       Math.Abs(pitChestMap.GetLinkHoleCoverage(20, 3, 8, 10) - 1f) < 0.001f,
+       "At 670 ms ObjBreakingFloor must hide its floor and activate its exact owned ObjHole rectangle.");
+Assert(!pitChestMap.BreakingFloors.Advance(
+           0, 0, 0, 0,
+           LiveWallpaperBreakingFloors.RespawnMilliseconds - 1,
+           LiveWallpaperBreakingFloors.BreakMilliseconds +
+           LiveWallpaperBreakingFloors.RespawnMilliseconds - 1,
+           canTrigger: false) &&
+       pitChestMap.IntersectsHole(20, 3, 8, 10) &&
+       pitChestMap.BreakingFloors.Advance(
+           0, 0, 0, 0, 1,
+           LiveWallpaperBreakingFloors.BreakMilliseconds +
+           LiveWallpaperBreakingFloors.RespawnMilliseconds,
+           canTrigger: false) &&
+       !pitChestMap.IntersectsHole(20, 3, 8, 10),
+       "Non-classic breaking floors must respawn after the native 15-second delay.");
 var chestJourneyMapData = new System.Text.StringBuilder(
     "3\n0\n0\noverworld.png\n20\n16\n1\n");
 for (var row = 0; row < 16; row++)
@@ -2861,6 +2908,8 @@ Assert(RoosterGameplayMotion.ResolvePickupPosition(
            RoosterGameplayMotion.PickupSequenceMilliseconds).Z ==
        RoosterGameplayMotion.CarryHeight,
        "Rooster pickup must remain grounded for ObjLink's pull and finish at ObjCock's exact carry height.");
+Assert(Math.Abs(RoosterGameplayMotion.CarryAnimationSpeedMultiplier - 2f) < 0.0001f,
+       "The carried wallpaper rooster must use ObjCock's doubled native animator speed.");
 Assert(Math.Abs(RoosterGameplayMotion.ResolveHoverTarget(0) - 36f) < 0.0001f &&
        Math.Abs(RoosterGameplayMotion.AdvanceFlightHeight(
            RoosterGameplayMotion.CarryHeight, 0, 1f) - 14.5f) < 0.0001f,
@@ -2969,9 +3018,27 @@ Assert(Math.Abs(constrainedBowWow.HorizontalOffset) < 0.001f &&
 Assert(LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 15) == 66 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 30) == 33 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 60) == 16 &&
+       LiveWallpaperFrameScheduler.GetDelayMilliseconds(
+           true, LiveWallpaperFrameScheduler.AdaptiveFrameRate) == 33 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(true, 999) == 33 &&
        LiveWallpaperFrameScheduler.GetDelayMilliseconds(false, 30) == 1_000,
-       "The wallpaper scheduler must support 15, 30, and opt-in 60 FPS while keeping its static low-power cadence.");
+       "The wallpaper scheduler must support fixed and unresolved adaptive FPS while keeping its static low-power cadence.");
+Assert(LiveWallpaperFrameScheduler.ResolveFrameRate(
+           LiveWallpaperFrameScheduler.AdaptiveFrameRate,
+           needsHighFrameRate: true, passive: true) == 60 &&
+       LiveWallpaperFrameScheduler.ResolveFrameRate(
+           LiveWallpaperFrameScheduler.AdaptiveFrameRate,
+           needsHighFrameRate: false, passive: false) == 30 &&
+       LiveWallpaperFrameScheduler.ResolveFrameRate(
+           LiveWallpaperFrameScheduler.AdaptiveFrameRate,
+           needsHighFrameRate: false, passive: true) == 15 &&
+       LiveWallpaperFrameScheduler.ResolveFrameRate(
+           15, needsHighFrameRate: true, passive: false) == 15 &&
+       LiveWallpaperFrameScheduler.ResolveFrameRate(
+           30, needsHighFrameRate: true, passive: true) == 30 &&
+       LiveWallpaperFrameScheduler.ResolveFrameRate(
+           60, needsHighFrameRate: false, passive: true) == 60,
+       "Adaptive FPS must use 60 for immediate motion, 30 for normal exploration, and 15 only while passive without changing fixed-rate choices.");
 var firstHighFpsDelay = LiveWallpaperFrameScheduler.GetCompensatedDelayMilliseconds(
     1_000, 0, true, 60, out var firstHighFpsDeadline);
 var renderCompensatedDelay = LiveWallpaperFrameScheduler.GetCompensatedDelayMilliseconds(

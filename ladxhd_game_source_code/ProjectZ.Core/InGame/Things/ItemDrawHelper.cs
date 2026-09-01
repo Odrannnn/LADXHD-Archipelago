@@ -53,7 +53,12 @@ namespace ProjectZ.InGame.Things
         private static bool _heartAnimation;
         private static bool _heartSounds;
 
-        public static Color[] CloakColors = { new Color(16, 173, 66), new Color(24, 132, 255), new Color(255, 8, 41) };
+        public static Color[] CloakColors =
+        {
+            TunicGameplay.GetDefaultColor(GameManager.CloakGreen),
+            TunicGameplay.GetDefaultColor(GameManager.CloakBlue),
+            TunicGameplay.GetDefaultColor(GameManager.CloakRed)
+        };
 
         // Values configurable via lahdmod.
         static int  tunic_red_r = 255;

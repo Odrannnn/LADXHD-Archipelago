@@ -29,7 +29,7 @@ namespace ProjectZ.InGame.GameObjects.Enemies
         private float _moveSpeed = 0.5f;
         private int _direction;
         private int _lives = EnemyLives.MoblinPig;
-        private int _dropIndex = 4;
+        private int _dropIndex = EnemyDeathGameplay.MoblinDrop;
 
         public EnemyMoblinPig() : base("moblinPig") { }
 

@@ -30,6 +30,31 @@ namespace ProjectZ
         public const float GroundDrag = 0.8f;
         public const float AirDrag = 0.9f;
         public const float FramesPerSecond = 60f;
+        public const float ItemJumpVelocity = 1f;
+        public const float ItemDropHeight = 60f;
+        public const int UncollectedDespawnMilliseconds = 15000;
+        public const int DeepWaterDespawnMilliseconds = 125;
+        public const string WaterLossAnimation = "Particles/fishingSplash";
+        public const int ItemBodyOffsetX = -4;
+        public const int ItemBodyOffsetY = -8;
+        public const int ItemBodyWidth = 8;
+        public const int ItemBodyHeight = 8;
+        public static Point WaterSplashPosition(float x, float y) => new(
+            (int)(x + ItemBodyOffsetX + ItemBodyWidth / 2f),
+            (int)(y + ItemBodyOffsetY + ItemBodyHeight / 2f));
+
+        // ObjItem.UpdateIdle resets this timer while airborne or away from deep water.
+        public static bool AdvanceDeepWater(ref double remaining, bool grounded, bool deepWater, double elapsedMilliseconds)
+        {
+            if (!grounded || !deepWater)
+            {
+                remaining = DeepWaterDespawnMilliseconds;
+                return false;
+            }
+            remaining -= elapsedMilliseconds;
+            return remaining <= 0;
+        }
+        public static Vector3 ItemPosition(int x, int y) => new(x + 8, y + 11, 0);
         public const int CollectionDespawnMilliseconds = 350;
         public const int CollectionFadeStartMilliseconds = 250;
         public const int CollectionMoveStopMilliseconds = 250;
@@ -63,6 +88,22 @@ namespace ProjectZ
                 InitialVerticalVelocity);
         }
 
+        public static void AdvanceVertical(ref float height, ref float velocity, ref bool grounded, bool deepWater = false)
+        {
+            velocity = LinkGameplayMotion.ApplyGravity(velocity, Gravity, 1f);
+            if (height + velocity > 0f && (!grounded || velocity >= 0f || Math.Abs(height) > 2f))
+            {
+                height += velocity;
+                grounded = false;
+            }
+            else
+            {
+                velocity = LinkGameplayMotion.ResolveGroundVelocity(velocity, Bounciness, deepWater);
+                height = 0f;
+                grounded = true;
+            }
+        }
+
         public static DroppedItemMotionState Resolve(
             Vector2 direction, long elapsedMilliseconds)
         {
@@ -74,21 +115,7 @@ namespace ProjectZ
                 elapsedMilliseconds * FramesPerSecond / 1000d));
             for (var frame = 0; frame < frames; frame++)
             {
-                velocity.Z = LinkGameplayMotion.ApplyGravity(
-                    velocity.Z, Gravity, 1f);
-                if (height + velocity.Z > 0f &&
-                    (!grounded || velocity.Z >= 0f || Math.Abs(height) > 2f))
-                {
-                    height += velocity.Z;
-                    grounded = false;
-                }
-                else
-                {
-                    velocity.Z = LinkGameplayMotion.ResolveGroundVelocity(
-                        velocity.Z, Bounciness, deepWater: false);
-                    height = 0f;
-                    grounded = true;
-                }
+                AdvanceVertical(ref height, ref velocity.Z, ref grounded);
 
                 offset += new Vector2(velocity.X, velocity.Y);
                 var drag = grounded ? GroundDrag : AirDrag;

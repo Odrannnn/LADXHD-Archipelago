@@ -27,7 +27,7 @@ namespace ProjectZ.InGame.GameObjects.Enemies
         private float _soundCounter;
         private bool _dealsDamage = true;
         private int _lives = EnemyLives.SeaUrchin;
-        private int _dropIndex = 2;
+        private int _dropIndex = EnemyDeathGameplay.SeaUrchinDrop;
 
         public EnemySeaUrchin() : base("sea urchin") { }
 

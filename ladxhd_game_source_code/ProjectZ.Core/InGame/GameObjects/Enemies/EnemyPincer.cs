@@ -44,7 +44,7 @@ namespace ProjectZ.InGame.GameObjects.Enemies
         private bool _overHole;
         private int _dirIndex;
         private int _lives = EnemyLives.Pincer;
-        private int _dropIndex = 1;
+        private int _dropIndex = EnemyDeathGameplay.PincerDrop;
 
         private int _offsetY = 4;
         private bool _isThrown;

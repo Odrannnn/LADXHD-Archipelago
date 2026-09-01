@@ -26,7 +26,7 @@ namespace ProjectZ.InGame.GameObjects.Enemies
 
         private const float MoveSpeed = 0.5f;
         private int _lives = EnemyLives.Leever;
-        private int _dropIndex = 4;
+        private int _dropIndex = EnemyDeathGameplay.LeeverDrop;
 
         public EnemyLeever() : base("leever") { }
 

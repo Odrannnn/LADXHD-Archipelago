@@ -39,6 +39,26 @@ internal static class WallpaperSceneEffectsTests
             effects.Shadows[2].StoneKey == map.GetStoneKey(80, 48) &&
             effects.Shadows[2].EntityX == 88 && effects.Shadows[2].EntityY == 60,
             "Bush/stone shadow invalidation must share cut/lift keys, including off-grid stone placements.");
+        var treeShadows = effects.GetShadowIndicesAt(2, 3);
+        var bushShadows = effects.GetShadowIndicesAt(4, 2);
+        var stoneShadows = effects.GetShadowIndicesAt(5, 3);
+        Check(treeShadows.Length == 1 && treeShadows[0] == 0 &&
+            bushShadows.Length == 1 && bushShadows[0] == 1 &&
+            stoneShadows.Length == 1 && stoneShadows[0] == 2 &&
+            effects.GetShadowIndicesAt(-1, 0).IsEmpty &&
+            effects.GetShadowIndicesAt(16, 15).IsEmpty,
+            "Static-shadow cells must use canonical entity anchors and source order.");
+        for (var index = 0; index < 100; index++)
+            _ = effects.GetShadowIndicesAt(index & 15, index / 16 & 15).Length;
+        var shadowGridAllocated = GC.GetAllocatedBytesForCurrentThread();
+        var shadowGridCount = 0;
+        for (var index = 0; index < 10000; index++)
+            foreach (var shadowIndex in
+                     effects.GetShadowIndicesAt(index & 15, index / 16 & 15))
+                shadowGridCount += shadowIndex + 1;
+        Check(GC.GetAllocatedBytesForCurrentThread() == shadowGridAllocated &&
+            shadowGridCount > 0,
+            "Static-shadow cell queries must be allocation-free per frame.");
         Check(!Map(["shadowDisabler", "tree0"], "0;0;0", "1;0;0").SceneEffects.UseShadows,
             "Maps that disable game shadows must not acquire wallpaper shadows.");
 
@@ -152,7 +172,13 @@ internal static class WallpaperSceneEffectsTests
         CheckRegionalBlur([new(-30, -30, 4, 4)], [new(200, 200, 4, 4)], expectedRegions: 0);
         var crowded = (from y in new[] { 8, 40, 72 } from x in new[] { 8, 64, 120 }
             select new Rectangle(x, y, 2, 2)).ToArray();
-        CheckRegionalBlur([], crowded, expectedRegions: 1); // Ninth island reaches the bounded fallback.
+        CheckRegionalBlur([], crowded, expectedRegions: crowded.Length,
+            maxAreaFraction: 0.2f);
+        var overflow = Enumerable.Range(0, GameSceneEffects.MaxShadowDirtyRegions + 1)
+            .Select(index => new Rectangle(
+                2 + index % 11 * 15, 4 + index / 11 * 30, 2, 2))
+            .ToArray();
+        CheckRegionalBlur([], overflow, expectedRegions: 1); // Capacity+1 retains the bounded fallback.
         var random = new Random(107);
         for (var frame = 0; frame < 24; frame++)
         {
@@ -199,7 +225,9 @@ internal static class WallpaperSceneEffectsTests
             union = union.IsEmpty ? bounds : Rectangle.Union(union, bounds);
         }
         if (count > regions.Length || expectedRegions >= 0 && count != expectedRegions)
-            throw new InvalidOperationException("Shadow regions must stay bounded, separate distant actors and merge overlapping ones.");
+            throw new InvalidOperationException(
+                "Shadow regions must stay bounded, separate distant actors and merge overlapping ones. " +
+                $"expected={expectedRegions}, actual={count}, previous={previous.Length}, current={current.Length}.");
         var scratch = new float[width * height];
         var lightBefore = before.Select((pixel, index) => Light(pixel, index)).ToArray();
         var sampledPixels = 0;

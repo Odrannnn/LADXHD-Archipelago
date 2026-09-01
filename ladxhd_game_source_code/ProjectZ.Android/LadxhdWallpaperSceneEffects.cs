@@ -27,6 +27,7 @@ namespace ProjectZ.Android
         private readonly List<ShadowDraw> _shadowCommands = new();
         private readonly List<ShadowDraw> _previousShadowCommands = new();
         private readonly List<ShadowDraw> _previousStaticShadowCommands = new();
+        private readonly List<int> _visibleStaticShadowIndices = new();
         private bool[] _matchedStaticShadows = [];
         private readonly Paint _shadowPaint = new() { AntiAlias = false, FilterBitmap = true };
         private readonly Paint _effectPaint = new() { AntiAlias = false, FilterBitmap = true };
@@ -95,6 +96,8 @@ namespace ProjectZ.Android
                 if (!_shadowAssets.ContainsKey(shadow.SpriteId))
                     _shadowAssets[shadow.SpriteId] = LoadAtlasSprite(context, "objects", shadow.SpriteId);
             _groundShadowSheet ??= LoadAtlasSprite(context, "items", "heart")?.Bitmap;
+            if (!_lightTextures.ContainsKey("shadow"))
+                _lightTextures["shadow"] = LoadInstalledLight(context, "shadow");
             if (!_lightTextures.ContainsKey("light"))
                 _lightTextures["light"] = LoadInstalledLight(context, "light");
             foreach (var light in _overworldMap.Map.SceneEffects.Lights)
@@ -235,9 +238,14 @@ namespace ProjectZ.Android
                 _shadowMask?.Dispose();
                 _rawShadowMask?.Dispose();
                 _staticShadowMask?.Dispose();
+                // BlurShadowMask reads and writes packed ARGB pixels through
+                // Bitmap.Get/SetPixels, whose ALPHA_8 conversion is undefined.
+                // Keep those two CPU-facing surfaces in their required format.
                 _shadowMask = Bitmap.CreateBitmap(width, height, Bitmap.Config.Argb8888);
                 _rawShadowMask = Bitmap.CreateBitmap(width, height, Bitmap.Config.Argb8888);
-                _staticShadowMask = Bitmap.CreateBitmap(width, height, Bitmap.Config.Argb8888);
+                // The static cache is only a coverage source drawn into the raw
+                // mask. ALPHA_8 retains all 256 alpha levels at one byte/pixel.
+                _staticShadowMask = Bitmap.CreateBitmap(width, height, Bitmap.Config.Alpha8);
                 _shadowCanvas = new Canvas(_rawShadowMask);
                 _staticShadowCanvas = new Canvas(_staticShadowMask);
                 _shadowScratch = new float[width * height];
@@ -260,10 +268,11 @@ namespace ProjectZ.Android
             {
                 _staticShadowCanvas.DrawColor(Color.Transparent, PorterDuff.Mode.Clear);
                 _shadowCommands.Clear();
-                foreach (var shadow in scene.Shadows)
+                CollectVisibleStaticShadowIndices(scene, viewport);
+                foreach (var shadowIndex in _visibleStaticShadowIndices)
                 {
-                    if (!IsNearViewport(viewport, shadow.EntityX, shadow.EntityY, 96f) ||
-                        shadow.BushKey >= 0 && link?.CutBushes?.Contains(shadow.BushKey) == true ||
+                    var shadow = scene.Shadows[shadowIndex];
+                    if (shadow.BushKey >= 0 && link?.CutBushes?.Contains(shadow.BushKey) == true ||
                         shadow.StoneKey >= 0 && link?.LiftedStones?.Contains(shadow.StoneKey) == true ||
                         !_shadowAssets.TryGetValue(shadow.SpriteId, out var asset) || asset == null)
                         continue;
@@ -290,12 +299,21 @@ namespace ProjectZ.Android
             _collectingShadows = true;
             try
             {
-                for (var i = 0; i < _mapActorStates.Length; i++)
-                    if (_activeMapActors[i])
-                        DrawInstalledMapActor(canvas, viewport, elapsed, animated, link, i);
-                for (var i = 0; i < _mapEnemyStates.Length; i++)
-                    if (_activeMapEnemies[i])
-                        DrawInstalledMapEnemy(canvas, viewport, elapsed, animated, i);
+                foreach (var actorIndex in _activeMapActorIndices)
+                    DrawInstalledMapActor(
+                        canvas, viewport, elapsed, animated, link, actorIndex);
+                foreach (var enemyIndex in _activeMapEnemyIndices)
+                    DrawInstalledMapEnemy(
+                        canvas, viewport, elapsed, animated, enemyIndex);
+                for (var i = 0; i < _overworldMap.Map.DungeonDoors.LooseKeys.Count; i++)
+                {
+                    var key = _overworldMap.Map.DungeonDoors.LooseKeys[i];
+                    if (key.Visible && IsNearViewport(viewport, key.X, key.Y, 80f))
+                        DrawLooseKey(canvas, viewport, i);
+                }
+                foreach (var drop in _overworldMap.Map.DungeonDoors.EnemyDrops)
+                    if (drop.Visible && IsNearViewport(viewport, drop.X, drop.Y, 32f))
+                        DrawPickup(canvas, viewport, drop);
                 if (link.HasValue)
                 {
                     DrawLink(canvas, viewport, elapsed, animated, link.Value);
@@ -348,6 +366,36 @@ namespace ProjectZ.Android
             // light map. Drawing a black overlay as well would double-darken it.
             if (!_sunlightEnabled)
                 DrawEffectBitmap(canvas, _shadowMask, viewport, view.Scale);
+        }
+
+        private void CollectVisibleStaticShadowIndices(
+            LiveWallpaperSceneEffects scene,
+            LiveWallpaperMapViewport viewport)
+        {
+            _visibleStaticShadowIndices.Clear();
+            var map = _overworldMap.Map;
+            const int marginTiles = 6; // Exact 96-pixel IsNearViewport margin.
+            var startX = Math.Clamp(
+                viewport.OriginX - marginTiles, 0, map.Width - 1);
+            var startY = Math.Clamp(
+                viewport.OriginY - marginTiles, 0, map.Height - 1);
+            var endX = Math.Clamp(
+                viewport.OriginX + viewport.Columns + marginTiles,
+                0, map.Width - 1);
+            var endY = Math.Clamp(
+                viewport.OriginY + viewport.Rows + marginTiles,
+                0, map.Height - 1);
+            for (var tileY = startY; tileY <= endY; tileY++)
+            for (var tileX = startX; tileX <= endX; tileX++)
+            foreach (var shadowIndex in scene.GetShadowIndicesAt(tileX, tileY))
+            {
+                var shadow = scene.Shadows[shadowIndex];
+                if (IsNearViewport(
+                        viewport, shadow.EntityX, shadow.EntityY, 96f))
+                    _visibleStaticShadowIndices.Add(shadowIndex);
+            }
+            // Preserve the original installed-list order and alpha overlap.
+            _visibleStaticShadowIndices.Sort();
         }
 
         private void CollectChangedShadowRegions(List<ShadowDraw> previous, float scale, int width, int height)
@@ -616,20 +664,42 @@ namespace ProjectZ.Android
             canvas.DrawBitmap(bitmap, null, _drawDestination, _effectPaint);
         }
 
+        private void ReleaseSceneEffectRenderTargets()
+        {
+            _scrollCopyCanvas.SetBitmap(null);
+            _scrollTargetCanvas.SetBitmap(null);
+            _scrollCopy?.Dispose();
+            _scrollCopy = null;
+            _shadowCanvas?.Dispose();
+            _shadowCanvas = null;
+            _staticShadowCanvas?.Dispose();
+            _staticShadowCanvas = null;
+            _shadowMask?.Dispose();
+            _shadowMask = null;
+            _rawShadowMask?.Dispose();
+            _rawShadowMask = null;
+            _staticShadowMask?.Dispose();
+            _staticShadowMask = null;
+            _lightCanvas?.Dispose();
+            _lightCanvas = null;
+            _lightMap?.Dispose();
+            _lightMap = null;
+            _staticShadowView = null;
+            _lightView = null;
+            _lightViewport = null;
+            _shadowScratch = [];
+            _previousShadowCommands.Clear();
+            _previousStaticShadowCommands.Clear();
+            _lightingApplied = false;
+        }
+
         private void DisposeSceneEffects()
         {
+            ReleaseSceneEffectRenderTargets();
             _scrollCopyCanvas.Dispose();
             _scrollTargetCanvas.Dispose();
-            _scrollCopy?.Dispose();
             _scrollPaint.Dispose();
             _scrollSourceMode.Dispose();
-            _shadowCanvas?.Dispose();
-            _staticShadowCanvas?.Dispose();
-            _shadowMask?.Dispose();
-            _rawShadowMask?.Dispose();
-            _staticShadowMask?.Dispose();
-            _lightCanvas?.Dispose();
-            _lightMap?.Dispose();
             foreach (var texture in _lightTextures.Values.Distinct())
                 texture?.Dispose();
             _shadowPaint.Dispose();

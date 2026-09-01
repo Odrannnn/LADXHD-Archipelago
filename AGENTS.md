@@ -93,6 +93,15 @@ Always use the pinned `ladxhd-android-builder:net9` Docker image for local .NET 
 smoke tests, full asset migration, and Android APK builds. Do not use a host-installed .NET SDK or
 silently substitute another SDK, workload, Java version, Android SDK, or container tag.
 
+For an iterative Android candidate, use `tools/build_android_arm64.ps1`. Its separate Android
+platform build is mandatory: a Core build and the smoke executable cannot catch .NET Android
+binding visibility or API-shape errors. The script then runs the regressions, publishes, checks
+that the expected APK was refreshed, and applies the assetless-package guard. `-SkipSmoke` is only
+for a compile iteration after the same source revision already passed the suite; never use it for
+the APK installed on a test device. Do not sign or install an artifact from a failed or interrupted
+script run. Keep the script's smoke restore before its Android restore: both graphs share `obj`
+assets, so Android ARM64 must be the last restore before the platform build and publish.
+
 For iterative phone testing, restore, compile, and publish only `android-arm64` by overriding the
 project's `RuntimeIdentifiers` property to `android-arm64`; do not spend time building the universal
 four-ABI APK. Build the universal APK only for an explicitly requested public release or final

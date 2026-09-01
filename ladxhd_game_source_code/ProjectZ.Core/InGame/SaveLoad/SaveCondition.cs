@@ -2,6 +2,7 @@
 
 namespace ProjectZ.InGame.SaveLoad
 {
+    using System;
     // the parser does support and, or, negate and simple brackets
     // this is probably not how it should be done
     // I never wrote something like this before and did not look into how it is normally done...
@@ -28,16 +29,20 @@ namespace ProjectZ.InGame.SaveLoad
 
         public static ConditionNode GetConditionNode(string strCondition)
         {
-            BracketDictionary.Clear();
+            // Both renderers can load maps on separate threads.
+            lock (BracketDictionary)
+            {
+                BracketDictionary.Clear();
 
-            // prepass replaces elements in brackets with dummy elements
-            strCondition = PreParse(strCondition);
+                // prepass replaces elements in brackets with dummy elements
+                strCondition = PreParse(strCondition);
 
-            // build the normal left/right tree
-            var node = ParseCondition(strCondition);
+                // build the normal left/right tree
+                var node = ParseCondition(strCondition);
 
-            // readd the bracket elements
-            return PostParse(node);
+                // readd the bracket elements
+                return PostParse(node);
+            }
         }
 
         private static string PreParse(string strCondition)
@@ -126,6 +131,7 @@ namespace ProjectZ.InGame.SaveLoad
         public ConditionNode Right;
 
         public virtual bool Check() => false;
+        public virtual bool Check(Func<string, string> readKey) => false;
     }
 
     class CNode : ConditionNode
@@ -154,6 +160,8 @@ namespace ProjectZ.InGame.SaveLoad
         {
             return Negate ^ (Game1.GameManager.SaveManager.GetString(SaveKey, "0") == Condition);
         }
+        public override bool Check(Func<string, string> readKey) =>
+            Negate ^ ((readKey(SaveKey) ?? "0") == Condition);
     }
 
     class CNodeAnd : ConditionNode
@@ -168,6 +176,8 @@ namespace ProjectZ.InGame.SaveLoad
         {
             return Left.Check() && Right.Check();
         }
+        public override bool Check(Func<string, string> readKey) =>
+            Left.Check(readKey) && Right.Check(readKey);
     }
 
     class CNodeOr : ConditionNode
@@ -182,5 +192,7 @@ namespace ProjectZ.InGame.SaveLoad
         {
             return Left.Check() || Right.Check();
         }
+        public override bool Check(Func<string, string> readKey) =>
+            Left.Check(readKey) || Right.Check(readKey);
     }
 }

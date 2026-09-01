@@ -94,7 +94,8 @@ namespace ProjectZ.InGame.GameObjects.Base.Components
             set => BodyBox.OffsetY = value;
         }
 
-        public int DeepWaterOffset = -3;
+        public const int DefaultDeepWaterOffset = -3;
+        public int DeepWaterOffset = DefaultDeepWaterOffset;
 
         public int Level = 0;
         

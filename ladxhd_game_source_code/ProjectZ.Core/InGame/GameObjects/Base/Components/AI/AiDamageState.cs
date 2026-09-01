@@ -638,7 +638,8 @@ namespace ProjectZ.InGame.GameObjects.Base.Components.AI
                 {
                     var posX = (int)bodyCenter.X;
                     var posY = (int)(bodyCenter.Y);
-                    var explosionAnimation = new ObjDeathExplodeEffect(_gameObject.Map, posX, posY, -12, -12, false);
+                    var explosionAnimation = new ObjDeathExplodeEffect(_gameObject.Map, posX, posY,
+                        EnemyDeathGameplay.ExplosionOffset, EnemyDeathGameplay.ExplosionOffset, false);
                     Game1.GameManager.MapManager.CurrentMap.Objects.SpawnObject(explosionAnimation);
                     Game1.GameManager.MapManager.CurrentMap.Objects.RegisterAlwaysAnimateObject(explosionAnimation);
                 }

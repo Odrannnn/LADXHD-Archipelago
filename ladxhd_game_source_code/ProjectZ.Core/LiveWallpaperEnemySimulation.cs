@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
+using ProjectZ.InGame.GameObjects.Base.Components.AI;
 
 namespace ProjectZ
 {
@@ -69,7 +70,8 @@ namespace ProjectZ
             float pixelX, float pixelY, int direction,
             LiveWallpaperEnemyAction action,
             LiveWallpaperEnemyProjectileState projectile = default,
-            LiveWallpaperLinkHit linkHit = default)
+            LiveWallpaperLinkHit linkHit = default,
+            long deathStartedAt = -1, float deathX = 0, float deathY = 0, string deathDrop = null)
         {
             PixelX = pixelX;
             PixelY = pixelY;
@@ -77,6 +79,10 @@ namespace ProjectZ
             Action = action;
             Projectile = projectile;
             LinkHit = linkHit;
+            DeathStartedAt = deathStartedAt;
+            DeathX = deathX;
+            DeathY = deathY;
+            DeathDrop = deathDrop;
         }
 
         public float PixelX { get; }
@@ -85,6 +91,10 @@ namespace ProjectZ
         public LiveWallpaperEnemyAction Action { get; }
         public LiveWallpaperEnemyProjectileState Projectile { get; }
         public LiveWallpaperLinkHit LinkHit { get; }
+        public long DeathStartedAt { get; }
+        public float DeathX { get; }
+        public float DeathY { get; }
+        public string DeathDrop { get; }
         public bool Visible => Action != LiveWallpaperEnemyAction.Hidden;
     }
 
@@ -125,9 +135,12 @@ namespace ProjectZ
                 public LiveWallpaperEnemyProjectileKind ProjectileKind;
                 public uint RandomState;
                 public LiveWallpaperEnemyAction Action;
-                public bool SwordHitApplied;
                 public int LastStoneImpactSerial;
                 public bool Dead;
+                public bool SuppressDeathEffects;
+                public long DeathStartedAt = -1;
+                public float DeathX, DeathY;
+                public string DeathDrop;
                 public LiveWallpaperLinkHit PendingLinkHit;
             }
 
@@ -172,19 +185,18 @@ namespace ProjectZ
                     runtime.LastStoneImpactSerial =
                         link.Value.StoneImpactSerial;
                     if (!runtime.Dead)
-                        ApplyThrownStoneHit(runtime, link.Value);
+                        ApplyThrownStoneHit(runtime, enemy, link.Value);
                 }
 
                 var swordAttack = link?.CombatEnemyIndex == enemyIndex &&
                                   link.Value.Action == LiveWallpaperLinkRouteAction.Attack;
-                if (!swordAttack)
-                    runtime.SwordHitApplied = false;
-                else if (!runtime.SwordHitApplied &&
-                         SwordIntersectsEnemy(runtime, enemy, link.Value) &&
+                // Native AiDamageState gates hits by its damage cooldown.
+                // Blocking swings can follow one another without an idle frame;
+                // a persistent Attack latch would make survivors immune forever.
+                if (swordAttack && SwordIntersectsEnemy(runtime, enemy, link.Value) &&
                          runtime.Cooldown <= 0 && !runtime.Dead)
                 {
-                    ApplySwordHit(runtime, link.Value);
-                    runtime.SwordHitApplied = true;
+                    ApplySwordHit(runtime, enemy, link.Value);
                 }
 
                 var remaining = Math.Clamp(
@@ -201,10 +213,21 @@ namespace ProjectZ
                     TryHitLinkByContact(runtime, enemy.Kind, link.Value);
 
                 if (runtime.Dead && runtime.Cooldown <= 0)
+                {
+                    if (runtime.DeathStartedAt < 0 && !runtime.SuppressDeathEffects)
+                    {
+                        runtime.DeathStartedAt = elapsedMilliseconds;
+                        // AiDamageState.BaseOnDeath uses the body-box center,
+                        // not the sprite anchor or original map spawn tile.
+                        runtime.DeathX = runtime.X + enemy.BodyX - enemy.EntityX + enemy.BodyWidth / 2f;
+                        runtime.DeathY = runtime.Y + enemy.BodyY - enemy.EntityY + enemy.BodyHeight / 2f;
+                        runtime.DeathDrop = EnemyDeathGameplay.RollDrop(enemy.Kind, (min, max) => Next(runtime, min, max));
+                    }
                     return new LiveWallpaperEnemyState(
                         runtime.X, runtime.Y, runtime.Direction,
                         LiveWallpaperEnemyAction.Hidden, GetProjectile(runtime),
-                        runtime.PendingLinkHit);
+                        runtime.PendingLinkHit, runtime.DeathStartedAt, runtime.DeathX, runtime.DeathY, runtime.DeathDrop);
+                }
                 if (runtime.Cooldown > 0)
                 {
                     // AiDamageState alternates the damage shader every 66 ms. The
@@ -238,9 +261,11 @@ namespace ProjectZ
                 runtime.AttackCooldown = 2000;
                 runtime.ProjectileKind = LiveWallpaperEnemyProjectileKind.None;
                 runtime.Lives = GetLives(enemy.Kind);
-                runtime.SwordHitApplied = false;
                 runtime.LastStoneImpactSerial = 0;
                 runtime.Dead = false;
+                runtime.SuppressDeathEffects = false;
+                runtime.DeathStartedAt = -1;
+                runtime.DeathDrop = null;
                 runtime.PendingLinkHit = default;
                 runtime.RandomState = (uint)(enemyIndex + 1) * 747796405u + 2891336453u;
                 switch (enemy.Kind)
@@ -706,7 +731,7 @@ namespace ProjectZ
             }
 
             private static void ApplySwordHit(
-                Runtime runtime, LiveWallpaperSimulatedLinkState link)
+                Runtime runtime, LiveWallpaperMapEnemy enemy, LiveWallpaperSimulatedLinkState link)
             {
                 var target = LinkPosition(link);
                 var direction = DirectionTo(
@@ -717,12 +742,15 @@ namespace ProjectZ
                 runtime.Direction = Opposite(direction);
                 runtime.Lives--;
                 runtime.Dead = runtime.Lives <= 0;
-                runtime.Cooldown = 66f * 6f;
+                // A normal sword hit splits Red Zol; native code explicitly
+                // suppresses its death puff/drop until the stronger-hit kill.
+                runtime.SuppressDeathEffects = enemy.Kind == LiveWallpaperMapEnemyKind.RedZol;
+                runtime.Cooldown = AiDamageState.StaticCooldown;
                 runtime.Action = LiveWallpaperEnemyAction.Hit;
             }
 
             private static void ApplyThrownStoneHit(
-                Runtime runtime, LiveWallpaperSimulatedLinkState link)
+                Runtime runtime, LiveWallpaperMapEnemy enemy, LiveWallpaperSimulatedLinkState link)
             {
                 var direction = DirectionTo(
                     link.StoneImpactX, link.StoneImpactY,
@@ -734,7 +762,9 @@ namespace ProjectZ
                 // ObjStone.Update passes damage=2 with HitType.ThrownObject.
                 runtime.Lives -= 2;
                 runtime.Dead = runtime.Lives <= 0;
-                runtime.Cooldown = 66f * 6f;
+                runtime.SuppressDeathEffects = enemy.Kind == LiveWallpaperMapEnemyKind.RedZol &&
+                    ProjectZ.InGame.GameObjects.EnemyLives.RedZol >= 2;
+                runtime.Cooldown = AiDamageState.StaticCooldown;
                 runtime.Action = LiveWallpaperEnemyAction.Hit;
             }
 

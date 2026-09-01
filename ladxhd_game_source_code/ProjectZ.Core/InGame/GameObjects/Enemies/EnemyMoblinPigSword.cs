@@ -32,7 +32,7 @@ namespace ProjectZ.InGame.GameObjects.Enemies
         private bool _isActive = true;
         private int _direction;
         private int _lives = EnemyLives.MoblinPigSword;
-        private int _dropIndex = 4;
+        private int _dropIndex = EnemyDeathGameplay.MoblinDrop;
 
         public BodyComponent Body;
         public int Direction => _direction;

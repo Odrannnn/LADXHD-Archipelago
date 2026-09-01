@@ -21,21 +21,16 @@ namespace ProjectZ.Android
         public const string ProcessName = ":wallpaper";
         private const string PreferencesName = "ladxhd_live_wallpaper";
         private const string AnimateKey = "animate";
-        private const string IslandLifeKey = "island_life";
-        private const string FeaturedCharacterKey = "featured_character";
         private const string SceneKey = "scene";
         private const string TimeOfDayKey = "time_of_day";
         private const string SunriseKey = "sunrise_minutes";
         private const string SunsetKey = "sunset_minutes";
-        private const string TapActionKey = "tap_action";
         private const string LinkActivityKey = "link_activity";
-        private const string WildlifeScheduleKey = "wildlife_schedule";
-        private const string CharacterPositionKey = "character_position";
         private const string FrameRateKey = "frame_rate";
         private const string FollowLoadingZonesKey = "follow_loading_zones";
 
-        internal readonly record struct Settings(bool Animated, bool IslandLife, int FeaturedCharacter,
-            int Scene, int TimeOfDay, int LinkActivity, int WildlifeSchedule, int CharacterPosition,
+        internal readonly record struct Settings(bool Animated,
+            int Scene, int TimeOfDay, int LinkActivity,
             bool FollowLoadingZones, int FrameRate, int Sunrise, int Sunset);
 
         // Owned by one wallpaper engine, on the main looper. Android keeps only
@@ -62,9 +57,8 @@ namespace ProjectZ.Android
                 {
                     if (_dirty)
                     {
-                        _value = new Settings(IsAnimated(_context), ShowIslandLife(_context),
-                            GetFeaturedCharacter(_context), GetScene(_context), GetTimeOfDay(_context),
-                            GetLinkActivity(_context), GetWildlifeSchedule(_context), GetCharacterPosition(_context),
+                        _value = new Settings(IsAnimated(_context), GetScene(_context), GetTimeOfDay(_context),
+                            GetLinkActivity(_context),
                             LadxhdWallpaperPreferences.FollowLoadingZones(_context), GetFrameRate(_context),
                             GetSunrise(_context), GetSunset(_context));
                         _dirty = false;
@@ -76,7 +70,7 @@ namespace ProjectZ.Android
             public void OnSharedPreferenceChanged(ISharedPreferences preferences, string key)
             {
                 _dirty = true;
-                _changed(); // Coalesce multi-key presets into the next visible frame.
+                _changed(); // Coalesce related preference changes into the next visible frame.
             }
 
             protected override void Dispose(bool disposing)
@@ -95,31 +89,14 @@ namespace ProjectZ.Android
         {
             var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.GetInt(FrameRateKey, 30) ?? 30;
-            return value == 60 ? 60 : value <= 15 ? 15 : 30;
+            return value == LiveWallpaperFrameScheduler.AdaptiveFrameRate
+                ? LiveWallpaperFrameScheduler.AdaptiveFrameRate
+                : value == 60 ? 60 : value <= 15 ? 15 : 30;
         }
 
         public static void SetAnimated(Context context, bool value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutBoolean(AnimateKey, value)?.Apply();
-
-        public static bool ShowIslandLife(Context context) =>
-            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.GetBoolean(IslandLifeKey, true) ?? true;
-
-        public static void SetShowIslandLife(Context context, bool value) =>
-            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.Edit()?.PutBoolean(IslandLifeKey, value)?.Apply();
-
-        public static int GetFeaturedCharacter(Context context)
-        {
-            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.GetInt(FeaturedCharacterKey, 0) ?? 0;
-            return Math.Clamp(value, 0, 4);
-        }
-
-        public static void SetFeaturedCharacter(Context context, int value) =>
-            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.Edit()?.PutInt(FeaturedCharacterKey, Math.Clamp(value, 0, 4))?.Apply();
 
         public static int GetScene(Context context)
         {
@@ -163,17 +140,6 @@ namespace ProjectZ.Android
             return true;
         }
 
-        public static int GetTapAction(Context context)
-        {
-            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.GetInt(TapActionKey, 0) ?? 0;
-            return Math.Clamp(value, 0, 2);
-        }
-
-        public static void SetTapAction(Context context, int value) =>
-            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.Edit()?.PutInt(TapActionKey, Math.Clamp(value, 0, 2))?.Apply();
-
         public static int GetLinkActivity(Context context)
         {
             var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
@@ -185,31 +151,12 @@ namespace ProjectZ.Android
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutInt(LinkActivityKey, Math.Clamp(value, 0, 3))?.Apply();
 
-        public static int GetWildlifeSchedule(Context context)
-        {
-            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.GetInt(WildlifeScheduleKey, 0) ?? 0;
-            return Math.Clamp(value, 0, 1);
-        }
-
-        public static void SetWildlifeSchedule(Context context, int value) =>
-            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.Edit()?.PutInt(WildlifeScheduleKey, Math.Clamp(value, 0, 1))?.Apply();
-
-        public static int GetCharacterPosition(Context context)
-        {
-            var value = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.GetInt(CharacterPositionKey, 0) ?? 0;
-            return Math.Clamp(value, 0, 3);
-        }
-
-        public static void SetCharacterPosition(Context context, int value) =>
-            context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.Edit()?.PutInt(CharacterPositionKey, Math.Clamp(value, 0, 3))?.Apply();
-
         public static void SetFrameRate(Context context, int value) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-                ?.Edit()?.PutInt(FrameRateKey, value == 60 ? 60 : value <= 15 ? 15 : 30)?.Apply();
+                ?.Edit()?.PutInt(FrameRateKey,
+                    value == LiveWallpaperFrameScheduler.AdaptiveFrameRate
+                        ? LiveWallpaperFrameScheduler.AdaptiveFrameRate
+                        : value == 60 ? 60 : value <= 15 ? 15 : 30)?.Apply();
 
         public static bool FollowLoadingZones(Context context) =>
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
@@ -219,24 +166,6 @@ namespace ProjectZ.Android
             context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
                 ?.Edit()?.PutBoolean(FollowLoadingZonesKey, value)?.Apply();
 
-        public static bool ApplyPreset(Context context, int preset)
-        {
-            if (!LiveWallpaperPresets.TryResolve(preset, out var value))
-                return false;
-            var editor = context.GetSharedPreferences(
-                PreferencesName, FileCreationMode.Private)?.Edit();
-            if (editor == null)
-                return false;
-            editor.PutBoolean(AnimateKey, true);
-            editor.PutBoolean(IslandLifeKey, true);
-            editor.PutInt(SceneKey, value.Scene);
-            editor.PutInt(TimeOfDayKey, value.TimeOfDay);
-            editor.PutInt(FeaturedCharacterKey, value.FeaturedCharacter);
-            editor.PutInt(CharacterPositionKey, value.CharacterPosition);
-            editor.PutInt(LinkActivityKey, value.LinkActivity);
-            editor.PutInt(WildlifeScheduleKey, value.WildlifeSchedule);
-            return editor.Commit();
-        }
     }
 
     internal static class LadxhdWallpaperLauncher
@@ -307,7 +236,7 @@ namespace ProjectZ.Android
 
             var explanation = new TextView(this)
             {
-                Text = "A silent, battery-aware Koholint scene. It uses Link, island characters, and wildlife animations from your locally generated game data without starting gameplay, saves, or Archipelago networking.",
+                Text = "Explore Koholint using your installed game maps and characters. Silent, paused when hidden, and separate from your saves and Archipelago progress.",
                 TextSize = 17f
             };
             var textParams = new LinearLayout.LayoutParams(
@@ -320,42 +249,15 @@ namespace ProjectZ.Android
             var status = new TextView(this)
             {
                 Text = assetReady
-                    ? "Game data ready: the wallpaper will use installed LADXHD character and wildlife sprites."
+                    ? "Game data ready. Characters and enemies come from the current map."
                     : $"Game data unavailable: {reason} The wallpaper remains blank until the original game data is prepared locally.",
                 TextSize = 15f
             };
             layout.AddView(status);
 
-            var presetLabel = new TextView(this)
-            {
-                Text = "Quick preset",
-                TextSize = 17f,
-                Enabled = assetReady
-            };
-            var presetLabelParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            presetLabelParams.SetMargins(0, Dp(20), 0, 0);
-            layout.AddView(presetLabel, presetLabelParams);
-            var preset = new Spinner(this) { Enabled = assetReady };
-            var presetAdapter = new ArrayAdapter<string>(this,
-                global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Custom", "Mabe Sunset", "Forest Night", "Island Journey"]);
-            presetAdapter.SetDropDownViewResource(
-                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
-            preset.Adapter = presetAdapter;
-            preset.ItemSelected += (_, args) =>
-            {
-                if (args.Position > 0 && LadxhdWallpaperPreferences.ApplyPreset(this, args.Position))
-                    Recreate();
-            };
-            var presetParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            presetParams.SetMargins(0, 0, 0, Dp(12));
-            layout.AddView(preset, presetParams);
-
             var animate = new global::Android.Widget.Switch(this)
             {
-                Text = "Animate Link, island characters, and wildlife",
+                Text = "Animate wallpaper",
                 Checked = LadxhdWallpaperPreferences.IsAnimated(this)
             };
             animate.CheckedChange += (_, args) =>
@@ -364,85 +266,6 @@ namespace ProjectZ.Android
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             animateParams.SetMargins(0, Dp(20), 0, Dp(12));
             layout.AddView(animate, animateParams);
-
-            var islandLife = new global::Android.Widget.Switch(this)
-            {
-                Text = "Show featured character and Koholint wildlife",
-                Checked = LadxhdWallpaperPreferences.ShowIslandLife(this),
-                Enabled = assetReady
-            };
-            islandLife.CheckedChange += (_, args) =>
-                LadxhdWallpaperPreferences.SetShowIslandLife(this, args.IsChecked);
-            var islandLifeParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            islandLifeParams.SetMargins(0, 0, 0, Dp(12));
-            layout.AddView(islandLife, islandLifeParams);
-
-            var wildlifeLabel = new TextView(this)
-            {
-                Text = "Wildlife schedule",
-                TextSize = 17f,
-                Enabled = assetReady
-            };
-            layout.AddView(wildlifeLabel);
-            var wildlifeSchedule = new Spinner(this) { Enabled = assetReady };
-            var wildlifeAdapter = new ArrayAdapter<string>(this,
-                global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Follow day and night", "Always show butterflies and owl"]);
-            wildlifeAdapter.SetDropDownViewResource(
-                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
-            wildlifeSchedule.Adapter = wildlifeAdapter;
-            wildlifeSchedule.SetSelection(LadxhdWallpaperPreferences.GetWildlifeSchedule(this));
-            wildlifeSchedule.ItemSelected += (_, args) =>
-                LadxhdWallpaperPreferences.SetWildlifeSchedule(this, args.Position);
-            var wildlifeParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            wildlifeParams.SetMargins(0, 0, 0, Dp(12));
-            layout.AddView(wildlifeSchedule, wildlifeParams);
-
-            var characterLabel = new TextView(this)
-            {
-                Text = "Featured island character",
-                TextSize = 17f,
-                Enabled = assetReady
-            };
-            layout.AddView(characterLabel);
-            var character = new Spinner(this) { Enabled = assetReady };
-            var characterAdapter = new ArrayAdapter<string>(this,
-                global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Marin", "BowWow", "Rooster", "Rotate automatically", "Match location"]);
-            characterAdapter.SetDropDownViewResource(
-                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
-            character.Adapter = characterAdapter;
-            character.SetSelection(LadxhdWallpaperPreferences.GetFeaturedCharacter(this));
-            character.ItemSelected += (_, args) =>
-                LadxhdWallpaperPreferences.SetFeaturedCharacter(this, args.Position);
-            var characterParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            characterParams.SetMargins(0, 0, 0, Dp(12));
-            layout.AddView(character, characterParams);
-
-            var positionLabel = new TextView(this)
-            {
-                Text = "Featured character position",
-                TextSize = 17f,
-                Enabled = assetReady
-            };
-            layout.AddView(positionLabel);
-            var characterPosition = new Spinner(this) { Enabled = assetReady };
-            var positionAdapter = new ArrayAdapter<string>(this,
-                global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Match location", "Left", "Center", "Right"]);
-            positionAdapter.SetDropDownViewResource(
-                global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
-            characterPosition.Adapter = positionAdapter;
-            characterPosition.SetSelection(LadxhdWallpaperPreferences.GetCharacterPosition(this));
-            characterPosition.ItemSelected += (_, args) =>
-                LadxhdWallpaperPreferences.SetCharacterPosition(this, args.Position);
-            var positionParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            positionParams.SetMargins(0, 0, 0, Dp(12));
-            layout.AddView(characterPosition, positionParams);
 
             var linkLabel = new TextView(this)
             {
@@ -454,7 +277,7 @@ namespace ProjectZ.Android
             var linkActivity = new Spinner(this) { Enabled = assetReady };
             var linkAdapter = new ArrayAdapter<string>(this,
                 global::Android.Resource.Layout.SimpleSpinnerItem,
-                ["Walk across scene", "Stand in scene", "Alternate travel and rest", "Hide Link"]);
+                ["Explore", "Stand still", "Explore and rest", "Hide Link"]);
             linkAdapter.SetDropDownViewResource(
                 global::Android.Resource.Layout.SimpleSpinnerDropDownItem);
             linkActivity.Adapter = linkAdapter;
@@ -468,7 +291,7 @@ namespace ProjectZ.Android
 
             var followLoadingZones = new global::Android.Widget.Switch(this)
             {
-                Text = "Follow Link through overworld loading zones",
+                Text = "Follow Link between rooms and through entrances",
                 Checked = LadxhdWallpaperPreferences.FollowLoadingZones(this),
                 Enabled = assetReady
             };
@@ -481,7 +304,7 @@ namespace ProjectZ.Android
 
             var sceneLabel = new TextView(this)
             {
-                Text = "Wallpaper location / starting point for island exploration",
+                Text = "Starting location",
                 TextSize = 17f,
                 Enabled = assetReady
             };
@@ -577,22 +400,32 @@ namespace ProjectZ.Android
             var rateLabel = new TextView(this) { Text = "Animation frame rate", TextSize = 17f };
             layout.AddView(rateLabel);
             var rates = new RadioGroup(this) { Orientation = Orientation.Vertical };
+            var adaptive = new RadioButton(this)
+            {
+                Text = "Adaptive battery (15-60 FPS)",
+                Id = View.GenerateViewId()
+            };
             var saver = new RadioButton(this) { Text = "Battery saver (15 FPS)", Id = View.GenerateViewId() };
             var smooth = new RadioButton(this) { Text = "Smooth (30 FPS)", Id = View.GenerateViewId() };
             var high = new RadioButton(this) { Text = "High FPS (60 FPS)", Id = View.GenerateViewId() };
+            rates.AddView(adaptive);
             rates.AddView(saver);
             rates.AddView(smooth);
             rates.AddView(high);
             var selectedFrameRate = LadxhdWallpaperPreferences.GetFrameRate(this);
-            rates.Check(selectedFrameRate == 60 ? high.Id : selectedFrameRate <= 15 ? saver.Id : smooth.Id);
+            rates.Check(selectedFrameRate == LiveWallpaperFrameScheduler.AdaptiveFrameRate
+                ? adaptive.Id
+                : selectedFrameRate == 60 ? high.Id : selectedFrameRate <= 15 ? saver.Id : smooth.Id);
             rates.CheckedChange += (_, args) =>
                 LadxhdWallpaperPreferences.SetFrameRate(
-                    this, args.CheckedId == high.Id ? 60 : args.CheckedId == saver.Id ? 15 : 30);
+                    this, args.CheckedId == adaptive.Id
+                        ? LiveWallpaperFrameScheduler.AdaptiveFrameRate
+                        : args.CheckedId == high.Id ? 60 : args.CheckedId == saver.Id ? 15 : 30);
             layout.AddView(rates);
 
             var frameRateWarning = new TextView(this)
             {
-                Text = "Battery warning: High FPS uses significantly more power and may make your phone warmer. The wallpaper still pauses when it is not visible.",
+                Text = "Adaptive battery uses 60 FPS briefly for touch and camera motion, 30 FPS for normal movement, and 15 FPS while Link is resting or hidden. High FPS uses significantly more power and may make your phone warmer. The wallpaper still pauses when it is not visible.",
                 TextSize = 14f
             };
             frameRateWarning.SetTypeface(null, TypefaceStyle.Bold);
@@ -687,6 +520,41 @@ namespace ProjectZ.Android
             catch (Exception exception)
             {
                 animation = null;
+                spritePath = null;
+                reason = exception.Message;
+                return false;
+            }
+        }
+
+        public static bool TryResolveLinkCloak(
+            Context context, out string spritePath, out string reason)
+        {
+            spritePath = null;
+            reason = null;
+            if (!AndroidAssetInstallation.TryGetActiveRoot(
+                    context, out var root, out reason))
+                return false;
+            try
+            {
+                var objectsRoot = FilePath.GetFullPath(
+                    FilePath.Combine(root, "Data", "Map Objects"));
+                var candidate = FilePath.GetFullPath(
+                    FilePath.Combine(objectsRoot, "link_cloak.png"));
+                var rootPrefix = objectsRoot.TrimEnd(
+                    FilePath.DirectorySeparatorChar) +
+                    FilePath.DirectorySeparatorChar;
+                if (!candidate.StartsWith(
+                        rootPrefix, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException(
+                        "The Link cloak path is invalid.");
+                if (!File.Exists(candidate))
+                    throw new FileNotFoundException(
+                        "The installed Link cloak is unavailable.");
+                spritePath = candidate;
+                return true;
+            }
+            catch (Exception exception)
+            {
                 spritePath = null;
                 reason = exception.Message;
                 return false;
@@ -832,6 +700,7 @@ namespace ProjectZ.Android
             private int _yPixelOffset;
             private long _startedAt;
             private long _nextFrameDeadline;
+            private long _adaptiveBoostUntil;
             private int _publishedColorRevision = -1;
 
             public LadxhdWallpaperEngine(LadxhdWallpaperService service) : base(service)
@@ -840,7 +709,11 @@ namespace ProjectZ.Android
                 _drawRunnable = new DrawRunnable(DrawFrame);
                 _scene = new LadxhdWallpaperScene(service);
                 _settings = new LadxhdWallpaperPreferences.Cache(service,
-                    () => ScheduleFrame(immediate: true));
+                    () =>
+                    {
+                        BoostAdaptiveFrameRate(1_000L);
+                        ScheduleFrame(immediate: true);
+                    });
                 _startedAt = SystemClock.ElapsedRealtime();
                 SetTouchEventsEnabled(true);
             }
@@ -848,6 +721,10 @@ namespace ProjectZ.Android
             public override void OnVisibilityChanged(bool visible)
             {
                 _visible = visible;
+                if (visible)
+                    BoostAdaptiveFrameRate(1_000L);
+                else
+                    _scene?.ReleaseRenderTargets();
                 ScheduleFrame(immediate: visible);
             }
 
@@ -855,12 +732,14 @@ namespace ProjectZ.Android
             {
                 base.OnSurfaceCreated(holder);
                 _surfaceReady = true;
+                BoostAdaptiveFrameRate(1_000L);
                 ScheduleFrame(immediate: true);
             }
 
             public override void OnSurfaceChanged(ISurfaceHolder holder, Format format, int width, int height)
             {
                 base.OnSurfaceChanged(holder, format, width, height);
+                BoostAdaptiveFrameRate(1_000L);
                 ScheduleFrame(immediate: true);
             }
 
@@ -876,9 +755,14 @@ namespace ProjectZ.Android
                 float xOffset, float yOffset, float xOffsetStep, float yOffsetStep,
                 int xPixelOffset, int yPixelOffset)
             {
+                var offsetChanged = MathF.Abs(_xOffset - xOffset) > 0.0001f ||
+                                    _xPixelOffset != xPixelOffset ||
+                                    _yPixelOffset != yPixelOffset;
                 _xOffset = Math.Clamp(xOffset, 0f, 1f);
                 _xPixelOffset = xPixelOffset;
                 _yPixelOffset = yPixelOffset;
+                if (offsetChanged)
+                    BoostAdaptiveFrameRate(750L);
                 ScheduleFrame(immediate: true);
             }
 
@@ -888,6 +772,7 @@ namespace ProjectZ.Android
                 {
                     _scene?.TrySetLinkDestination(
                         e.GetX(), e.GetY());
+                    BoostAdaptiveFrameRate(2_000L);
                     ScheduleFrame(immediate: true);
                 }
                 base.OnTouchEvent(e);
@@ -937,9 +822,8 @@ namespace ProjectZ.Android
                         var elapsed = SystemClock.ElapsedRealtime() - _startedAt;
                         var settings = _settings.Value;
                         _scene.Draw(canvas, elapsed, _xOffset,
-                            settings.Animated, settings.IslandLife, settings.FeaturedCharacter,
+                            settings.Animated,
                             settings.Scene, settings.TimeOfDay, settings.LinkActivity,
-                            settings.WildlifeSchedule, settings.CharacterPosition,
                             settings.FollowLoadingZones, settings.Sunrise, settings.Sunset);
                     }
                 }
@@ -976,14 +860,26 @@ namespace ProjectZ.Android
                 else
                 {
                     var settings = _settings.Value;
+                    var resolvedFrameRate = LiveWallpaperFrameScheduler.ResolveFrameRate(
+                        settings.FrameRate,
+                        now < _adaptiveBoostUntil ||
+                        (_scene?.NeedsHighFrameRate ?? false),
+                        _scene?.PrefersLowFrameRate ?? settings.LinkActivity == 3);
                     delay = LiveWallpaperFrameScheduler.GetCompensatedDelayMilliseconds(
                         now,
                         _nextFrameDeadline,
                         settings.Animated,
-                        settings.FrameRate,
+                        resolvedFrameRate,
                         out _nextFrameDeadline);
                 }
                 _handler.PostDelayed(_drawRunnable, delay);
+            }
+
+            private void BoostAdaptiveFrameRate(long durationMilliseconds)
+            {
+                var until = SystemClock.ElapsedRealtime() + durationMilliseconds;
+                if (until > _adaptiveBoostUntil)
+                    _adaptiveBoostUntil = until;
             }
         }
 
@@ -1078,6 +974,8 @@ namespace ProjectZ.Android
             Actor,
             Enemy,
             EnemyProjectile,
+            LooseKey,
+            EnemyDrop,
             Link
         }
 
@@ -1118,8 +1016,16 @@ namespace ProjectZ.Android
             AntiAlias = false,
             FilterBitmap = false
         };
+        private readonly Paint _cloakPaint = new Paint
+        {
+            AntiAlias = false,
+            FilterBitmap = false,
+            Alpha = 255
+        };
+        private readonly ColorFilter[] _cloakColorFilters = new ColorFilter[3];
         private readonly Dictionary<string, Bitmap> _spriteSheets =
             new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
+        private readonly Bitmap _linkCloak;
         private readonly SpriteAsset[] _linkWalking = new SpriteAsset[4];
         private readonly SpriteAsset[] _linkStanding = new SpriteAsset[4];
         private readonly SpriteAsset[] _linkJumping = new SpriteAsset[4];
@@ -1195,19 +1101,21 @@ namespace ProjectZ.Android
             new Dictionary<string, AtlasSpriteAsset>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, AtlasSpriteAsset> _mapAnimatedTiles =
             new Dictionary<string, AtlasSpriteAsset>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, SpriteAsset> _mapAnimatedObjects =
+            new Dictionary<string, SpriteAsset>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, SpriteAsset> _mapLamps =
             new Dictionary<string, SpriteAsset>(StringComparer.OrdinalIgnoreCase);
         private SpriteAsset _butterfly;
         private SpriteAsset _owl;
         private AtlasSpriteAsset _marinNote;
         private AtlasSpriteAsset _bowWowChain;
-        private AtlasSpriteAsset _roosterParticleLarge;
-        private AtlasSpriteAsset _roosterParticleMedium;
-        private AtlasSpriteAsset _roosterParticleSmall;
         private AtlasSpriteAsset _vegetationLeaf;
         private AtlasSpriteAsset _stoneParticle;
         private SpriteAsset _stoneSplash;
         private SpriteAsset _stoneFall;
+        private SpriteAsset _enemyDeathExplosion;
+        private LiveWallpaperMap _deathDropMap;
+        private readonly HashSet<int> _createdDeathDrops = new();
         private AtlasSpriteAsset _vegetationHeart;
         private AtlasSpriteAsset _vegetationRupee;
         private AtlasSpriteAsset _hookshotChain;
@@ -1223,10 +1131,11 @@ namespace ProjectZ.Android
         private readonly LiveWallpaperEnemySimulation.Session _enemySimulation = new();
         private readonly LiveWallpaperActorSimulation.Session _actorSimulation = new();
         private readonly List<PlayerLayerDrawEntry> _playerLayerDrawEntries = new();
+        private readonly List<int> _visibleDecorationIndices = new();
+        private readonly List<int> _activeMapActorIndices = new();
+        private readonly List<int> _activeMapEnemyIndices = new();
         private LiveWallpaperActorState[] _mapActorStates = [];
         private LiveWallpaperEnemyState[] _mapEnemyStates = [];
-        private bool[] _activeMapActors = [];
-        private bool[] _activeMapEnemies = [];
         private readonly Dictionary<int, int> _grandmotherDirections = new();
         private LiveWallpaperMapViewport? _followedViewport;
         private int _followedScene = -1;
@@ -1244,12 +1153,35 @@ namespace ProjectZ.Android
         private int _mapTileCacheRows;
         private float _mapTileCacheTileSize;
         private int _wallpaperColorRevision;
+        private readonly bool _performanceLogEnabled;
+        private int _performanceFrameCount;
+        private long _performanceTotalNanoseconds;
+        private long _performanceMapNanoseconds;
+        private long _performanceAnimatedNanoseconds;
+        private long _performanceLinkNanoseconds;
+        private long _performanceSimulationNanoseconds;
+        private long _performanceBottomNanoseconds;
+        private long _performanceShadowNanoseconds;
+        private long _performancePlayerNanoseconds;
+        private long _performanceLightingNanoseconds;
 
         public int WallpaperColorRevision => _wallpaperColorRevision;
+        public bool NeedsHighFrameRate { get; private set; }
+        public bool PrefersLowFrameRate { get; private set; }
 
         public LadxhdWallpaperScene(Context context)
         {
             _context = context.ApplicationContext ?? context;
+            _performanceLogEnabled = global::Android.Util.Log.IsLoggable(
+                "LadxhdPerf", global::Android.Util.LogPriority.Debug);
+            _linkCloak = LoadLinkCloak(context);
+            for (var index = 0; index < _cloakColorFilters.Length; index++)
+            {
+                var color = TunicGameplay.GetDefaultColor(index);
+                _cloakColorFilters[index] = new PorterDuffColorFilter(
+                    Color.Rgb(color.R, color.G, color.B),
+                    PorterDuff.Mode.Multiply);
+            }
             for (var direction = 0; direction < 4; direction++)
             {
                 _linkWalking[direction] = LoadSprite(
@@ -1396,16 +1328,14 @@ namespace ProjectZ.Android
             _owl = LoadSprite(context, "NPCs/owl.ani", ["fly", "hover", "idle"]);
             _marinNote = LoadAtlasSprite(context, "npcs", "note");
             _bowWowChain = LoadAtlasSprite(context, "npcs", "bowwow chain");
-            _roosterParticleLarge = LoadAtlasSprite(context, "npcs", "cock_particle_0");
-            _roosterParticleMedium = LoadAtlasSprite(context, "npcs", "cock_particle_1");
-            _roosterParticleSmall = LoadAtlasSprite(context, "npcs", "cock_particle_2");
             _vegetationLeaf = LoadAtlasSprite(context, "objects", "leaf");
             _stoneParticle = LoadAtlasSprite(
                 context, "objects", "stone_particle");
             _stoneSplash = LoadSprite(
-                context, "Particles/fishingSplash.ani", ["idle"]);
+                context, DroppedItemMotion.WaterLossAnimation + ".ani", ["idle"]);
             _stoneFall = LoadSprite(
                 context, "Particles/fall.ani", ["idle"]);
+            _enemyDeathExplosion = LoadSprite(context, EnemyDeathGameplay.ExplosionAnimation + ".ani", ["run"]);
             _vegetationHeart = LoadAtlasSprite(context, "items", "heart");
             _vegetationRupee = LoadAtlasSprite(context, "items", "rubyBlue");
             _hookshotChain = LoadAtlasSprite(
@@ -1417,12 +1347,11 @@ namespace ProjectZ.Android
             _overworldMap = LoadOverworldMap(context);
             if (_overworldMap != null)
             {
+                PrepareDungeonDoorAsset(context);
                 _mapActorStates = new LiveWallpaperActorState[
                     _overworldMap.Map.Actors.Count];
                 _mapEnemyStates = new LiveWallpaperEnemyState[
                     _overworldMap.Map.Enemies.Count];
-                _activeMapActors = new bool[_overworldMap.Map.Actors.Count];
-                _activeMapEnemies = new bool[_overworldMap.Map.Enemies.Count];
                 foreach (var decoration in _overworldMap.Map.Decorations)
                 {
                     var key = decoration.AssetKey;
@@ -1435,6 +1364,13 @@ namespace ProjectZ.Android
                     if (!_mapAnimatedTiles.ContainsKey(animatedTile.SpriteId))
                         _mapAnimatedTiles[animatedTile.SpriteId] = LoadAtlasSprite(
                             context, "objects", animatedTile.SpriteId);
+                }
+                foreach (var animatedObject in _overworldMap.Map.AnimatedObjects)
+                {
+                    if (!_mapAnimatedObjects.ContainsKey(animatedObject.AnimationKey))
+                        _mapAnimatedObjects[animatedObject.AnimationKey] = LoadSprite(
+                            context, animatedObject.AnimationPath,
+                            [animatedObject.AnimationName]);
                 }
                 foreach (var lamp in _overworldMap.Map.Lamps)
                 {
@@ -1477,13 +1413,12 @@ namespace ProjectZ.Android
         {
             if (_overworldMap?.Map == null)
                 return;
+            PrepareDungeonDoorAsset(context);
             PrepareSceneEffectAssets(context);
             _mapActorStates = new LiveWallpaperActorState[
                 _overworldMap.Map.Actors.Count];
             _mapEnemyStates = new LiveWallpaperEnemyState[
                 _overworldMap.Map.Enemies.Count];
-            _activeMapActors = new bool[_overworldMap.Map.Actors.Count];
-            _activeMapEnemies = new bool[_overworldMap.Map.Enemies.Count];
             foreach (var decoration in _overworldMap.Map.Decorations)
             {
                 var key = decoration.AssetKey;
@@ -1496,6 +1431,13 @@ namespace ProjectZ.Android
                 if (!_mapAnimatedTiles.ContainsKey(animatedTile.SpriteId))
                     _mapAnimatedTiles[animatedTile.SpriteId] = LoadAtlasSprite(
                         context, "objects", animatedTile.SpriteId);
+            }
+            foreach (var animatedObject in _overworldMap.Map.AnimatedObjects)
+            {
+                if (!_mapAnimatedObjects.ContainsKey(animatedObject.AnimationKey))
+                    _mapAnimatedObjects[animatedObject.AnimationKey] = LoadSprite(
+                        context, animatedObject.AnimationPath,
+                        [animatedObject.AnimationName]);
             }
             foreach (var lamp in _overworldMap.Map.Lamps)
             {
@@ -1546,6 +1488,18 @@ namespace ProjectZ.Android
                     continue;
                 _chestItems[visual.SpriteId] = LoadAtlasSprite(
                     context, "items", visual.SpriteId);
+            }
+            if (_overworldMap.Map.DungeonDoors.LooseKeys.Count > 0)
+            {
+                if (!_chestItems.ContainsKey("smallkey"))
+                    _chestItems["smallkey"] = LoadAtlasSprite(context, "items", "smallkey");
+                if (_chestItems["smallkey"] is { Bitmap: not null } asset)
+                    foreach (var key in _overworldMap.Map.DungeonDoors.LooseKeys)
+                    {
+                        key.SetSpriteRectangle(new Microsoft.Xna.Framework.Rectangle(
+                            asset.Entry.X, asset.Entry.Y, asset.Entry.Width, asset.Entry.Height));
+                        key.SetWaterEffectDuration(_stoneSplash?.Animation?.DurationMilliseconds ?? 0);
+                    }
             }
         }
 
@@ -1638,23 +1592,21 @@ namespace ProjectZ.Android
             long elapsed,
             float xOffset,
             bool animated,
-            bool showIslandLife,
-            int featuredCharacter,
             int scene,
             int timeOfDay,
             int linkActivity,
-            int wildlifeSchedule,
-            int characterPosition,
             bool followLoadingZones,
             int sunrise,
             int sunset)
         {
+            NeedsHighFrameRate = false;
+            PrefersLowFrameRate = linkActivity == 3;
             var width = canvas.Width;
             var height = canvas.Height;
             if (width <= 0 || height <= 0)
                 return;
+            var performanceFrameStart = PerformanceTimestamp();
             var time = animated ? elapsed : 0L;
-            var unit = Math.Max(1f, Math.Min(width, height) / 240f);
             ConfigureSunlight(timeOfDay, DateTime.Now.TimeOfDay.TotalMinutes, sunrise, sunset);
             canvas.DrawColor(Color.Black);
 
@@ -1690,12 +1642,18 @@ namespace ProjectZ.Android
                 _followedScene = resolvedScene;
                 _followedSceneSetting = scene;
             }
-            var groundY = DrawInstalledMap(
+            var performancePhaseStart = PerformanceTimestamp();
+            DrawInstalledMap(
                 canvas, width, height, resolvedScene, xOffset,
                 _followedViewport, out var viewport);
+            var performanceMap = PerformanceTimestamp() - performancePhaseStart;
             _lastDrawnViewport = viewport;
+            performancePhaseStart = PerformanceTimestamp();
             DrawInstalledMapAnimatedTiles(canvas, viewport, time, animated);
+            var performanceAnimated =
+                PerformanceTimestamp() - performancePhaseStart;
             LiveWallpaperSimulatedLinkState? simulatedLink = null;
+            performancePhaseStart = PerformanceTimestamp();
             if (linkActivity != 3)
             {
                 var followOverworldLoadingZones = followLoadingZones &&
@@ -1709,29 +1667,107 @@ namespace ProjectZ.Android
                     allowViewportFollow: followLoadingZones,
                     holeFallAnimationMilliseconds:
                         _holeFallAnimationMilliseconds);
+                PrefersLowFrameRate = simulatedLink.Value.Action is
+                    LiveWallpaperLinkRouteAction.Stand or
+                    LiveWallpaperLinkRouteAction.Hidden;
                 if (followLoadingZones &&
                     TryUpdateFollowCamera(
                         viewport, simulatedLink.Value, elapsed, out var nextViewport))
+                {
+                    NeedsHighFrameRate =
+                        MathF.Abs(nextViewport.CameraOriginX - viewport.CameraOriginX) > 0.001f ||
+                        MathF.Abs(nextViewport.CameraOriginY - viewport.CameraOriginY) > 0.001f;
                     _followedViewport = nextViewport;
+                }
                 if (simulatedLink.Value.Action == LiveWallpaperLinkRouteAction.Attack)
                     simulatedLink = AttachSwordAttackBox(simulatedLink.Value);
             }
+            var performanceLink = PerformanceTimestamp() - performancePhaseStart;
+            performancePhaseStart = PerformanceTimestamp();
             _linkSimulation.BeginLiveStateFrame(_overworldMap?.Map);
             PrepareInstalledMapActors(viewport, time, animated, simulatedLink);
             PrepareInstalledMapEnemies(viewport, time, animated, simulatedLink);
+            var performanceSimulation =
+                PerformanceTimestamp() - performancePhaseStart;
+            performancePhaseStart = PerformanceTimestamp();
             DrawInstalledMapBottomDecorations(
                 canvas, viewport, time, animated, simulatedLink);
+            var performanceBottom =
+                PerformanceTimestamp() - performancePhaseStart;
+            performancePhaseStart = PerformanceTimestamp();
             DrawSceneShadows(canvas, viewport, elapsed, animated, simulatedLink);
+            var performanceShadows =
+                PerformanceTimestamp() - performancePhaseStart;
             // ComponentDrawPool renders every Values.LayerPlayer component in one
             // CPosition.Y order. Keep map sprites, actors, enemies, projectiles and
             // Link in that same player-layer order instead of type-based passes.
+            performancePhaseStart = PerformanceTimestamp();
             DrawInstalledMapPlayerLayer(
                 canvas, viewport, elapsed, animated, simulatedLink);
+            DrawEnemyDeathEffects(canvas, viewport, elapsed);
+            var performancePlayer =
+                PerformanceTimestamp() - performancePhaseStart;
+            performancePhaseStart = PerformanceTimestamp();
             DrawMapLighting(canvas, viewport);
             DrawSceneTransition(canvas, width, height, scene, elapsed);
             if (followLoadingZones && simulatedLink.HasValue)
                 TryFollowLinkThroughPortal(
                     simulatedLink.Value, width, height, xOffset);
+            var performanceLighting =
+                PerformanceTimestamp() - performancePhaseStart;
+            RecordPerformance(
+                PerformanceTimestamp() - performanceFrameStart,
+                performanceMap, performanceAnimated, performanceLink,
+                performanceSimulation, performanceBottom, performanceShadows,
+                performancePlayer, performanceLighting);
+        }
+
+        private long PerformanceTimestamp() => _performanceLogEnabled
+            ? SystemClock.ElapsedRealtimeNanos()
+            : 0L;
+
+        private void RecordPerformance(
+            long total, long map, long animated, long link, long simulation,
+            long bottom, long shadows, long player, long lighting)
+        {
+            if (!_performanceLogEnabled)
+                return;
+            _performanceFrameCount++;
+            _performanceTotalNanoseconds += total;
+            _performanceMapNanoseconds += map;
+            _performanceAnimatedNanoseconds += animated;
+            _performanceLinkNanoseconds += link;
+            _performanceSimulationNanoseconds += simulation;
+            _performanceBottomNanoseconds += bottom;
+            _performanceShadowNanoseconds += shadows;
+            _performancePlayerNanoseconds += player;
+            _performanceLightingNanoseconds += lighting;
+            if (_performanceFrameCount < 120)
+                return;
+
+            const double nanosecondsPerMillisecond = 1_000_000d;
+            var divisor = _performanceFrameCount * nanosecondsPerMillisecond;
+            global::Android.Util.Log.Debug("LadxhdPerf",
+                $"frames={_performanceFrameCount} " +
+                $"total={_performanceTotalNanoseconds / divisor:F3}ms " +
+                $"map={_performanceMapNanoseconds / divisor:F3}ms " +
+                $"animated={_performanceAnimatedNanoseconds / divisor:F3}ms " +
+                $"link={_performanceLinkNanoseconds / divisor:F3}ms " +
+                $"simulation={_performanceSimulationNanoseconds / divisor:F3}ms " +
+                $"bottom={_performanceBottomNanoseconds / divisor:F3}ms " +
+                $"shadows={_performanceShadowNanoseconds / divisor:F3}ms " +
+                $"player={_performancePlayerNanoseconds / divisor:F3}ms " +
+                $"lighting={_performanceLightingNanoseconds / divisor:F3}ms");
+            _performanceFrameCount = 0;
+            _performanceTotalNanoseconds = 0;
+            _performanceMapNanoseconds = 0;
+            _performanceAnimatedNanoseconds = 0;
+            _performanceLinkNanoseconds = 0;
+            _performanceSimulationNanoseconds = 0;
+            _performanceBottomNanoseconds = 0;
+            _performanceShadowNanoseconds = 0;
+            _performancePlayerNanoseconds = 0;
+            _performanceLightingNanoseconds = 0;
         }
 
         public bool TrySetLinkDestination(float canvasX, float canvasY)
@@ -1753,6 +1789,7 @@ namespace ProjectZ.Android
             var opacity = LiveWallpaperSceneSelection.GetRotationTransitionOpacity(scene, elapsed);
             if (opacity <= 0f)
                 return;
+            NeedsHighFrameRate = true;
             _overlayPaint.Color = Color.Argb((int)(255f * opacity), 4, 8, 18);
             canvas.DrawRect(0, 0, width, height, _overlayPaint);
         }
@@ -1952,6 +1989,16 @@ namespace ProjectZ.Android
             return WallpaperColors.FromBitmap(sample);
         }
 
+        public void ReleaseRenderTargets()
+        {
+            _mapTileCacheCanvas?.Dispose();
+            _mapTileCacheCanvas = null;
+            _mapTileCache?.Dispose();
+            _mapTileCache = null;
+            _mapTileCacheMap = null;
+            ReleaseSceneEffectRenderTargets();
+        }
+
         private bool TryUpdateFollowCamera(
             LiveWallpaperMapViewport viewport,
             LiveWallpaperSimulatedLinkState link,
@@ -2029,6 +2076,45 @@ namespace ProjectZ.Android
             return current;
         }
 
+        private void PrepareDungeonDoorAsset(Context context)
+        {
+            const string key = "objects\ndungeon_door";
+            if (_overworldMap.Map.DungeonDoors.Doors.Count > 0 && !_mapDecorations.ContainsKey(key))
+                _mapDecorations[key] = LoadAtlasSprite(context, "objects", "dungeon_door");
+        }
+
+        private void DrawInstalledDungeonDoors(Canvas canvas, LiveWallpaperMapViewport viewport)
+        {
+            if (!_mapDecorations.TryGetValue("objects\ndungeon_door", out var asset) || asset == null)
+                return;
+            var scale = viewport.TileSize / 16f;
+            foreach (var door in _overworldMap.Map.DungeonDoors.Doors)
+            {
+                var entry = asset.Entry;
+                var source = DungeonDoorGameplay.Source(DungeonDoorGameplay.Variant(
+                    new Microsoft.Xna.Framework.Rectangle(entry.X, entry.Y, entry.Width, entry.Height), door.Mode),
+                    door.Amount);
+                if (source.Height <= 0 || source.X < 0 || source.Y < 0 ||
+                    source.Right > asset.PixelWidth || source.Bottom > asset.PixelHeight)
+                    continue;
+                var x = viewport.Left + (door.X + 8 - viewport.OriginX * 16) * scale;
+                var y = viewport.Top + (door.Y + 8 - viewport.OriginY * 16) * scale;
+                if (x < -viewport.TileSize || x > canvas.Width + viewport.TileSize ||
+                    y < -viewport.TileSize || y > canvas.Height + viewport.TileSize) continue;
+                _drawSource.Set(source.X, source.Y, source.Right, source.Bottom);
+                // CSprite: DrawOffset=(8,8), Center=(8,8), FlipHorizontally,
+                // rotation=(direction+1)*PI/2. Cropping retains that fixed origin.
+                _drawDestination.Set(-8 * scale, -8 * scale,
+                    (source.Width - 8) * scale, (source.Height - 8) * scale);
+                canvas.Save();
+                canvas.Translate(x, y);
+                canvas.Rotate(DungeonDoorGameplay.Rotation(door.Direction) * (180f / MathF.PI));
+                canvas.Scale(-1, 1);
+                canvas.DrawBitmap(asset.Bitmap, _drawSource, _drawDestination, _bitmapPaint);
+                canvas.Restore();
+            }
+        }
+
         private void DrawInstalledMapBottomDecorations(
             Canvas canvas, LiveWallpaperMapViewport viewport,
             long elapsed, bool animated,
@@ -2036,15 +2122,18 @@ namespace ProjectZ.Android
         {
             if (_overworldMap?.Map == null)
                 return;
-            for (var decorationIndex = 0;
-                 decorationIndex < _overworldMap.Map.Decorations.Count;
-                 decorationIndex++)
+            DrawInstalledDungeonDoors(canvas, viewport);
+            CollectVisibleDecorationIndices(viewport, playerLayer: false, link);
+            foreach (var decorationIndex in _visibleDecorationIndices)
             {
-                if (_overworldMap.Map.Decorations[decorationIndex].PlayerLayer)
-                    continue;
                 DrawInstalledMapDecoration(
                     canvas, viewport, decorationIndex, link);
             }
+            for (var objectIndex = 0;
+                 objectIndex < _overworldMap.Map.AnimatedObjects.Count;
+                 objectIndex++)
+                DrawInstalledMapAnimatedObject(
+                    canvas, viewport, elapsed, animated, objectIndex);
             for (var lampIndex = 0;
                  lampIndex < _overworldMap.Map.Lamps.Count;
                  lampIndex++)
@@ -2054,6 +2143,32 @@ namespace ProjectZ.Android
                 DrawInstalledMapLamp(
                     canvas, viewport, elapsed, animated, lampIndex);
             }
+        }
+
+        private void DrawInstalledMapAnimatedObject(
+            Canvas canvas, LiveWallpaperMapViewport viewport,
+            long elapsed, bool animated, int objectIndex)
+        {
+            if (_overworldMap?.Map == null || objectIndex < 0 ||
+                objectIndex >= _overworldMap.Map.AnimatedObjects.Count)
+                return;
+            var mapObject = _overworldMap.Map.AnimatedObjects[objectIndex];
+            if (!IsNearViewport(
+                    viewport, mapObject.EntityX, mapObject.EntityY, 32f) ||
+                !_mapAnimatedObjects.TryGetValue(
+                    mapObject.AnimationKey, out var asset) || asset == null)
+                return;
+            var scale = viewport.TileSize / 16f;
+            var drawX = viewport.Left +
+                (mapObject.DrawX / 16f - viewport.OriginX) * viewport.TileSize;
+            var drawY = viewport.Top +
+                (mapObject.DrawY / 16f - viewport.OriginY) * viewport.TileSize;
+            // Both ObjSpikes and ObjIceBlock explicitly synchronize their idle
+            // animations from global elapsed time. A frozen wallpaper uses the
+            // first installed frame and incurs no animation-state updates.
+            DrawSpriteAt(
+                canvas, asset, animated ? elapsed : 0L,
+                drawX, drawY, scale);
         }
 
         private void DrawInstalledMapLamp(
@@ -2100,6 +2215,11 @@ namespace ProjectZ.Android
             var decoration = _overworldMap.Map.Decorations[decorationIndex];
             var entityX = (float)decoration.EntityX;
             var entityY = (float)decoration.EntityY;
+            if (LiveWallpaperBreakingFloors.IsBreakingFloorSprite(
+                    decoration.SpriteId) &&
+                _overworldMap.Map.BreakingFloors.IsBrokenAt(
+                    decoration.EntityX, decoration.EntityY))
+                return;
             if (LiveWallpaperMap.IsMoveStoneSprite(decoration.SpriteId))
             {
                 var moveStoneKey = _overworldMap.Map.GetMoveStoneKey(decoration);
@@ -2155,8 +2275,25 @@ namespace ProjectZ.Android
         {
             if (_overworldMap?.Map == null)
                 return;
+            var map = _overworldMap.Map;
             var scale = viewport.TileSize / 16f;
-            foreach (var tile in _overworldMap.Map.AnimatedTiles)
+            // ObjAnimatedTile is stored in ComponentDrawPool's tile cells and
+            // the native renderer visits only cells intersecting the camera.
+            // Keep the same spatial traversal instead of scanning thousands of
+            // off-screen overworld water/flower objects every rendered frame.
+            var startX = Math.Clamp(
+                (int)MathF.Floor(viewport.OriginX - 1f), 0, map.Width - 1);
+            var startY = Math.Clamp(
+                (int)MathF.Floor(viewport.OriginY - 1f), 0, map.Height - 1);
+            var endX = Math.Clamp(
+                (int)MathF.Ceiling(viewport.OriginX + viewport.Columns + 1f),
+                0, map.Width - 1);
+            var endY = Math.Clamp(
+                (int)MathF.Ceiling(viewport.OriginY + viewport.Rows + 1f),
+                0, map.Height - 1);
+            for (var tileY = startY; tileY <= endY; tileY++)
+            for (var tileX = startX; tileX <= endX; tileX++)
+            foreach (var tile in map.GetAnimatedTilesAt(tileX, tileY))
             {
                 if (!_mapAnimatedTiles.TryGetValue(tile.SpriteId, out var asset) ||
                     asset == null)
@@ -2185,13 +2322,15 @@ namespace ProjectZ.Android
         {
             if (_overworldMap?.Map == null)
                 return;
+            if (!ReferenceEquals(_deathDropMap, _overworldMap.Map))
+            {
+                _deathDropMap = _overworldMap.Map;
+                _createdDeathDrops.Clear();
+            }
             if (_mapEnemyStates.Length != _overworldMap.Map.Enemies.Count)
                 _mapEnemyStates = new LiveWallpaperEnemyState[
                     _overworldMap.Map.Enemies.Count];
-            if (_activeMapEnemies.Length != _overworldMap.Map.Enemies.Count)
-                _activeMapEnemies = new bool[_overworldMap.Map.Enemies.Count];
-            else
-                Array.Clear(_activeMapEnemies, 0, _activeMapEnemies.Length);
+            _activeMapEnemyIndices.Clear();
             for (var enemyIndex = 0;
                  enemyIndex < _overworldMap.Map.Enemies.Count;
                  enemyIndex++)
@@ -2203,7 +2342,25 @@ namespace ProjectZ.Android
                 var state = _enemySimulation.Resolve(
                     _overworldMap.Map, enemyIndex, animated ? elapsed : 0L, link);
                 _mapEnemyStates[enemyIndex] = state;
-                _activeMapEnemies[enemyIndex] = true;
+                if (state.DeathStartedAt >= 0 && _createdDeathDrops.Add(enemyIndex))
+                {
+                    // Top-down water uses ObjItem's loss effect. Hole attraction
+                    // and side-view item physics are not supported yet.
+                    var map = _overworldMap.Map;
+                    var supportedGround = !map.Is2DMap &&
+                        !map.IntersectsHole(state.DeathX - 4, state.DeathY - 8, 8, 8) &&
+                        !map.IntersectsVoid(state.DeathX - 4, state.DeathY - 8, 8, 8);
+                    var drop = supportedGround
+                        ? map.DungeonDoors.SpawnEnemyDrop(state.DeathDrop, state.DeathX, state.DeathY) : null;
+                    var asset = state.DeathDrop == "ruby" ? _vegetationRupee : _vegetationHeart;
+                    if (drop != null && asset?.Bitmap != null)
+                    {
+                        drop.SetSpriteRectangle(new Microsoft.Xna.Framework.Rectangle(
+                            asset.Entry.X, asset.Entry.Y, asset.Entry.Width, asset.Entry.Height));
+                        drop.SetWaterEffectDuration(_stoneSplash?.Animation?.DurationMilliseconds ?? 0);
+                    }
+                }
+                _activeMapEnemyIndices.Add(enemyIndex);
                 _linkSimulation.UpdateLiveEnemyState(
                     _overworldMap.Map, enemyIndex, state);
                 if (animated && state.LinkHit.Valid)
@@ -2220,15 +2377,10 @@ namespace ProjectZ.Android
 
             _playerLayerDrawEntries.Clear();
             var sequence = 0;
-            for (var decorationIndex = 0;
-                 decorationIndex < _overworldMap.Map.Decorations.Count;
-                 decorationIndex++)
+            CollectVisibleDecorationIndices(viewport, playerLayer: true, link);
+            foreach (var decorationIndex in _visibleDecorationIndices)
             {
                 var decoration = _overworldMap.Map.Decorations[decorationIndex];
-                if (!decoration.PlayerLayer ||
-                    !IsNearViewport(
-                        viewport, decoration.EntityX, decoration.EntityY, 64f))
-                    continue;
                 _playerLayerDrawEntries.Add(new PlayerLayerDrawEntry(
                     PlayerLayerDrawKind.Decoration, decorationIndex,
                     decoration.EntityY, sequence++));
@@ -2245,14 +2397,8 @@ namespace ProjectZ.Android
                     PlayerLayerDrawKind.Lamp, lampIndex,
                     lamp.EntityY, sequence++));
             }
-            for (var actorIndex = 0;
-                 actorIndex < _overworldMap.Map.Actors.Count &&
-                 actorIndex < _mapActorStates.Length;
-                 actorIndex++)
+            foreach (var actorIndex in _activeMapActorIndices)
             {
-                if (actorIndex >= _activeMapActors.Length ||
-                    !_activeMapActors[actorIndex])
-                    continue;
                 var actor = _overworldMap.Map.Actors[actorIndex];
                 var state = _mapActorStates[actorIndex];
                 if (!state.Visible)
@@ -2265,14 +2411,8 @@ namespace ProjectZ.Android
                 _playerLayerDrawEntries.Add(new PlayerLayerDrawEntry(
                     PlayerLayerDrawKind.Actor, actorIndex, positionY, sequence++));
             }
-            for (var enemyIndex = 0;
-                 enemyIndex < _overworldMap.Map.Enemies.Count &&
-                 enemyIndex < _mapEnemyStates.Length;
-                 enemyIndex++)
+            foreach (var enemyIndex in _activeMapEnemyIndices)
             {
-                if (enemyIndex >= _activeMapEnemies.Length ||
-                    !_activeMapEnemies[enemyIndex])
-                    continue;
                 var state = _mapEnemyStates[enemyIndex];
                 if (state.Projectile.Visible && IsNearViewport(
                         viewport, state.Projectile.PixelX,
@@ -2286,6 +2426,22 @@ namespace ProjectZ.Android
                 _playerLayerDrawEntries.Add(new PlayerLayerDrawEntry(
                     PlayerLayerDrawKind.Enemy, enemyIndex,
                     state.PixelY, sequence++));
+            }
+            for (var index = 0; index < _overworldMap.Map.DungeonDoors.LooseKeys.Count; index++)
+            {
+                var key = _overworldMap.Map.DungeonDoors.LooseKeys[index];
+                if (!_overworldMap.Map.Is2DMap && (key.Visible || key.WaterEffectVisible) && IsNearViewport(viewport, key.X, key.Y, 80f))
+                    _playerLayerDrawEntries.Add(new PlayerLayerDrawEntry(
+                        PlayerLayerDrawKind.LooseKey, index,
+                        key.LostInWater ? DroppedItemMotion.WaterSplashPosition(key.X, key.Y).Y : key.Y, sequence++));
+            }
+            for (var index = 0; index < _overworldMap.Map.DungeonDoors.EnemyDrops.Count; index++)
+            {
+                var drop = _overworldMap.Map.DungeonDoors.EnemyDrops[index];
+                if ((drop.Visible || drop.WaterEffectVisible) && IsNearViewport(viewport, drop.X, drop.Y, 32f))
+                    _playerLayerDrawEntries.Add(new PlayerLayerDrawEntry(
+                        PlayerLayerDrawKind.EnemyDrop, index,
+                        drop.LostInWater ? DroppedItemMotion.WaterSplashPosition(drop.X, drop.Y).Y : drop.Y, sequence++));
             }
             if (link.HasValue && IsNearViewport(
                     viewport, link.Value.MapX * 16f, link.Value.MapY * 16f, 64f))
@@ -2320,6 +2476,12 @@ namespace ProjectZ.Android
                             _mapEnemyStates[entry.Index].Projectile,
                             viewport.TileSize / 16f);
                         break;
+                    case PlayerLayerDrawKind.LooseKey:
+                        DrawLooseKey(canvas, viewport, entry.Index);
+                        break;
+                    case PlayerLayerDrawKind.EnemyDrop:
+                        DrawPickup(canvas, viewport, _overworldMap.Map.DungeonDoors.EnemyDrops[entry.Index]);
+                        break;
                     case PlayerLayerDrawKind.Link:
                         DrawLink(canvas, viewport, elapsed, animated, link.Value);
                         DrawHookshot(canvas, viewport, link.Value);
@@ -2329,6 +2491,119 @@ namespace ProjectZ.Android
                             canvas, viewport, elapsed, animated, link.Value);
                         break;
                 }
+            }
+        }
+
+        private void CollectVisibleDecorationIndices(
+            LiveWallpaperMapViewport viewport, bool playerLayer,
+            LiveWallpaperSimulatedLinkState? link)
+        {
+            _visibleDecorationIndices.Clear();
+            var map = _overworldMap?.Map;
+            if (map == null)
+                return;
+
+            // TryGetDrawAnchor uses an exact four-tile conservative margin.
+            // Query cells by that same final draw anchor, then retain its exact
+            // float cull in DrawInstalledMapDecoration.
+            var startX = Math.Clamp(
+                (int)MathF.Floor(viewport.OriginX - 4f), 0, map.Width - 1);
+            var startY = Math.Clamp(
+                (int)MathF.Floor(viewport.OriginY - 4f), 0, map.Height - 1);
+            var endX = Math.Clamp(
+                (int)MathF.Floor(viewport.OriginX + viewport.Columns + 4f),
+                0, map.Width - 1);
+            var endY = Math.Clamp(
+                (int)MathF.Floor(viewport.OriginY + viewport.Rows + 4f),
+                0, map.Height - 1);
+            for (var tileY = startY; tileY <= endY; tileY++)
+            for (var tileX = startX; tileX <= endX; tileX++)
+            foreach (var decorationIndex in
+                     map.GetDecorationIndicesAtDrawCell(tileX, tileY))
+            {
+                if (map.Decorations[decorationIndex].PlayerLayer == playerLayer)
+                    _visibleDecorationIndices.Add(decorationIndex);
+            }
+
+            // A pushed block's current anchor can leave its installed cell.
+            // Include only relocated blocks whose exact current anchor is in
+            // range, without returning to a full decoration-list scan.
+            if (link.HasValue && link.Value.MoveStones is { Count: > 0 } moved)
+            {
+                foreach (var decorationIndex in map.MovableDecorationIndices)
+                {
+                    var decoration = map.Decorations[decorationIndex];
+                    if (decoration.PlayerLayer != playerLayer ||
+                        !moved.TryGetValue(
+                            map.GetMoveStoneKey(decoration), out var position) ||
+                        !decoration.TryGetDrawAnchor(
+                            viewport, position.X, position.Y, out _, out _) ||
+                        _visibleDecorationIndices.Contains(decorationIndex))
+                        continue;
+                    _visibleDecorationIndices.Add(decorationIndex);
+                }
+            }
+
+            // Previous rendering walked the source list. Sorting the much
+            // smaller candidate set by its original index preserves that draw
+            // order exactly, including same-depth overlaps.
+            _visibleDecorationIndices.Sort();
+        }
+
+        private void DrawLooseKey(Canvas canvas, LiveWallpaperMapViewport viewport, int index)
+            => DrawPickup(canvas, viewport, _overworldMap.Map.DungeonDoors.LooseKeys[index]);
+
+        private void DrawPickup(Canvas canvas, LiveWallpaperMapViewport viewport, LiveWallpaperItemPickup key)
+        {
+            if (key.LostInWater)
+            {
+                if (_collectingShadows || !key.WaterEffectVisible || _stoneSplash?.Animation == null) return;
+                var splash = DroppedItemMotion.WaterSplashPosition(key.X, key.Y);
+                var splashScale = viewport.TileSize / 16f;
+                DrawSpriteAt(canvas, _stoneSplash, (long)key.WaterEffectElapsed,
+                    viewport.Left + (splash.X - viewport.OriginX * 16) * splashScale,
+                    viewport.Top + (splash.Y - viewport.OriginY * 16) * splashScale, splashScale);
+                return;
+            }
+            var asset = key.ItemName == "ruby" ? _vegetationRupee : key.ItemName == "heart" ? _vegetationHeart :
+                _chestItems.GetValueOrDefault(key.SpriteId);
+            if (!key.Visible || _overworldMap.Map.Is2DMap || asset?.Bitmap == null) return;
+            var offset = 0f;
+            var alpha = 1f;
+            if (key.Fading)
+                DroppedItemMotion.ResolveCollectedVisual((long)key.CollectionElapsed, out offset, out alpha, out _);
+            if (!key.Collected) offset = 0;
+            if (_collectingShadows)
+            {
+                // ObjItem's ordinary ellipse uses width+2 by width/2+2 with
+                // (-width/2-1,-width/4-2), independent of the atlas origin.
+                if (_lightTextures.TryGetValue("shadow", out var shadow) && shadow != null)
+                    AddShadow(shadow, 0, 0, 65, 66,
+                        key.X - asset.Entry.Width / 2 - 1, key.Y - asset.Entry.Width / 4 - 2,
+                        1f, 0, alpha: alpha, drawWidth: asset.Entry.Width + 2,
+                        drawHeight: asset.Entry.Width / 2 + 2, directional: false);
+                return;
+            }
+            var scale = viewport.TileSize / 16f;
+            DrawAtlasTopLeftAt(canvas, asset,
+                viewport.Left + (key.X - viewport.OriginX * 16 - asset.Entry.Width / 2f) * scale,
+                viewport.Top + (key.Y - viewport.OriginY * 16 - key.Height - asset.Entry.Height + offset) * scale,
+                scale, alpha: alpha);
+        }
+
+        private void DrawEnemyDeathEffects(Canvas canvas, LiveWallpaperMapViewport viewport, long elapsed)
+        {
+            if (_enemyDeathExplosion?.Animation == null) return;
+            var scale = viewport.TileSize / 16f;
+            foreach (var index in _activeMapEnemyIndices)
+            {
+                var death = _mapEnemyStates[index];
+                var age = elapsed - death.DeathStartedAt;
+                if (death.DeathStartedAt < 0 || age < 0 || age >= _enemyDeathExplosion.Animation.DurationMilliseconds) continue;
+                DrawSpriteAt(canvas, _enemyDeathExplosion, age,
+                    viewport.Left + ((int)death.DeathX + EnemyDeathGameplay.ExplosionOffset - viewport.OriginX * 16) * scale,
+                    viewport.Top + ((int)death.DeathY + EnemyDeathGameplay.ExplosionOffset - viewport.OriginY * 16) * scale,
+                    scale);
             }
         }
 
@@ -2485,10 +2760,7 @@ namespace ProjectZ.Android
             if (_mapActorStates.Length != _overworldMap.Map.Actors.Count)
                 _mapActorStates = new LiveWallpaperActorState[
                     _overworldMap.Map.Actors.Count];
-            if (_activeMapActors.Length != _overworldMap.Map.Actors.Count)
-                _activeMapActors = new bool[_overworldMap.Map.Actors.Count];
-            else
-                Array.Clear(_activeMapActors, 0, _activeMapActors.Length);
+            _activeMapActorIndices.Clear();
             for (var actorIndex = 0;
                  actorIndex < _overworldMap.Map.Actors.Count;
                  actorIndex++)
@@ -2501,7 +2773,7 @@ namespace ProjectZ.Android
                     _overworldMap.Map, actorIndex,
                     animated ? elapsed : 0L, link);
                 _mapActorStates[actorIndex] = actorState;
-                _activeMapActors[actorIndex] = true;
+                _activeMapActorIndices.Add(actorIndex);
                 _linkSimulation.UpdateLiveActorState(
                     _overworldMap.Map, actorIndex, actorState);
             }
@@ -2948,6 +3220,8 @@ namespace ProjectZ.Android
             if (asset == null)
                 return;
             var placement = LiveWallpaperLinkPlacement.Resolve(viewport, simulated);
+            _cloakPaint.SetColorFilter(_cloakColorFilters[Math.Clamp(
+                _linkSimulation.CloakType, 0, _cloakColorFilters.Length - 1)]);
             var attacking = simulated.Action == LiveWallpaperLinkRouteAction.Attack;
             var sword = attacking ? _linkSwords[direction] : null;
             var pegasus = simulated.Action is
@@ -3010,7 +3284,8 @@ namespace ProjectZ.Android
                 DrawSpriteAt(canvas, asset, elapsed,
                     placement.AnchorX, placement.AnchorY, placement.Scale,
                     engineDriven: true, animated: animated,
-                    speedMultiplier: animationSpeed);
+                    speedMultiplier: animationSpeed,
+                    overlayBitmap: _linkCloak, overlayPaint: _cloakPaint);
             if (damageVisible && sword != null)
                 DrawSpriteAt(canvas, sword, elapsed,
                     placement.AnchorX, placement.AnchorY, placement.Scale,
@@ -3019,7 +3294,8 @@ namespace ProjectZ.Android
                 DrawSpriteAt(canvas, asset, elapsed,
                     placement.AnchorX, placement.AnchorY, placement.Scale,
                     engineDriven: true, animated: animated,
-                    speedMultiplier: animationSpeed);
+                    speedMultiplier: animationSpeed,
+                    overlayBitmap: _linkCloak, overlayPaint: _cloakPaint);
             if (drawActiveStone && !drawStoneBeforeLink)
                 DrawLiftedStone(canvas, viewport, simulated);
             DrawChestItem(canvas, viewport, simulated);
@@ -3394,9 +3670,10 @@ namespace ProjectZ.Android
                 return;
             }
             DrawSpriteAt(canvas, asset, elapsed, anchorX, anchorY, scale,
-                engineDriven: true, animated: animated);
-            if (link.CarryingRooster)
-                DrawRoosterParticles(canvas, anchorX, anchorY, elapsed, scale);
+                engineDriven: true, animated: animated,
+                speedMultiplier: link.CarryingRooster
+                    ? RoosterGameplayMotion.CarryAnimationSpeedMultiplier
+                    : 1f);
         }
 
         private void DrawFeaturedCharacter(
@@ -3446,8 +3723,6 @@ namespace ProjectZ.Android
                 return;
             if (selection == 1)
                 DrawBowWowChain(canvas, baseX, groundY, centerX, bottomY, mapScale);
-            else if (selection == 2 && follower.Height > 3f)
-                DrawRoosterParticles(canvas, centerX, bottomY, elapsed, mapScale);
             var spriteOffsetX = selection == 1 ? -8f * mapScale : 0f;
             var spriteOffsetY = selection == 1 ? -16f * mapScale : 0f;
             DrawSpriteAt(canvas, asset, elapsed,
@@ -3510,21 +3785,6 @@ namespace ProjectZ.Android
             }
         }
 
-        private void DrawRoosterParticles(
-            Canvas canvas, float centerX, float bottomY, long elapsed, float unit)
-        {
-            var sway = MathF.Sin(elapsed / 230f) * 2f * unit;
-            DrawAtlasSpriteAt(canvas, _roosterParticleLarge,
-                centerX - 9f * unit + sway, bottomY - 5f * unit,
-                Math.Max(1.5f, unit));
-            DrawAtlasSpriteAt(canvas, _roosterParticleMedium,
-                centerX + 8f * unit - sway, bottomY - 10f * unit,
-                Math.Max(1.5f, unit));
-            DrawAtlasSpriteAt(canvas, _roosterParticleSmall,
-                centerX - 3f * unit - sway, bottomY - 15f * unit,
-                Math.Max(1.5f, unit));
-        }
-
         private void DrawButterflies(
             Canvas canvas, int width, float groundY, long elapsed, float unit, bool animated)
         {
@@ -3565,7 +3825,9 @@ namespace ProjectZ.Android
             float scale,
             bool engineDriven = false,
             bool animated = true,
-            float speedMultiplier = 1f)
+            float speedMultiplier = 1f,
+            Bitmap overlayBitmap = null,
+            Paint overlayPaint = null)
         {
             if (asset?.Bitmap == null || asset.Animation == null)
                 return;
@@ -3591,6 +3853,11 @@ namespace ProjectZ.Android
             if (frame.MirroredVertically)
                 canvas.Scale(1f, -1f, destination.CenterX(), destination.CenterY());
             canvas.DrawBitmap(asset.Bitmap, source, destination, _bitmapPaint);
+            if (overlayBitmap != null && overlayPaint != null &&
+                frame.X + frame.Width <= overlayBitmap.Width &&
+                frame.Y + frame.Height <= overlayBitmap.Height)
+                canvas.DrawBitmap(
+                    overlayBitmap, source, destination, overlayPaint);
             canvas.RestoreToCount(save);
         }
 
@@ -3764,6 +4031,28 @@ namespace ProjectZ.Android
             }
         }
 
+        private Bitmap LoadLinkCloak(Context context)
+        {
+            if (!LadxhdWallpaperAssets.TryResolveLinkCloak(
+                    context, out var spritePath, out _))
+                return null;
+            try
+            {
+                if (!_spriteSheets.TryGetValue(spritePath, out var bitmap))
+                {
+                    bitmap = BitmapFactory.DecodeFile(spritePath) ??
+                             throw new InvalidDataException(
+                                 "The installed Link cloak could not be decoded.");
+                    _spriteSheets.Add(spritePath, bitmap);
+                }
+                return bitmap;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private EnemyAssetSet LoadEnemyAssetSet(
             Context context, LiveWallpaperMapEnemyKind kind)
         {
@@ -3894,16 +4183,16 @@ namespace ProjectZ.Android
 
         public void Dispose()
         {
+            ReleaseRenderTargets();
             DisposeSceneEffects();
             _drawSource.Dispose();
             _drawDestination.Dispose();
-            _mapTileCacheCanvas?.Dispose();
-            _mapTileCacheCanvas = null;
-            _mapTileCache?.Dispose();
-            _mapTileCache = null;
             foreach (var bitmap in _spriteSheets.Values)
                 bitmap.Dispose();
             _spriteSheets.Clear();
+            foreach (var filter in _cloakColorFilters)
+                filter?.Dispose();
+            _cloakPaint.Dispose();
             _bitmapPaint.Dispose();
             _overlayPaint.Dispose();
         }

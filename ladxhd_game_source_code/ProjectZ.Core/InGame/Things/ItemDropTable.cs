@@ -71,27 +71,8 @@ namespace ProjectZ.InGame.Things
             if (index >= 14)
                 return GetRandomDrop(index, spawnPowerups);
 
-            // Holds the item or empty string that is returned.
-            string returnItem = "";
-
-            // Get the item by index.
-            LootTable tableEntry = ItemDrops[index];
-
-            // Roll the dice to see if an item drops.
-            int diceRoll = Game1.RandomNumber.Next(0, 100);
-
-            // Get the chance of a drop based on current health.
-            int dropChance = MapManager.ObjLink.IsLowHealth 
-                ? tableEntry.ChanceLowHealth 
-                : tableEntry.ChanceNormal;
-
-            // See if it falls under the current drop chance
-            if (diceRoll < dropChance) 
-                returnItem = tableEntry.ItemName;
-
-            // If it's a heart and the player disabled them clear the string.
-            if (GameSettings.NoHeartDrops && returnItem == "heart")
-                returnItem = "";
+            var returnItem = RollOrdinaryDrop(index, MapManager.ObjLink.IsLowHealth,
+                GameSettings.NoHeartDrops, Game1.RandomNumber.Next);
 
             if (Archipelago.ArchipelagoManager.ShouldSuppressBombDrop(
                     Game1.GameManager.ArchipelagoManager.IsBoundSave,
@@ -101,6 +82,16 @@ namespace ProjectZ.InGame.Things
 
             // If it was not a hit, return an empty string.
             return returnItem;
+        }
+
+        public static string RollOrdinaryDrop(int index, bool lowHealth, bool noHeartDrops,
+            System.Func<int, int, int> next)
+        {
+            if (index < 0 || index >= ItemDrops.Length) return "";
+            var entry = ItemDrops[index];
+            var item = next(0, 100) < (lowHealth ? entry.ChanceLowHealth : entry.ChanceNormal)
+                ? entry.ItemName : "";
+            return noHeartDrops && item == "heart" ? "" : item;
         }
 
         private static string GetRandomDrop(int index, bool spawnPowerups)

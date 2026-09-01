@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xna.Framework;
 
 namespace ProjectZ
@@ -12,6 +13,7 @@ namespace ProjectZ
         Attack,
         FeatherJump,
         PegasusJump,
+        RailJump,
         Swim,
         RoosterFly,
         CutBush,
@@ -20,7 +22,8 @@ namespace ProjectZ
         PegasusCharge,
         PegasusDash,
         Hookshot,
-        Exit
+        Exit,
+        UnlockDoor
     }
 
     public readonly struct LiveWallpaperJourneyPoint
@@ -33,7 +36,8 @@ namespace ProjectZ
             float hookshotTargetY = 0f,
             int chestKey = -1,
             string chestItemName = null,
-            int moveStoneKey = -1)
+            int moveStoneKey = -1,
+            int ledgeIndex = -1)
         {
             PixelX = pixelX;
             PixelY = pixelY;
@@ -45,6 +49,7 @@ namespace ProjectZ
             ChestKey = chestKey;
             ChestItemName = chestItemName;
             MoveStoneKey = moveStoneKey;
+            LedgeIndex = ledgeIndex;
         }
 
         public float PixelX { get; }
@@ -57,6 +62,7 @@ namespace ProjectZ
         public int ChestKey { get; }
         public string ChestItemName { get; }
         public int MoveStoneKey { get; }
+        public int LedgeIndex { get; }
     }
 
     public sealed class LiveWallpaperJourneyPlan
@@ -321,6 +327,16 @@ namespace ProjectZ
                             PositiveHash(scene, variant, 97),
                             out var hookshotPlan))
                         return hookshotPlan;
+                    if (TryCreateLedgePlan(
+                            map, pair.Start.X, pair.Start.Y,
+                            pair.End.X, pair.End.Y,
+                            pathMinX, pathMinY, pathMaxX, pathMaxY,
+                            allowDiagonal: false, out var ledgePlan))
+                    {
+                        if (followLoadingZones && pair.End.HasExit)
+                            ledgePlan = AppendLoadingZoneExit(ledgePlan, pair.End);
+                        return ledgePlan;
+                    }
                     continue;
                 }
 
@@ -442,6 +458,11 @@ namespace ProjectZ
                     reachableWhenNoPath: reachable);
                 if (path.Count < 2)
                 {
+                    if (TryCreateLedgePlan(
+                            map, startX, startY, candidate.X, candidate.Y,
+                            minX, minY, maxX, maxY,
+                            allowDiagonal: true, out var ledgePlan))
+                        return ledgePlan;
                     // A failed A* has already exhausted Link's connected
                     // component. Reuse it instead of trying dozens of targets
                     // in other rooms and potentially never trying his own.
@@ -462,6 +483,226 @@ namespace ProjectZ
                         : ToPlan(map, path));
             }
             return new LiveWallpaperJourneyPlan([]);
+        }
+
+        private static bool TryCreateLedgePlan(
+            LiveWallpaperMap map,
+            int startX, int startY, int endX, int endY,
+            int minX, int minY, int maxX, int maxY,
+            bool allowDiagonal,
+            out LiveWallpaperJourneyPlan plan)
+        {
+            plan = null;
+            if (map?.Ledges == null || map.Ledges.Count == 0)
+                return false;
+            List<LiveWallpaperJourneyPoint> best = null;
+            foreach (var ledge in map.Ledges)
+            {
+                var direction = FieldDirections[ledge.Direction];
+                foreach (var takeoff in EnumerateLedgeTakeoffs(
+                             ledge, minX, minY, maxX, maxY))
+                {
+                    var approach = new Point(
+                        Snap((int)MathF.Round(takeoff.X - direction.X * GridStep)),
+                        Snap((int)MathF.Round(takeoff.Y - direction.Y * GridStep)));
+                    if (!IsInside(approach, minX, minY, maxX, maxY) ||
+                        !IsWalkable(map, approach.X, approach.Y, true,
+                            includeBushes: false, includeStones: false,
+                            includeMoveStones: false) ||
+                        !IsWalkable(map, takeoff.X, takeoff.Y, true,
+                            includeBushes: false, includeStones: false,
+                            includeMoveStones: false))
+                        continue;
+
+                    var landing = ledge.GetGoal(
+                        takeoff, LinkBodyWidth, LinkBodyHeight);
+                    if (landing.X < minX || landing.X > maxX ||
+                        landing.Y < minY || landing.Y > maxY ||
+                        map.IntersectsVoid(
+                            landing.X + LinkBodyOffsetX,
+                            landing.Y + LinkBodyOffsetY,
+                            LinkBodyWidth, LinkBodyHeight) ||
+                        (!ledge.IgnoreCollision || ledge.MoveOnTop) &&
+                        map.IntersectsCollision(
+                            landing.X + LinkBodyOffsetX,
+                            landing.Y + LinkBodyOffsetY,
+                            LinkBodyWidth, LinkBodyHeight, false))
+                        continue;
+                    var landingGrid = new Point(
+                        Snap((int)MathF.Round(landing.X)),
+                        Snap((int)MathF.Round(landing.Y)));
+                    if (!IsInside(landingGrid, minX, minY, maxX, maxY) ||
+                        !IsWalkable(map, landingGrid.X, landingGrid.Y, true,
+                            includeBushes: false, includeStones: false,
+                            includeMoveStones: false))
+                        continue;
+
+                    var before = FindPath(
+                        map, startX, startY, approach.X, approach.Y,
+                        minX, minY, maxX, maxY, includeHoles: true,
+                        includeBushes: false, includeStones: false,
+                        includeMoveStones: false, allowDiagonal: allowDiagonal,
+                        penalizeVisibleEdges: false);
+                    if (before.Count == 0)
+                        continue;
+                    var after = FindPath(
+                        map, landingGrid.X, landingGrid.Y, endX, endY,
+                        minX, minY, maxX, maxY, includeHoles: true,
+                        includeBushes: false, includeStones: false,
+                        includeMoveStones: false, allowDiagonal: allowDiagonal,
+                        penalizeVisibleEdges: false);
+                    if (after.Count == 0)
+                        continue;
+
+                    var points = new List<LiveWallpaperJourneyPoint>();
+                    AppendSegmentPlan(map, before, points, skipFirst: false);
+                    if (points.Count == 0 || Vector2.DistanceSquared(
+                            new(points[^1].PixelX, points[^1].PixelY), takeoff) > 0.01f)
+                        points.Add(new LiveWallpaperJourneyPoint(takeoff.X, takeoff.Y));
+                    points.Add(new LiveWallpaperJourneyPoint(
+                        landing.X, landing.Y, LiveWallpaperJourneyAction.RailJump,
+                        ledgeIndex: ledge.Index));
+                    var skipLandingGrid = Vector2.DistanceSquared(
+                        landing, new Vector2(landingGrid.X, landingGrid.Y)) <= 0.01f;
+                    AppendSegmentPlan(map, after, points, skipLandingGrid);
+                    if (best == null || points.Count < best.Count)
+                        best = points;
+                }
+            }
+            if (best == null)
+                return false;
+            plan = new LiveWallpaperJourneyPlan(best.ToArray());
+            return true;
+        }
+
+        private static IEnumerable<Vector2> EnumerateLedgeTakeoffs(
+            LiveWallpaperLedge ledge,
+            int minX, int minY, int maxX, int maxY)
+        {
+            if (ledge.Direction is 1 or 3)
+            {
+                var y = ledge.Direction == 1
+                    ? ledge.PixelY + ledge.Height + LinkBodyHeight
+                    : ledge.PixelY;
+                for (var x = minX; x <= maxX; x += GridStep)
+                    if (x + LinkBodyOffsetX < ledge.PixelX + ledge.Width &&
+                        x + LinkBodyOffsetX + LinkBodyWidth > ledge.PixelX)
+                        yield return new Vector2(x, y);
+                yield break;
+            }
+
+            var takeoffX = ledge.Direction == 0
+                ? ledge.PixelX + ledge.Width - LinkBodyOffsetX
+                : ledge.PixelX - (LinkBodyOffsetX + LinkBodyWidth);
+            for (var y = minY; y <= maxY; y += GridStep)
+                if (y + LinkBodyOffsetY < ledge.PixelY + ledge.Height &&
+                    y + LinkBodyOffsetY + LinkBodyHeight > ledge.PixelY)
+                    yield return new Vector2(takeoffX, y);
+        }
+
+        private static void AppendSegmentPlan(
+            LiveWallpaperMap map, List<Point> path,
+            List<LiveWallpaperJourneyPoint> destination, bool skipFirst)
+        {
+            var segment = TryCreateTraversableObjectPlan(map, path, out var objectPlan)
+                ? objectPlan
+                : ToPlan(map, path);
+            for (var index = skipFirst ? 1 : 0; index < segment.Points.Count; index++)
+                destination.Add(segment.Points[index]);
+        }
+
+        private static LiveWallpaperJourneyPlan AppendLoadingZoneExit(
+            LiveWallpaperJourneyPlan plan, Endpoint endpoint)
+        {
+            if (plan == null || !endpoint.HasExit)
+                return plan;
+            var points = new List<LiveWallpaperJourneyPoint>(plan.Points)
+            {
+                new(endpoint.ExitX, endpoint.ExitY, LiveWallpaperJourneyAction.Exit)
+            };
+            return new LiveWallpaperJourneyPlan(points.ToArray());
+        }
+
+        public static bool TryCreateLooseKeyPlan(
+            LiveWallpaperMap map, LiveWallpaperMapViewport viewport,
+            float startPixelX, float startPixelY, out LiveWallpaperJourneyPlan plan)
+        {
+            plan = null;
+            if (map == null || map.Is2DMap || viewport.Columns <= 0 || viewport.Rows <= 0) return false;
+            GetBounds(map, viewport, out var minX, out var minY, out var maxX, out var maxY);
+            var reachable = new HashSet<Point>();
+            foreach (var item in map.DungeonDoors.LooseKeys.Concat(map.DungeonDoors.EnemyDrops))
+            {
+                if (!item.CanCollect) continue;
+                var x = Snap((int)item.X);
+                var y = Snap((int)item.Y);
+                if (!IsInside(new Point(x, y), minX, minY, maxX, maxY) ||
+                    !IsWalkable(map, x, y, true) || reachable.Count > 0 && !reachable.Contains(new Point(x, y)) ||
+                    !item.Intersects(x + LinkBodyOffsetX, y + LinkBodyOffsetY, LinkBodyWidth, LinkBodyHeight)) continue;
+                var path = FindPath(map, (int)startPixelX, (int)startPixelY, x, y,
+                    minX, minY, maxX, maxY, includeHoles: true,
+                    includeBushes: false, includeStones: false, includeMoveStones: false,
+                    reachableWhenNoPath: reachable);
+                if (path.Count < 2) continue;
+                plan = TryCreateTraversableObjectPlan(map, path, out var objects) ? objects : ToPlan(map, path);
+                return true;
+            }
+            return false;
+        }
+
+        public static bool TryCreateUnlockPlan(
+            LiveWallpaperMap map, LiveWallpaperMapViewport viewport,
+            float startPixelX, float startPixelY, out LiveWallpaperJourneyPlan plan)
+        {
+            plan = null;
+            if (map == null || map.Is2DMap || viewport.Columns <= 0 || viewport.Rows <= 0) return false;
+            var doors = new List<LiveWallpaperDungeonDoors.Door>();
+            foreach (var door in map.DungeonDoors.Doors)
+                if (map.DungeonDoors.CanUnlock(door)) doors.Add(door);
+            if (doors.Count == 0) return false;
+            doors.Sort((a, b) => Vector2.DistanceSquared(new(a.X, a.Y), new(startPixelX, startPixelY))
+                .CompareTo(Vector2.DistanceSquared(new(b.X, b.Y), new(startPixelX, startPixelY))));
+            GetBounds(map, viewport, out var minX, out var minY, out var maxX, out var maxY);
+            var startX = Snap(Math.Clamp((int)MathF.Round(startPixelX), minX, maxX));
+            var startY = Snap(Math.Clamp((int)MathF.Round(startPixelY), minY, maxY));
+            var reachable = new HashSet<Point>();
+            foreach (var door in doors)
+            {
+                // Approach the actual pushable panel; its paired plain panel
+                // remains solid, so this cannot unlock a gate from its back side.
+                var approaches = new[]
+                {
+                    new Point(Snap(door.X - 8), Snap(door.Y + 13)),
+                    new Point(Snap(door.X + 8), Snap(door.Y)),
+                    new Point(Snap(door.X + 24), Snap(door.Y + 13)),
+                    new Point(Snap(door.X + 8), Snap(door.Y + 32))
+                };
+                for (var side = 0; side < approaches.Length; side++)
+                {
+                    var approach = approaches[side];
+                    if (!IsInside(approach, minX, minY, maxX, maxY) ||
+                        !IsWalkable(map, approach.X, approach.Y, true) ||
+                        reachable.Count > 0 && !reachable.Contains(approach)) continue;
+                    var path = FindPath(map, startX, startY, approach.X, approach.Y,
+                        minX, minY, maxX, maxY, includeHoles: true,
+                        includeBushes: false, includeStones: false, includeMoveStones: false,
+                        reachableWhenNoPath: reachable);
+                    if (path.Count == 0) continue;
+                    var direction = side switch
+                    {
+                        0 => new Point(8, 0), 1 => new Point(0, 8),
+                        2 => new Point(-8, 0), _ => new Point(0, -8)
+                    };
+                    var basePlan = TryCreateTraversableObjectPlan(map, path, out var objects) ? objects : ToPlan(map, path);
+                    var points = new List<LiveWallpaperJourneyPoint>(basePlan.Points)
+                    {
+                        new(approach.X + direction.X, approach.Y + direction.Y, LiveWallpaperJourneyAction.UnlockDoor)
+                    };
+                    plan = new LiveWallpaperJourneyPlan(points.ToArray());
+                    return true;
+                }
+            }
+            return false;
         }
 
         public static LiveWallpaperJourneyPlan CreateToPoint(
@@ -563,7 +804,20 @@ namespace ProjectZ
                             ? objectPlan
                             : ToPlan(map, path));
                 }
+                // Do not replace an exact tapped destination across a one-way
+                // ledge with a nearby point on Link's current level. First let
+                // the authored downhill edge connect the exact two regions.
+                if (radius == 0 && !tappedHole && TryCreateLedgePlan(
+                        map, startX, startY, targetX, targetY,
+                        minX, minY, maxX, maxY,
+                        allowDiagonal: true, out var directLedgePlan))
+                    return directLedgePlan;
             }
+            if (TryCreateLedgePlan(
+                    map, startX, startY, targetX, targetY,
+                    minX, minY, maxX, maxY,
+                    allowDiagonal: true, out var ledgePlan))
+                return ledgePlan;
             return new LiveWallpaperJourneyPlan([]);
         }
 
@@ -1506,12 +1760,13 @@ namespace ProjectZ
                             portal.EntryId, excludedPortalEntryId,
                             StringComparison.Ordinal))
                         continue;
-                    endpoints.RemoveAll(endpoint =>
-                    {
-                        var deltaX = endpoint.X - portal.LinkTargetX;
-                        var deltaY = endpoint.Y - portal.LinkTargetY;
-                        return deltaX * deltaX + deltaY * deltaY <= 2.25f;
-                    });
+                    // A viewport edge can coincide with the arrival stair.
+                    // Its grid-snapped endpoint still overlaps the real trigger
+                    // even when it is not within 1.5px of LinkTarget. Use the
+                    // same activation test as movement, not a second proximity
+                    // rule that quietly reintroduces the excluded entrance.
+                    endpoints.RemoveAll(endpoint => portal.ShouldActivateAt(
+                        endpoint.X, endpoint.Y, 0, portal.Direction));
                 }
             }
             foreach (var portal in map.Portals)

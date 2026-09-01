@@ -34,7 +34,12 @@ namespace ProjectZ
         public const float ShadowBlurNearWeight = 0.35f;
         public const float ShadowBlurFarWeight = 0.15f;
         public const int ShadowBlurRadius = 3;
-        public const int MaxShadowDirtyRegions = 8;
+        // A busy wallpaper view can contain more than eight independently
+        // moving actors. Falling back at the ninth silhouette unions distant
+        // bounds and needlessly re-blurs most of the screen every frame.
+        // Thirty-two rectangles remain a tiny fixed buffer while covering the
+        // installed game's crowded outdoor and dungeon views separately.
+        public const int MaxShadowDirtyRegions = 32;
         public const int LampSize = 160;
         public const int LampRed = 255;
         public const int LampGreen = 200;

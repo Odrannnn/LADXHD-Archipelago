@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.Xna.Framework;
 using ProjectZ.InGame.GameObjects.Base.CObjects;
 using ProjectZ.InGame.GameObjects.Base.Components;
+using ProjectZ.InGame.Things;
 
 namespace ProjectZ
 {
@@ -251,6 +252,14 @@ namespace ProjectZ
         private LiveWallpaperJourneyPlan _journeyPlan;
         private bool _hasMapPosition;
         private LiveWallpaperMap _currentJourneyMap;
+        private LiveWallpaperMap _dungeonDoorMap;
+        private LiveWallpaperMap _breakingFloorMap;
+        private LiveWallpaperDungeonDoors.Door _pushingDoor;
+        private LiveWallpaperDungeonDoors.Door _openingDoor;
+        private long _lastDoorContactAt = -1;
+        private float _doorPushRemaining;
+        private int _pendingKeyChest = -1;
+        private long _keyChestGrantAt;
         private LiveWallpaperMap _navigationSourceMap;
         private LiveWallpaperMap _navigationMap;
         private bool _replanAfterBlockMove;
@@ -299,6 +308,14 @@ namespace ProjectZ
         private bool _pegasusChargePauseStarted;
         private long _pegasusChargeStartedAt;
         private bool _pegasusJumpActive;
+        private bool _railJumpActive;
+        private int _railJumpLedgeIndex = -1;
+        private long _railJumpPushStartedAt;
+        private Vector2 _railJumpStart;
+        private Vector2 _railJumpTarget;
+        private float _railJumpPercentage;
+        private float _railJumpSpeed;
+        private float _railJumpHeight;
         private bool _hookshotStarted;
         private bool _hookshotPulling;
         private Vector2 _hookshotLinkStart;
@@ -383,6 +400,9 @@ namespace ProjectZ
         }
 
         public BodyComponent Body => _body;
+        // The wallpaper remains save-independent, but its visible tunic follows
+        // the exact gameplay/AP telephone order for this renderer session.
+        public int CloakType { get; private set; } = GameManager.CloakGreen;
         private LiveWallpaperSideViewSimulation _sideView;
         private LiveWallpaperMap _sideViewMap;
         public bool CanActivatePortal(LiveWallpaperMap map, LiveWallpaperMapPortal portal) =>
@@ -392,6 +412,11 @@ namespace ProjectZ
         public void EnterMap(
             float pixelX, float pixelY, string entryPortalId = null)
         {
+            _dungeonDoorMap = null;
+            _breakingFloorMap = null;
+            _pushingDoor = _openingDoor = null;
+            _lastDoorContactAt = -1;
+            _pendingKeyChest = -1;
             _hasMapPosition = true;
             _failedJourneySteps.Clear();
             _sideView = null;
@@ -426,6 +451,7 @@ namespace ProjectZ
             _hitVelocity = Vector2.Zero;
             _airMoveVelocity = Vector2.Zero;
             _pegasusJumpActive = false;
+            ResetRailJump();
             _cutBushes.Clear();
             _cutVegetationTimes.Clear();
             _vegetationDrops.Clear();
@@ -528,6 +554,11 @@ namespace ProjectZ
             var plan = LiveWallpaperJourneyPlanner.CreateToPoint(
                 GetNavigationMap(map), viewport, _position.X, _position.Y,
                 targetPixelX, targetPixelY);
+            if ((plan.Points.Count < 2 || Vector2.DistanceSquared(
+                    new(plan.Points[^1].PixelX, plan.Points[^1].PixelY), new(targetPixelX, targetPixelY)) > 16 * 16) &&
+                LiveWallpaperJourneyPlanner.TryCreateUnlockPlan(GetNavigationMap(map), viewport,
+                    _position.X, _position.Y, out var unlockPlan))
+                plan = unlockPlan;
             if (plan.Points.Count < 2)
                 return false;
 
@@ -567,6 +598,7 @@ namespace ProjectZ
             _pegasusChargePauseStarted = false;
             _pegasusChargeStartedAt = 0;
             _pegasusJumpActive = false;
+            ResetRailJump();
             _hookshotStarted = false;
             _hookshotPulling = false;
             _hookshotPosition = Vector2.Zero;
@@ -651,6 +683,31 @@ namespace ProjectZ
             long holeFallAnimationMilliseconds = 0L)
         {
             _currentJourneyMap = map;
+            if (!ReferenceEquals(_breakingFloorMap, map))
+            {
+                _breakingFloorMap = map;
+                map?.BreakingFloors.Reset();
+            }
+            if (!ReferenceEquals(_dungeonDoorMap, map))
+            {
+                _dungeonDoorMap = map;
+                map?.DungeonDoors.Reset();
+            }
+            else if (animated && activityMode != 1 && _lastElapsed.HasValue &&
+                     elapsedMilliseconds >= _lastElapsed.Value && elapsedMilliseconds - _lastElapsed.Value <= 1000)
+                map?.DungeonDoors.Advance(Math.Clamp(
+                    (elapsedMilliseconds - _lastElapsed.Value) / (1000f / 60f), 0, 6));
+            if (_openingDoor != null && !_openingDoor.BlocksMovement)
+            {
+                _openingDoor = null;
+                _pushingDoor = null;
+                _replanAfterBlockMove = true;
+            }
+            if (_pendingKeyChest >= 0 && animated && elapsedMilliseconds >= _keyChestGrantAt)
+            {
+                map?.DungeonDoors.CollectChest(map, _pendingKeyChest);
+                _pendingKeyChest = -1;
+            }
             if (map?.Is2DMap == true)
             {
                 EnsureSideView(map);
@@ -724,11 +781,19 @@ namespace ProjectZ
 
             var frameScale = Math.Clamp(
                 elapsedDelta / (1000f / 60f), 0f, 6f);
+            if (map != null && animated && activityMode != 1)
+            {
+                if (map.DungeonDoors.UpdateLooseKeys(viewport, frameScale, map) && !_manualDestinationActive)
+                    _replanAfterBlockMove = true;
+                if (map.DungeonDoors.CollectLooseKeys(_position.X + _body.OffsetX,
+                        _position.Y + _body.OffsetY, _body.Width, _body.Height, _position.Z, _holeFalling))
+                    _replanAfterBlockMove = true;
+            }
             UpdateMoveStoneMotion(map, elapsedMilliseconds);
             if (_replanAfterBlockMove)
             {
                 _replanAfterBlockMove = false;
-                // The old route assumed the block stayed at its original tile.
+                // A moved block or unlocked door changed the available passage.
                 // Preserve a tapped goal when still reachable; otherwise choose
                 // another route using the completed push's actual collision.
                 if (!_manualDestinationActive ||
@@ -744,7 +809,20 @@ namespace ProjectZ
             // Hole absorption is physical state, not journey state. Process it
             // before the no-route fallback so an unavailable path cannot bypass
             // a fall that has already begun under Link's body.
+            if (map != null && animated && activityMode != 1 && !_holeFalling)
+                map.BreakingFloors.Advance(
+                    _position.X + _body.OffsetX,
+                    _position.Y + _body.OffsetY,
+                    _body.Width, _body.Height,
+                    elapsedDelta, elapsedMilliseconds,
+                    canTrigger: _body.IsGrounded &&
+                                _hitVelocity.LengthSquared() <= 0.0025f);
             UpdateHoleAbsorption(map, frameScale, elapsedMilliseconds);
+            // Native SystemBody advances damage knockback independently of Link's
+            // current input or route. Contact can leave the wallpaper Link exactly
+            // overlapping an enemy, where no journey can initially be planned; the
+            // physical push therefore has to run before the no-route early return.
+            var enemyKnockbackActive = AdvanceEnemyKnockback(map, frameScale);
 
             if (_journeyPlan == null || _journeyPlan.Points.Count == 0)
             {
@@ -794,7 +872,8 @@ namespace ProjectZ
                                 vegetationDropDirections: _vegetationDropDirections,
                                 collectedVegetationDropTimes: _collectedVegetationDropTimes,
                                 liftedStones: _liftedStones, openedChests: _openedChests,
-                                collectedRupees: _collectedRupees, collectedHearts: _collectedHearts,
+                                collectedRupees: _collectedRupees + (map?.DungeonDoors.CollectedDropRupees ?? 0),
+                                collectedHearts: _collectedHearts + (map?.DungeonDoors.CollectedDropHearts ?? 0),
                                 moveStones: _moveStones, fallenMoveStones: _fallenMoveStones);
                         }
                         var fallback = LiveWallpaperLinkActivity.ResolveForScene(
@@ -859,6 +938,7 @@ namespace ProjectZ
             }
 
             var canMove = animated && activityMode != 1 && !_holeFalling &&
+                          !enemyKnockbackActive &&
                           elapsedMilliseconds >= _pauseUntil &&
                           _journeyPointIndex < _journeyPlan.Points.Count;
             if (_holeFalling)
@@ -895,6 +975,8 @@ namespace ProjectZ
             var actionProgress = 0f;
             var action = LiveWallpaperLinkRouteAction.Stand;
             var hookshotVisible = false;
+            var railJumping = false;
+            var railJumpWaiting = false;
             var targetJourneyAction = _journeyPointIndex < _journeyPlan.Points.Count
                 ? _journeyPlan.Points[_journeyPointIndex].Action
                 : LiveWallpaperJourneyAction.Walk;
@@ -908,25 +990,70 @@ namespace ProjectZ
             if (_runtimeCombatEnemyIndex >= 0 &&
                 elapsedMilliseconds >= _pauseUntil)
                 _runtimeCombatEnemyIndex = -1;
-            if (_hitVelocity.LengthSquared() > 0.0025f && frameScale > 0)
-            {
-                ApplyJourneyConstrainedMovement(
-                    map, _hitVelocity *
-                         (0.5f + _body.SpeedMultiply * 0.5f) * frameScale,
-                    includeHoles: false, includeEnemies: false);
-                var hitNormal = Vector2.Normalize(_hitVelocity);
-                var slowDownAmount = 0.05f + Math.Clamp(
-                    _hitVelocity.Length() / 25f, 0f, 0.05f);
-                _hitVelocity -= hitNormal * slowDownAmount * frameScale;
-                if (_hitVelocity.Length() < 0.25f)
-                    _hitVelocity = Vector2.Zero;
-                canMove = false;
-            }
-            else if (_hitVelocity != Vector2.Zero)
-            {
-                _hitVelocity = Vector2.Zero;
-            }
             if (canMove && frameScale > 0 && targetJourneyAction ==
+                    LiveWallpaperJourneyAction.RailJump)
+            {
+                var point = _journeyPlan.Points[_journeyPointIndex];
+                if (point.LedgeIndex < 0 || point.LedgeIndex >= map.Ledges.Count)
+                {
+                    OnJourneyPointReached(elapsedMilliseconds);
+                }
+                else
+                {
+                    var ledge = map.Ledges[point.LedgeIndex];
+                    inputMove = DirectionToVector(ledge.Direction);
+                    _lastRouteDirection = ledge.Direction;
+                    if (!_railJumpActive)
+                    {
+                        if (_railJumpLedgeIndex != point.LedgeIndex)
+                        {
+                            _railJumpLedgeIndex = point.LedgeIndex;
+                            _railJumpPushStartedAt = elapsedMilliseconds;
+                        }
+                        if (elapsedMilliseconds - _railJumpPushStartedAt <
+                            ledge.InertiaMilliseconds)
+                        {
+                            railJumpWaiting = true;
+                            canMove = false;
+                        }
+                        else
+                        {
+                            _railJumpActive = true;
+                            _railJumpStart = _position.Position;
+                            _railJumpTarget = new Vector2(point.PixelX, point.PixelY);
+                            _railJumpPercentage = 0f;
+                            _railJumpSpeed = RailJumpGameplay.BaseSpeed *
+                                             ledge.JumpSpeedMultiplier;
+                            _railJumpHeight = RailJumpGameplay.BaseHeight *
+                                              ledge.JumpHeightMultiplier;
+                            _body.IsGrounded = false;
+                            _body.Velocity.Z = 0f;
+                            _airMoveVelocity = Vector2.Zero;
+                        }
+                    }
+                    if (_railJumpActive)
+                    {
+                        railJumping = true;
+                        _railJumpPercentage += frameScale * _railJumpSpeed;
+                        var amount = RailJumpGameplay.GetProgressAmount(
+                            _railJumpPercentage);
+                        _position.Set(new Vector3(
+                            Vector2.Lerp(_railJumpStart, _railJumpTarget, amount),
+                            RailJumpGameplay.GetHeight(
+                                _railJumpPercentage, _railJumpHeight)));
+                        if (_railJumpPercentage >= 1f)
+                        {
+                            _position.Set(new Vector3(_railJumpTarget, 0f));
+                            _body.IsGrounded = true;
+                            _body.Velocity.Z = 0f;
+                            _railJumpActive = false;
+                            _railJumpLedgeIndex = -1;
+                            OnJourneyPointReached(elapsedMilliseconds);
+                        }
+                    }
+                }
+            }
+            else if (canMove && frameScale > 0 && targetJourneyAction ==
                     LiveWallpaperJourneyAction.Hookshot)
             {
                 var point = _journeyPlan.Points[_journeyPointIndex];
@@ -1096,6 +1223,12 @@ namespace ProjectZ
                         inputMove = pushDirection;
                         canMove = false;
                     }
+                    else if (TryPushBlockingDungeonDoor(map, difference, elapsedMilliseconds, elapsedDelta,
+                                 out var doorDirection))
+                    {
+                        inputMove = doorDirection;
+                        canMove = false;
+                    }
                     else if (TryStartBlockingEnemyAttack(
                                  map, difference, elapsedMilliseconds,
                                  out var attackDirection))
@@ -1157,6 +1290,12 @@ namespace ProjectZ
                         inputMove = pushDirection;
                         canMove = false;
                     }
+                    else if (TryPushBlockingDungeonDoor(map, movement, elapsedMilliseconds, elapsedDelta,
+                                 out var doorDirection))
+                    {
+                        inputMove = doorDirection;
+                        canMove = false;
+                    }
                     else if (TryStartBlockingEnemyAttack(
                                  map, movement, elapsedMilliseconds,
                                  out var attackDirection))
@@ -1190,6 +1329,14 @@ namespace ProjectZ
             {
                 action = LiveWallpaperLinkRouteAction.Hidden;
                 inputMove = Vector2.Zero;
+            }
+            else if (railJumping || _railJumpActive)
+            {
+                action = LiveWallpaperLinkRouteAction.FeatherJump;
+            }
+            else if (railJumpWaiting)
+            {
+                action = LiveWallpaperLinkRouteAction.Pushing;
             }
             else if (targetJourneyAction ==
                          LiveWallpaperJourneyAction.Hookshot &&
@@ -1258,6 +1405,10 @@ namespace ProjectZ
                     inputMove = FaceEnemy(map, combatEnemy);
                     actionProgress = Math.Clamp(
                         (elapsedMilliseconds - _combatStartedAt) / 233f, 0f, 1f);
+                }
+                else if (_pushingDoor != null && _lastDoorContactAt == elapsedMilliseconds)
+                {
+                    action = LiveWallpaperLinkRouteAction.Pushing;
                 }
                 else if (_pauseUntil > elapsedMilliseconds &&
                     (_runtimeBushCutActive ||
@@ -1551,8 +1702,8 @@ namespace ProjectZ
                 stoneImpactStartedAt: _stoneImpactStartedAt,
                 stoneImpactSerial: _stoneImpactSerial,
                 stoneImpactEnemyIndex: _stoneImpactEnemyIndex,
-                collectedRupees: _collectedRupees,
-                collectedHearts: _collectedHearts,
+                collectedRupees: _collectedRupees + (map?.DungeonDoors.CollectedDropRupees ?? 0),
+                collectedHearts: _collectedHearts + (map?.DungeonDoors.CollectedDropHearts ?? 0),
                 activeStoneReleased: activeStoneReleased,
                 hookshotVisible: hookshotVisible,
                 hookshotMapX: _hookshotPosition.X / TileSize,
@@ -1594,6 +1745,12 @@ namespace ProjectZ
                 edgeStartOnly, followLoadingZones,
                 followLoadingZones ? _visitedFieldKeys : null,
                 _entryPortalIdToAvoid, _openedChests);
+            if (continueFromCurrentPosition && LiveWallpaperJourneyPlanner.TryCreateUnlockPlan(
+                    GetNavigationMap(map), viewport, _position.X, _position.Y, out var unlockPlan))
+                _journeyPlan = unlockPlan;
+            else if (continueFromCurrentPosition && LiveWallpaperJourneyPlanner.TryCreateLooseKeyPlan(
+                         GetNavigationMap(map), viewport, _position.X, _position.Y, out var keyPlan))
+                _journeyPlan = keyPlan;
             // ObjDoor marks the arrival door as already colliding while Link is
             // placed on the new map. Give the autonomous wallpaper one complete
             // route away from that entrance before it may choose the reciprocal
@@ -1663,6 +1820,7 @@ namespace ProjectZ
             _pegasusChargePauseStarted = false;
             _pegasusChargeStartedAt = 0;
             _pegasusJumpActive = false;
+            ResetRailJump();
             _hookshotStarted = false;
             _hookshotPulling = false;
             _hookshotPosition = Vector2.Zero;
@@ -1958,6 +2116,8 @@ namespace ProjectZ
                 point.ChestKey >= 0 && !_openedChests.Contains(point.ChestKey))
             {
                 _openedChests.Add(point.ChestKey);
+                _pendingKeyChest = point.ChestKey;
+                _keyChestGrantAt = elapsedMilliseconds + ChestGameplayPresentation.OpeningMilliseconds;
                 _chestPauseStarted = true;
                 _chestOpenedAt = elapsedMilliseconds;
                 _pauseUntil = elapsedMilliseconds +
@@ -1988,6 +2148,17 @@ namespace ProjectZ
                 !_interactionPauseStarted)
             {
                 _interactionPauseStarted = true;
+                if (_currentJourneyMap != null &&
+                    _journeyPlan.InteractionActorIndex >= 0 &&
+                    _journeyPlan.InteractionActorIndex <
+                        _currentJourneyMap.Actors.Count &&
+                    _currentJourneyMap.Actors[
+                        _journeyPlan.InteractionActorIndex].Kind ==
+                        LiveWallpaperMapActorKind.Telephone)
+                {
+                    CloakType = TunicGameplay.GetNext(
+                        CloakType, ownsBlueTunic: true, ownsRedTunic: true);
+                }
                 _pauseUntil = elapsedMilliseconds + 2_200L;
                 return;
             }
@@ -2259,6 +2430,28 @@ namespace ProjectZ
                 _body.InsideCollisionEscape);
         }
 
+        private bool AdvanceEnemyKnockback(
+            LiveWallpaperMap map, float frameScale)
+        {
+            if (_hitVelocity.LengthSquared() > 0.0025f && frameScale > 0f)
+            {
+                ApplyJourneyConstrainedMovement(
+                    map, _hitVelocity *
+                         (0.5f + _body.SpeedMultiply * 0.5f) * frameScale,
+                    includeHoles: false, includeEnemies: false);
+                var hitNormal = Vector2.Normalize(_hitVelocity);
+                var slowDownAmount = 0.05f + Math.Clamp(
+                    _hitVelocity.Length() / 25f, 0f, 0.05f);
+                _hitVelocity -= hitNormal * slowDownAmount * frameScale;
+                if (_hitVelocity.Length() < 0.25f)
+                    _hitVelocity = Vector2.Zero;
+                return true;
+            }
+            if (_hitVelocity != Vector2.Zero)
+                _hitVelocity = Vector2.Zero;
+            return false;
+        }
+
         private float GetJourneyBlockingOverlapArea(
             LiveWallpaperMap map, float positionX, float positionY,
             bool includeEnemies)
@@ -2357,7 +2550,7 @@ namespace ProjectZ
             if (direction.LengthSquared() > 0.0001f)
                 direction.Normalize();
 
-            if (!map.TryGetBushKeyAlongMovement(
+            if (!map.TryGetCuttableVegetationKeyAlongMovement(
                     _position.X + _body.OffsetX,
                     _position.Y + _body.OffsetY,
                     _body.Width,
@@ -2410,6 +2603,36 @@ namespace ProjectZ
             _stoneImpactEnemyIndex = -1;
             _pauseUntil = elapsedMilliseconds + StoneSequenceMilliseconds;
             return true;
+        }
+
+        private bool TryPushBlockingDungeonDoor(LiveWallpaperMap map, Vector2 movement,
+            long elapsed, long delta, out Vector2 direction)
+        {
+            direction = movement;
+            if (map == null || map.DungeonDoors.Doors.Count == 0 || !_body.IsGrounded ||
+                movement.LengthSquared() <= 0.0001f ||
+                _openingDoor == null && map.DungeonDoors.SmallKeyCount == 0 && !map.DungeonDoors.HasNightmareKey)
+                return false;
+            var x = _position.X + movement.X + _body.OffsetX;
+            var y = _position.Y + movement.Y + _body.OffsetY;
+            if (!map.TryGetBlockingCollisionBounds(x, y, _body.Width, _body.Height, false, out var blocking))
+                return false;
+            foreach (var door in map.DungeonDoors.Doors)
+            {
+                if (!door.BlocksMovement || blocking.X != door.X || blocking.Y != door.Y ||
+                    blocking.Width != 16 || blocking.Height != 16 ||
+                    !ReferenceEquals(door, _openingDoor) && !map.DungeonDoors.CanUnlock(door)) continue;
+                direction = DirectionToVector(ResolveDirection(movement, _lastRouteDirection));
+                if (!ReferenceEquals(door, _pushingDoor) || _lastDoorContactAt != elapsed - delta)
+                    _doorPushRemaining = DungeonDoorGameplay.UnlockPushMilliseconds;
+                else _doorPushRemaining -= Math.Max(0, delta);
+                _pushingDoor = door;
+                _lastDoorContactAt = elapsed;
+                if (_openingDoor == null && _doorPushRemaining <= 0 && map.DungeonDoors.TryUnlock(door))
+                    _openingDoor = door;
+                return true;
+            }
+            return false;
         }
 
         private bool TryStartBlockingMoveStonePush(
@@ -2535,6 +2758,7 @@ namespace ProjectZ
             _lastRouteDirection = pushDirection;
             _pauseUntil = elapsedMilliseconds + MoveStoneInertiaMilliseconds +
                           MoveStoneMovementMilliseconds;
+            NotifyDungeonBlockPush(map, moveStoneKey, pushDirection, completed: false);
             return true;
         }
 
@@ -2558,6 +2782,8 @@ namespace ProjectZ
             if (movementElapsed < MoveStoneMovementMilliseconds)
                 return;
             _moveStones[_activeMoveStoneKey] = _activeMoveStoneGoal;
+            NotifyDungeonBlockPush(map, _activeMoveStoneKey,
+                ResolveDirection(_activeMoveStoneGoal - _activeMoveStoneStart, _lastRouteDirection), completed: true);
             if (map != null &&
                 (map.IntersectsHole(
                      _activeMoveStoneGoal.X, _activeMoveStoneGoal.Y,
@@ -2576,6 +2802,18 @@ namespace ProjectZ
             if (_moveStoneJourneyAction)
                 _journeyPointIndex++;
             _moveStoneJourneyAction = false;
+        }
+
+        private static void NotifyDungeonBlockPush(LiveWallpaperMap map, int key, int direction, bool completed)
+        {
+            if (map == null || map.DungeonDoors.Doors.Count == 0 && map.DungeonDoors.LooseKeys.Count == 0) return;
+            foreach (var obj in map.Objects)
+                if (LiveWallpaperMap.IsMoveStoneTemplate(obj.Template) &&
+                    map.GetMoveStoneKey(obj.PixelX, obj.PixelY) == key)
+                {
+                    map.DungeonDoors.BlockPushed(obj, direction, completed);
+                    return;
+                }
         }
 
         private Vector2 ResolveStoneThrowDirection()
@@ -2623,6 +2861,18 @@ namespace ProjectZ
                 return false;
             }
             return !_body.IsGrounded;
+        }
+
+        private void ResetRailJump()
+        {
+            _railJumpActive = false;
+            _railJumpLedgeIndex = -1;
+            _railJumpPushStartedAt = 0L;
+            _railJumpStart = Vector2.Zero;
+            _railJumpTarget = Vector2.Zero;
+            _railJumpPercentage = 0f;
+            _railJumpSpeed = 0f;
+            _railJumpHeight = 0f;
         }
 
         private void UpdateHoleAbsorption(
