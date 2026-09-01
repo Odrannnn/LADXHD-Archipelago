@@ -1,5 +1,17 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.105**
+### Wallpaper fidelity, navigation and battery update
+  * Expanded installed-map fidelity for dungeon doors, small and nightmare keys, loose pickups, breaking floors, ledges, phones, books, furniture, switches, buttons, spikes, ice blocks and other authored fixtures. Shared gameplay constants and collision rules replace wallpaper-specific approximations.
+  * Improved autonomous and tapped navigation around stairs, doorways, pits, ledges, moved blocks, live actors and enemies. Link can open compatible dungeon locks, collect landed keys and drops, recover after contact knockback and continue pending routes after collision changes.
+  * Added native enemy death effects and ordinary heart/rupee drops, including the original jump, collection, fade, expiry and deep-water loss behavior. Unsupported puzzle rewards remain disabled rather than being guessed.
+  * Added an optional adaptive 15–60 FPS mode: 60 FPS briefly for touch and camera motion, 30 FPS during exploration and 15 FPS while Link rests or is hidden. Existing fixed 15/30/60 FPS choices remain unchanged.
+  * Reduced renderer work through exact cell indexes for animated tiles, decorations, static shadows and active actors/enemies. Improved dirty-shadow batching while preserving installed draw order, animation timing, lighting and final pixels.
+  * Reduced memory pressure with an 8-bit static shadow mask and by releasing derived full-screen map, shadow, lighting, scroll and blur buffers whenever Android hides the wallpaper, while preserving Link's journey and installed source assets.
+  * Removed the non-native resurrection particles that appeared as white orbs while Link carried the flying rooster, and shared the original doubled carry-animation speed with the game actor.
+  * Simplified wallpaper settings to controls used by the installed-map renderer and documented the pinned ARM64 build/signing workflow. Version code 2154 remains update-compatible with the permanent signing lineage.
+  * No asset rebuild, save migration, new Archipelago seed or APWorld rule change is required. Install over the existing app; generated assets, saves, settings and Archipelago profiles are retained.
+
 ## **v2.0.86**
 ### Wallpaper interior and dungeon scrolling
   * Corrected the entrance-dependent camera offset in interiors. Small rooms are centred as a whole, and larger interiors can scroll to their actual visible edges without cached overscan shortening the camera range.
