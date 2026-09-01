@@ -1,5 +1,15 @@
 # **The Legend of Zelda: Link's Awakening DX HD Changelog:**
 
+## **v2.0.106**
+### Wallpaper travel, actor fidelity and presentation
+  * Scoped indoor actors and enemies to Link's active 160×128 room so BowWow and other room residents no longer bleed in from adjacent map rooms. BowWow's chain now shares the native six-segment solver, link lengths, height propagation, direction smoothing and transparency.
+  * Added deliberate overworld warp-hole journeys with the original hole fall, source rise/fade, destination wait, spinning fall-in and grounded landing sequence. Arrival clears stale routes and begins from the exact installed destination spawn.
+  * Made installed Hookshot anchors an occasional validated journey objective instead of a last-resort path. Top-down and side-view routes enforce the native 120-pixel range, clear chain corridor and collision-safe landing.
+  * Reduced repeated interior backtracking by preferring endpoints that advance away from the previous journey origin, while retaining bounded alternatives for one-route rooms and collision recovery.
+  * Kept chest routes active while following Link through rooms, added periodic direct routes to unopened installed chests, and retained the original upward-facing opening/item presentation.
+  * Filled wallpaper letterboxing and system-bar space from the current installed scene palette instead of pitch black, with cached top/bottom readability vignettes and no extra full-screen render target.
+  * Version code 2155 remains compatible with the permanent signing lineage. No asset rebuild, save migration, new Archipelago seed or APWorld rule change is required; install over the existing app to retain generated assets, saves, settings and profiles.
+
 ## **v2.0.105**
 ### Wallpaper fidelity, navigation and battery update
   * Expanded installed-map fidelity for dungeon doors, small and nightmare keys, loose pickups, breaking floors, ledges, phones, books, furniture, switches, buttons, spikes, ice blocks and other authored fixtures. Shared gameplay constants and collision rules replace wallpaper-specific approximations.
