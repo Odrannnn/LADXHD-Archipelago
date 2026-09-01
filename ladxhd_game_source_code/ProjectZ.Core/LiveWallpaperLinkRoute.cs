@@ -24,6 +24,8 @@ namespace ProjectZ
         RoosterFly,
         RoosterThrow,
         Falling,
+        TeleporterUp,
+        TeleporterFall,
         Hidden,
         Climb,
         SideViewFall,

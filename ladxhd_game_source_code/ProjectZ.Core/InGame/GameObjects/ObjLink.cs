@@ -879,11 +879,11 @@ namespace ProjectZ.InGame.GameObjects
             else if (CurrentState == State.TeleporterUpWait)
             {
                 _holeTeleportCounter += Game1.DeltaTime;
-                if (_holeTeleportCounter > 1000)
+                if (_holeTeleportCounter > LinkGameplayMotion.WorldTeleporterRiseWaitMilliseconds)
                 {
                     CurrentState = State.TeleporterUp;
 
-                    _holeTeleportCounter -= 1000;
+                    _holeTeleportCounter -= LinkGameplayMotion.WorldTeleporterRiseWaitMilliseconds;
                     _shadowComponent.Transparency = 0;
 
                     Game1.AudioManager.PlaySoundEffect("D360-37-25");
@@ -892,13 +892,18 @@ namespace ProjectZ.InGame.GameObjects
             else if (CurrentState == State.TeleporterUp)
             {
                 _holeTeleportCounter += Game1.DeltaTime;
-                var time = 400;
+                var time = LinkGameplayMotion.WorldTeleporterRiseMilliseconds;
 
-                EntityPosition.Z = (float)(_holeTeleportCounter / time) * 128;
-                Direction = (int)(_holeTeleportCounter / 64) % 4;
+                EntityPosition.Z = (float)(_holeTeleportCounter / time) *
+                                   LinkGameplayMotion.WorldTeleporterHeight;
+                Direction = (int)(_holeTeleportCounter /
+                                  LinkGameplayMotion.WorldTeleporterDirectionMilliseconds) % 4;
 
                 // fade in
-                var percentage = MathHelper.Clamp(1 - ((float)_holeTeleportCounter - (time - 100)) / 100, 0, 1);
+                var percentage = MathHelper.Clamp(1 -
+                    ((float)_holeTeleportCounter -
+                     (time - LinkGameplayMotion.WorldTeleporterFadeMilliseconds)) /
+                    LinkGameplayMotion.WorldTeleporterFadeMilliseconds, 0, 1);
                 SpriteTransparency = percentage;
                 _shadowComponent.Transparency = percentage;
 
@@ -915,11 +920,12 @@ namespace ProjectZ.InGame.GameObjects
             else if (CurrentState == State.TeleportFallWait)
             {
                 _holeTeleportCounter += Game1.DeltaTime;
-                var time = 350;
+                var time = LinkGameplayMotion.WorldTeleporterDestinationWaitMilliseconds;
 
                 if (_holeTeleportCounter > time)
                 {
-                    _holeTeleportCounter -= time - 50;
+                    _holeTeleportCounter -= time -
+                        LinkGameplayMotion.WorldTeleporterFadeMilliseconds / 2;
                     _body.Velocity = new Vector3(0, 0, 0);
                     CurrentState = State.TeleportFall;
                 }
@@ -927,10 +933,13 @@ namespace ProjectZ.InGame.GameObjects
             else if (CurrentState == State.TeleportFall)
             {
                 _holeTeleportCounter += Game1.DeltaTime;
-                Direction = (int)(_holeTeleportCounter / 64) % 4;
+                Direction = (int)(_holeTeleportCounter /
+                                  LinkGameplayMotion.WorldTeleporterDirectionMilliseconds) % 4;
 
                 // fade in
-                var percentage = MathHelper.Clamp((float)_holeTeleportCounter / 100, 0, 1);
+                var percentage = MathHelper.Clamp(
+                    (float)_holeTeleportCounter /
+                    LinkGameplayMotion.WorldTeleporterFadeMilliseconds, 0, 1);
 
                 if (_body.IsGrounded)
                 {

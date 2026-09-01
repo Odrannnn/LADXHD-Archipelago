@@ -18,6 +18,7 @@ internal static class WallpaperSideViewTests
         CheckCurrentTapRecovery(map);
         CheckUnreachableTapRecovery(map);
         CheckNoTopDownFallback(map);
+        CheckSideViewHookshot();
         CheckInstalledDungeonRoutes();
     }
 
@@ -239,6 +240,33 @@ internal static class WallpaperSideViewTests
             "An airborne 2D map must enter side-view gravity, never the top-down journey fallback.");
     }
 
+    private static void CheckSideViewHookshot()
+    {
+        var map = LoadHookshotMap();
+        var simulation = new LiveWallpaperSideViewSimulation(
+            map, new Vector2(40, 176), null);
+        var sawHookshot = false;
+        var crossedAnchorGap = false;
+        var maximumX = simulation.Body.Position.X;
+        var hookshotFrames = 0;
+        for (var frame = 0; frame <= 30 * 40; frame++)
+        {
+            var state = simulation.Update(
+                (long)Math.Round(frame * 1000d / 30), true);
+            sawHookshot |= state.Action ==
+                           LiveWallpaperLinkRouteAction.Hookshot &&
+                           state.HookshotVisible;
+            if (state.Action == LiveWallpaperLinkRouteAction.Hookshot)
+                hookshotFrames++;
+            maximumX = Math.Max(maximumX, simulation.Body.Position.X);
+            crossedAnchorGap |= simulation.Body.Position.X >= 216;
+            if (sawHookshot && crossedAnchorGap)
+                break;
+        }
+        Check(sawHookshot && crossedAnchorGap,
+            $"A side-view room with a real installed Hookshot grip must deliberately extend the chain and pull Link to its collision face (hookshotFrames={hookshotFrames}, maxX={maximumX}).");
+    }
+
     private static void CheckInstalledDungeonRoutes()
     {
         var dataRoot = Environment.GetEnvironmentVariable("LADXHD_TEST_GAME_DATA");
@@ -446,6 +474,31 @@ internal static class WallpaperSideViewTests
         foreach (var line in objects) text.AppendLine(line);
         Check(LiveWallpaperMap.TryLoad(new StringReader(text.ToString()), out var map) && map.Is2DMap,
             "Synthetic side-view fixture must parse as an Is2DMap.");
+        return map;
+    }
+
+    private static LiveWallpaperMap LoadHookshotMap()
+    {
+        const int width = 20, height = 12;
+        var text = new StringBuilder(
+            $"3\n0\n0\nsideview.png\n{width}\n{height}\n1\n");
+        for (var row = 0; row < height; row++)
+            text.AppendLine(string.Join(',', Enumerable.Repeat("0", width)));
+        text.AppendLine("3");
+        text.AppendLine("link2dspawner");
+        text.AppendLine("c1");
+        text.AppendLine("hookshotGrip");
+        var objects = new List<string> { "0;0;0" };
+        for (var x = 0; x < width * 16; x += 16)
+            objects.Add($"1;{x};176");
+        objects.Add("2;224;160");
+        text.AppendLine(objects.Count.ToString());
+        foreach (var line in objects)
+            text.AppendLine(line);
+        Check(LiveWallpaperMap.TryLoad(
+                new StringReader(text.ToString()), out var map) &&
+              map.Is2DMap && map.HookshotTargets.Count == 1,
+            "Synthetic side-view Hookshot fixture must retain its installed grip.");
         return map;
     }
 

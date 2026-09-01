@@ -20,6 +20,14 @@ namespace ProjectZ
         public const float PegasusBootsParticleMilliseconds = 120f;
         public const float HookshotSpeed = 3f;
         public const float HookshotMaximumDistance = 120f;
+        // ObjLink's exact overworld-hole transition values. Keep the gameplay
+        // and wallpaper presentation on the same timings and height.
+        public const long WorldTeleporterRiseWaitMilliseconds = 1000L;
+        public const long WorldTeleporterRiseMilliseconds = 400L;
+        public const long WorldTeleporterDestinationWaitMilliseconds = 350L;
+        public const long WorldTeleporterFadeMilliseconds = 100L;
+        public const long WorldTeleporterDirectionMilliseconds = 64L;
+        public const float WorldTeleporterHeight = 128f;
         public const float CornerCorrectionThreshold = 2.5f;
         public const float CollisionEscapeEpsilon = 0.01f;
         public const int FeatherAirborneFramesAt60Fps = 31;

@@ -349,7 +349,9 @@ namespace ProjectZ
             int direction, int mode,
             string entryId = null, string nextMap = null,
             string exitId = null, bool is2dDoor = false,
-            bool isHoleTeleporter = false)
+            bool isHoleTeleporter = false,
+            bool isOverworldTeleporter = false,
+            int teleporterId = -1)
         {
             PixelX = pixelX;
             PixelY = pixelY;
@@ -362,6 +364,8 @@ namespace ProjectZ
             ExitId = exitId;
             Is2DDoor = is2dDoor;
             IsHoleTeleporter = isHoleTeleporter;
+            IsOverworldTeleporter = isOverworldTeleporter;
+            TeleporterId = teleporterId;
         }
 
         public int PixelX { get; }
@@ -375,6 +379,8 @@ namespace ProjectZ
         public string ExitId { get; }
         public bool Is2DDoor { get; }
         public bool IsHoleTeleporter { get; }
+        public bool IsOverworldTeleporter { get; }
+        public int TeleporterId { get; }
         public bool HasDestination =>
             !string.IsNullOrWhiteSpace(NextMap) &&
             !string.IsNullOrWhiteSpace(ExitId);
@@ -637,6 +643,43 @@ namespace ProjectZ
                     return true;
             }
             return false;
+        }
+
+        public bool TryGetOverworldTeleporterAt(
+            float x, float y, float width, float height,
+            out LiveWallpaperMapPortal teleporter)
+        {
+            foreach (var portal in Portals)
+            {
+                if (!portal.IsOverworldTeleporter)
+                    continue;
+                // ObjOverworldTeleporter's Hole CBox is inset one pixel.
+                if (x < portal.PixelX + 15 && x + width > portal.PixelX + 1 &&
+                    y < portal.PixelY + 15 && y + height > portal.PixelY + 1)
+                {
+                    teleporter = portal;
+                    return true;
+                }
+            }
+            teleporter = default;
+            return false;
+        }
+
+        public bool TryGetOtherOverworldTeleporter(
+            int sourceId, int selector,
+            out LiveWallpaperMapPortal teleporter)
+        {
+            var candidates = Portals
+                .Where(portal => portal.IsOverworldTeleporter &&
+                                 portal.TeleporterId != sourceId)
+                .ToArray();
+            if (candidates.Length == 0)
+            {
+                teleporter = default;
+                return false;
+            }
+            teleporter = candidates[Math.Abs(selector % candidates.Length)];
+            return true;
         }
         public bool IsHouse { get; }
         public bool Is2DMap { get; }
@@ -2401,6 +2444,15 @@ namespace ProjectZ
             int positionX,
             int positionY)
         {
+            if (template == "overworldTeleporter")
+            {
+                portals.Add(new LiveWallpaperMapPortal(
+                    positionX, positionY, 16, 16, 0, 0,
+                    isHoleTeleporter: true,
+                    isOverworldTeleporter: true,
+                    teleporterId: GetOptionalInt(parts, 3, -1)));
+                return;
+            }
             if (template == "holeTeleporter")
             {
                 portals.Add(new LiveWallpaperMapPortal(
@@ -2514,6 +2566,18 @@ namespace ProjectZ
                 AddCollision(grid, mapWidth, mapHeight,
                     new CollisionRectangle(positionX + offsetX, positionY + offsetY,
                         width, height, CollisionKind.Hole), ref collisionCount,
+                    ref hazardCount, ref npcWallCount);
+                return;
+            }
+
+            if (template == "overworldTeleporter")
+            {
+                // ObjOverworldTeleporter uses CBox(posX+1,posY+1,14,14)
+                // with CollisionTypes.Hole.
+                AddCollision(grid, mapWidth, mapHeight,
+                    new CollisionRectangle(
+                        positionX + 1, positionY + 1, 14, 14,
+                        CollisionKind.Hole), ref collisionCount,
                     ref hazardCount, ref npcWallCount);
                 return;
             }

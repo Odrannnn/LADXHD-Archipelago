@@ -17,13 +17,16 @@ namespace ProjectZ
     {
         public LiveWallpaperActorState(
             float entityX, float entityY, float height,
-            int direction, LiveWallpaperActorAction action)
+            int direction, LiveWallpaperActorAction action,
+            float chainOffsetX = 0f, float chainOffsetY = 0f)
         {
             EntityX = entityX;
             EntityY = entityY;
             Height = Math.Max(0f, height);
             Direction = Math.Clamp(direction, 0, 3);
             Action = action;
+            ChainOffsetX = chainOffsetX;
+            ChainOffsetY = chainOffsetY;
         }
 
         public float EntityX { get; }
@@ -31,6 +34,8 @@ namespace ProjectZ
         public float Height { get; }
         public int Direction { get; }
         public LiveWallpaperActorAction Action { get; }
+        public float ChainOffsetX { get; }
+        public float ChainOffsetY { get; }
         public bool Visible => Action != LiveWallpaperActorAction.Hidden;
         public bool BlocksMovement =>
             Visible && Action != LiveWallpaperActorAction.Fly;
@@ -169,6 +174,8 @@ namespace ProjectZ
                 public uint RandomState;
                 public LiveWallpaperActorAction Action;
                 public bool Grounded;
+                public float ChainOffsetX;
+                public float ChainOffsetY;
             }
 
             private readonly Dictionary<int, Runtime> _runtime = new();
@@ -209,7 +216,8 @@ namespace ProjectZ
                 }
                 return new LiveWallpaperActorState(
                     runtime.X, runtime.Y, runtime.Z,
-                    runtime.Direction, runtime.Action);
+                    runtime.Direction, runtime.Action,
+                    runtime.ChainOffsetX, runtime.ChainOffsetY);
             }
 
             internal static bool IsMobile(LiveWallpaperMapActorKind kind) =>
@@ -260,6 +268,8 @@ namespace ProjectZ
                 runtime.RandomState = (uint)(actorIndex + 1) * 747796405u +
                                       2891336453u;
                 runtime.Direction = 0;
+                runtime.ChainOffsetX = -6f;
+                runtime.ChainOffsetY = 0f;
                 runtime.Grounded = true;
                 runtime.DirectionChangeTimer = 250f;
                 if (actor.Kind == LiveWallpaperMapActorKind.Owl)
@@ -386,10 +396,13 @@ namespace ProjectZ
                     else
                         BeginIdle(runtime, actor.Kind);
                 }
-                if (runtime.Action != LiveWallpaperActorAction.Walk)
-                    return;
-
                 var frameScale = deltaMilliseconds / (1000f / 60f);
+                if (runtime.Action != LiveWallpaperActorAction.Walk)
+                {
+                    UpdateBowWowChainOffset(runtime, actor.Kind, frameScale);
+                    return;
+                }
+
                 Move(runtime, map, actor, actorIndex, link, frameScale);
                 if (runtime.Grounded)
                 {
@@ -415,6 +428,21 @@ namespace ProjectZ
                     runtime.VelocityZ = 0;
                     runtime.Grounded = true;
                 }
+                UpdateBowWowChainOffset(runtime, actor.Kind, frameScale);
+            }
+
+            private static void UpdateBowWowChainOffset(
+                Runtime runtime, LiveWallpaperMapActorKind kind,
+                float frameScale)
+            {
+                if (kind != LiveWallpaperMapActorKind.BowWow)
+                    return;
+                var direction = AnimationHelper.DirectionOffset[runtime.Direction];
+                var amount = Math.Clamp(frameScale * 0.25f, 0f, 1f);
+                runtime.ChainOffsetX = MathHelper.Lerp(
+                    runtime.ChainOffsetX, direction.X * 6f, amount);
+                runtime.ChainOffsetY = MathHelper.Lerp(
+                    runtime.ChainOffsetY, direction.Y * 3f, amount);
             }
 
             private static void UpdateOwl(

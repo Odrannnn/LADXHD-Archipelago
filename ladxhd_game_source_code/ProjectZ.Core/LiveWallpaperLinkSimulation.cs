@@ -219,6 +219,15 @@ namespace ProjectZ
     /// </summary>
     public sealed class LiveWallpaperLinkSimulation
     {
+        private enum WorldTeleporterPhase
+        {
+            None,
+            RiseWait,
+            Rise,
+            DestinationWait,
+            Fall
+        }
+
         private const float TileSize = 16f;
         private const float WalkSpeedPerFrame = LinkGameplayMotion.WalkSpeed;
         private const long MoveStoneInertiaMilliseconds = 500L;
@@ -327,6 +336,11 @@ namespace ProjectZ
         private bool _holeFalling;
         private long _holeFallStartedAt;
         private long _holeFallAnimationMilliseconds = 850L;
+        private int _pendingOverworldTeleporterId = -1;
+        private WorldTeleporterPhase _worldTeleporterPhase;
+        private long _worldTeleporterPhaseStartedAt;
+        private Vector2 _worldTeleporterDestination;
+        private float _worldTeleporterFallVelocity;
         private bool _journeyIslandLife;
         private bool _journeyFollowLoadingZones;
         private bool _journeyAllowViewportFollow;
@@ -378,6 +392,8 @@ namespace ProjectZ
         private int _fieldTransitionsWithoutDiscovery;
         private bool _continueFromCurrentOnReset;
         private string _entryPortalIdToAvoid;
+        private bool _hasPreviousJourneyStart;
+        private Vector2 _previousJourneyStart;
 
         private const int MaximumFieldTransitionsWithoutDiscovery = 12;
 
@@ -426,6 +442,11 @@ namespace ProjectZ
             _holeResetField = GetHoleResetField(pixelX, pixelY);
             _holeFalling = false;
             _holeFallStartedAt = 0L;
+            _pendingOverworldTeleporterId = -1;
+            _worldTeleporterPhase = WorldTeleporterPhase.None;
+            _worldTeleporterPhaseStartedAt = 0L;
+            _worldTeleporterDestination = Vector2.Zero;
+            _worldTeleporterFallVelocity = 0f;
             _body.Velocity = Vector3.Zero;
             _body.VelocityTarget = Vector2.Zero;
             _body.HoleAbsorption = Vector2.Zero;
@@ -437,6 +458,8 @@ namespace ProjectZ
             _journeyExited = false;
             _continueFromCurrentOnReset = true;
             _entryPortalIdToAvoid = entryPortalId;
+            _hasPreviousJourneyStart = false;
+            _previousJourneyStart = Vector2.Zero;
             _nextJourneyAt = 0L;
             _pauseUntil = _lastElapsed ?? 0L;
             _manualDestinationActive = false;
@@ -753,7 +776,16 @@ namespace ProjectZ
             _lastElapsed = elapsedMilliseconds;
             ExpireCollectedVegetationDrops(elapsedMilliseconds);
             RespawnDistantObjects(map);
-            if (reset)
+            if (reset && _worldTeleporterPhase != WorldTeleporterPhase.None)
+            {
+                // Resuming after screen-off must not replace the native portal
+                // sequence with an unrelated autonomous route.
+                _journeyIslandLife = allowIslandLife;
+                _journeyFollowLoadingZones = followLoadingZones;
+                _journeyAllowViewportFollow = allowViewportFollow;
+                elapsedDelta = 0;
+            }
+            else if (reset)
             {
                 _journeyVariant = (int)Math.Max(0, elapsedMilliseconds / 20_000L);
                 var continueThroughLoadingZone = _continueFromCurrentOnReset ||
@@ -781,6 +813,11 @@ namespace ProjectZ
 
             var frameScale = Math.Clamp(
                 elapsedDelta / (1000f / 60f), 0f, 6f);
+            if (_worldTeleporterPhase != WorldTeleporterPhase.None)
+                AdvanceWorldTeleporter(
+                    map, viewport, scene, allowIslandLife,
+                    followLoadingZones, allowViewportFollow,
+                    elapsedMilliseconds, frameScale);
             if (map != null && animated && activityMode != 1)
             {
                 if (map.DungeonDoors.UpdateLooseKeys(viewport, frameScale, map) && !_manualDestinationActive)
@@ -809,7 +846,9 @@ namespace ProjectZ
             // Hole absorption is physical state, not journey state. Process it
             // before the no-route fallback so an unavailable path cannot bypass
             // a fall that has already begun under Link's body.
-            if (map != null && animated && activityMode != 1 && !_holeFalling)
+            if (map != null && animated && activityMode != 1 &&
+                !_holeFalling &&
+                _worldTeleporterPhase == WorldTeleporterPhase.None)
                 map.BreakingFloors.Advance(
                     _position.X + _body.OffsetX,
                     _position.Y + _body.OffsetY,
@@ -817,12 +856,15 @@ namespace ProjectZ
                     elapsedDelta, elapsedMilliseconds,
                     canTrigger: _body.IsGrounded &&
                                 _hitVelocity.LengthSquared() <= 0.0025f);
-            UpdateHoleAbsorption(map, frameScale, elapsedMilliseconds);
+            if (_worldTeleporterPhase == WorldTeleporterPhase.None)
+                UpdateHoleAbsorption(map, frameScale, elapsedMilliseconds);
             // Native SystemBody advances damage knockback independently of Link's
             // current input or route. Contact can leave the wallpaper Link exactly
             // overlapping an enemy, where no journey can initially be planned; the
             // physical push therefore has to run before the no-route early return.
-            var enemyKnockbackActive = AdvanceEnemyKnockback(map, frameScale);
+            var enemyKnockbackActive =
+                _worldTeleporterPhase == WorldTeleporterPhase.None &&
+                AdvanceEnemyKnockback(map, frameScale);
 
             if (_journeyPlan == null || _journeyPlan.Points.Count == 0)
             {
@@ -885,7 +927,8 @@ namespace ProjectZ
                 }
             }
 
-            if (_journeyPointIndex >= _journeyPlan.Points.Count)
+            if (_worldTeleporterPhase == WorldTeleporterPhase.None &&
+                _journeyPointIndex >= _journeyPlan.Points.Count)
             {
                 // The arrival route has now genuinely carried Link away from
                 // the reciprocal entrance. Later journeys may use that door.
@@ -917,7 +960,33 @@ namespace ProjectZ
             {
                 // ObjLink.OnHoleReset restores the saved safe position when the
                 // canonical fall animation finishes, then resumes from idle.
-                _position.Set(new Vector3(_holeResetPosition, 0f));
+                if (_pendingOverworldTeleporterId >= 0 &&
+                    map.TryGetOtherOverworldTeleporter(
+                        _pendingOverworldTeleporterId,
+                        PositiveTeleportSelector(_journeyVariant),
+                        out var destination))
+                {
+                    // ObjLink waits below the source, rises and fades out,
+                    // then StartWorldTelportation places it above the next
+                    // installed portal at (entityX+8, entityY+38).
+                    _worldTeleporterDestination = new Vector2(
+                        destination.PixelX + 8f,
+                        destination.PixelY + 38f);
+                    _worldTeleporterPhase = WorldTeleporterPhase.RiseWait;
+                    _worldTeleporterPhaseStartedAt = elapsedMilliseconds;
+                }
+                else
+                {
+                    _position.Set(new Vector3(_holeResetPosition, 0f));
+                    _journeyVariant++;
+                    StartJourney(
+                        map, viewport, scene, allowIslandLife,
+                        elapsedMilliseconds,
+                        continueFromCurrentPosition: true,
+                        followLoadingZones: followLoadingZones,
+                        allowViewportFollow: allowViewportFollow);
+                }
+                _pendingOverworldTeleporterId = -1;
                 _body.Velocity = Vector3.Zero;
                 _body.VelocityTarget = Vector2.Zero;
                 _body.HoleAbsorption = Vector2.Zero;
@@ -927,17 +996,11 @@ namespace ProjectZ
                 _airMoveVelocity = Vector2.Zero;
                 _holeFalling = false;
                 _holeFallStartedAt = 0L;
-                _journeyVariant++;
-                StartJourney(
-                    map, viewport, scene, allowIslandLife,
-                    elapsedMilliseconds,
-                    continueFromCurrentPosition: true,
-                    followLoadingZones: followLoadingZones,
-                    allowViewportFollow: allowViewportFollow);
                 elapsedDelta = 0L;
             }
 
             var canMove = animated && activityMode != 1 && !_holeFalling &&
+                          _worldTeleporterPhase == WorldTeleporterPhase.None &&
                           !enemyKnockbackActive &&
                           elapsedMilliseconds >= _pauseUntil &&
                           _journeyPointIndex < _journeyPlan.Points.Count;
@@ -1312,7 +1375,9 @@ namespace ProjectZ
 
             // SystemBody applies the independently smoothed hole force after
             // ordinary movement, omitting the hole itself from collision tests.
-            if (!_holeFalling && _body.IsGrounded &&
+            if (!_holeFalling &&
+                _worldTeleporterPhase == WorldTeleporterPhase.None &&
+                _body.IsGrounded &&
                 _body.HoleAbsorption != Vector2.Zero && frameScale > 0f)
             {
                 ApplyJourneyConstrainedMovement(
@@ -1325,7 +1390,12 @@ namespace ProjectZ
                 !_roosterReleaseState.Grounded && frameScale > 0f)
                 _roosterReleaseState = RoosterGameplayMotion.AdvanceRelease(
                     _roosterReleaseState, frameScale);
-            if (_journeyExited)
+            if (_worldTeleporterPhase != WorldTeleporterPhase.None)
+            {
+                action = LiveWallpaperLinkRouteAction.Hidden;
+                inputMove = Vector2.Zero;
+            }
+            else if (_journeyExited)
             {
                 action = LiveWallpaperLinkRouteAction.Hidden;
                 inputMove = Vector2.Zero;
@@ -1574,13 +1644,15 @@ namespace ProjectZ
                     action = LiveWallpaperLinkRouteAction.Swim;
             }
 
-            if (!_holeFalling && _body.IsGrounded &&
+            if (!_holeFalling &&
+                _worldTeleporterPhase == WorldTeleporterPhase.None &&
+                _body.IsGrounded &&
                 map?.GetLinkHoleCoverage(
                     _position.X + _body.OffsetX,
                     _position.Y + _body.OffsetY,
                     _body.Width, _body.Height) >= _body.AbsorbPercentage)
             {
-                BeginHoleFall(elapsedMilliseconds);
+                BeginHoleFall(map, elapsedMilliseconds);
             }
             if (_holeFalling)
             {
@@ -1589,6 +1661,36 @@ namespace ProjectZ
                     (elapsedMilliseconds - _holeFallStartedAt) /
                     (float)Math.Max(1L, _holeFallAnimationMilliseconds),
                     0f, 1f);
+                inputMove = Vector2.Zero;
+                featherPressed = false;
+                interactionActor = -1;
+                combatEnemy = -1;
+                hookshotVisible = false;
+            }
+            else if (_worldTeleporterPhase != WorldTeleporterPhase.None)
+            {
+                var phaseElapsed = Math.Max(
+                    0L, elapsedMilliseconds - _worldTeleporterPhaseStartedAt);
+                action = _worldTeleporterPhase switch
+                {
+                    WorldTeleporterPhase.Rise =>
+                        LiveWallpaperLinkRouteAction.TeleporterUp,
+                    WorldTeleporterPhase.Fall =>
+                        LiveWallpaperLinkRouteAction.TeleporterFall,
+                    _ => LiveWallpaperLinkRouteAction.Hidden
+                };
+                actionProgress = _worldTeleporterPhase switch
+                {
+                    WorldTeleporterPhase.Rise => Math.Clamp(
+                        phaseElapsed /
+                        (float)LinkGameplayMotion.WorldTeleporterRiseMilliseconds,
+                        0f, 1f),
+                    WorldTeleporterPhase.Fall => Math.Clamp(
+                        phaseElapsed /
+                        (float)LinkGameplayMotion.WorldTeleporterFadeMilliseconds,
+                        0f, 1f),
+                    _ => 0f
+                };
                 inputMove = Vector2.Zero;
                 featherPressed = false;
                 interactionActor = -1;
@@ -1606,6 +1708,14 @@ namespace ProjectZ
                 direction = ResolveDirection(FaceActor(map, interactionActor), fallbackDirection);
             else if (combatEnemy >= 0)
                 direction = ResolveDirection(FaceEnemy(map, combatEnemy), fallbackDirection);
+            if (_worldTeleporterPhase is WorldTeleporterPhase.Rise or
+                    WorldTeleporterPhase.Fall)
+            {
+                var phaseElapsed = Math.Max(
+                    0L, elapsedMilliseconds - _worldTeleporterPhaseStartedAt);
+                direction = (int)(phaseElapsed /
+                    LinkGameplayMotion.WorldTeleporterDirectionMilliseconds) % 4;
+            }
             _lastRouteDirection = direction;
             if (_journeyPointIndex != movementPointIndex)
             {
@@ -1644,7 +1754,7 @@ namespace ProjectZ
                         // loop, so its existing stuck timeout advances to the
                         // same ObjLink fall/reset outcome instead of replanning
                         // forever from inside the hole.
-                        BeginHoleFall(elapsedMilliseconds);
+                        BeginHoleFall(map, elapsedMilliseconds);
                         action = LiveWallpaperLinkRouteAction.Falling;
                         actionProgress = 0f;
                     }
@@ -1738,13 +1848,32 @@ namespace ProjectZ
         {
             if (followLoadingZones && continueFromCurrentPosition)
                 RememberCurrentField();
-            _journeyPlan = LiveWallpaperJourneyPlanner.Create(
-                GetNavigationMap(map), viewport, scene, _journeyVariant, allowIslandLife,
-                continueFromCurrentPosition ? _position.X : null,
-                continueFromCurrentPosition ? _position.Y : null,
-                edgeStartOnly, followLoadingZones,
-                followLoadingZones ? _visitedFieldKeys : null,
-                _entryPortalIdToAvoid, _openedChests);
+            var navigationMap = GetNavigationMap(map);
+            var journeyStart = _position.Position;
+            var previousJourneyX = !followLoadingZones &&
+                                   _hasPreviousJourneyStart
+                ? _previousJourneyStart.X
+                : (float?)null;
+            var previousJourneyY = !followLoadingZones &&
+                                   _hasPreviousJourneyStart
+                ? _previousJourneyStart.Y
+                : (float?)null;
+            LiveWallpaperJourneyPlan teleporterPlan = null;
+            var useOverworldTeleporter = followLoadingZones &&
+                continueFromCurrentPosition && _journeyVariant % 8 == 3 &&
+                LiveWallpaperJourneyPlanner.TryCreateOverworldTeleporterPlan(
+                    navigationMap, viewport, _position.X, _position.Y,
+                    _journeyVariant, out teleporterPlan);
+            _journeyPlan = useOverworldTeleporter
+                ? teleporterPlan
+                : LiveWallpaperJourneyPlanner.Create(
+                    navigationMap, viewport, scene, _journeyVariant, allowIslandLife,
+                    continueFromCurrentPosition ? _position.X : null,
+                    continueFromCurrentPosition ? _position.Y : null,
+                    edgeStartOnly, followLoadingZones,
+                    followLoadingZones ? _visitedFieldKeys : null,
+                    _entryPortalIdToAvoid, _openedChests,
+                    previousJourneyX, previousJourneyY);
             if (continueFromCurrentPosition && LiveWallpaperJourneyPlanner.TryCreateUnlockPlan(
                     GetNavigationMap(map), viewport, _position.X, _position.Y, out var unlockPlan))
                 _journeyPlan = unlockPlan;
@@ -1765,8 +1894,15 @@ namespace ProjectZ
                     continueFromCurrentPosition ? _position.Y : null,
                     edgeStartOnly, followLoadingZones,
                     followLoadingZones ? _visitedFieldKeys : null,
-                    openedChests: _openedChests);
+                    openedChests: _openedChests,
+                    previousJourneyPixelX: previousJourneyX,
+                    previousJourneyPixelY: previousJourneyY);
                 _entryPortalIdToAvoid = null;
+            }
+            if (continueFromCurrentPosition && !followLoadingZones)
+            {
+                _previousJourneyStart = journeyStart;
+                _hasPreviousJourneyStart = true;
             }
             _journeyIslandLife = allowIslandLife;
             _journeyFollowLoadingZones = followLoadingZones;
@@ -2907,7 +3043,7 @@ namespace ProjectZ
                 if (!_body.WasHolePulled)
                     _body.HoleAbsorption = Vector2.Zero;
                 _body.HoleAbsorption *= MathF.Pow(0.85f, timeMultiplier);
-                BeginHoleFall(elapsedMilliseconds);
+                BeginHoleFall(map, elapsedMilliseconds);
                 return;
             }
             if (contact.Coverage > _body.AbsorbStop)
@@ -2926,7 +3062,8 @@ namespace ProjectZ
             _body.WasHolePulled = false;
         }
 
-        private void BeginHoleFall(long elapsedMilliseconds)
+        private void BeginHoleFall(
+            LiveWallpaperMap map, long elapsedMilliseconds)
         {
             // ObjLink.OnHoleAbsorb clears movement and plays link0/fall before
             // OnHoleReset returns Link to the field's saved safe position.
@@ -2940,6 +3077,118 @@ namespace ProjectZ
             _hitVelocity = Vector2.Zero;
             _hookshotStarted = false;
             _hookshotPulling = false;
+            if (map != null && map.TryGetOverworldTeleporterAt(
+                    _position.X + _body.OffsetX,
+                    _position.Y + _body.OffsetY,
+                    _body.Width, _body.Height,
+                    out var teleporter))
+                _pendingOverworldTeleporterId = teleporter.TeleporterId;
+        }
+
+        private static int PositiveTeleportSelector(int variant) =>
+            (variant * 1103515245 + 12345) & int.MaxValue;
+
+        private void AdvanceWorldTeleporter(
+            LiveWallpaperMap map,
+            LiveWallpaperMapViewport viewport,
+            int scene,
+            bool allowIslandLife,
+            bool followLoadingZones,
+            bool allowViewportFollow,
+            long elapsedMilliseconds,
+            float frameScale)
+        {
+            var phaseElapsed = Math.Max(
+                0L, elapsedMilliseconds - _worldTeleporterPhaseStartedAt);
+            if (_worldTeleporterPhase == WorldTeleporterPhase.RiseWait &&
+                phaseElapsed >=
+                LinkGameplayMotion.WorldTeleporterRiseWaitMilliseconds)
+            {
+                _worldTeleporterPhase = WorldTeleporterPhase.Rise;
+                _worldTeleporterPhaseStartedAt = elapsedMilliseconds;
+                _position.Z = 0f;
+                return;
+            }
+            if (_worldTeleporterPhase == WorldTeleporterPhase.Rise)
+            {
+                var progress = Math.Clamp(
+                    phaseElapsed /
+                    (float)LinkGameplayMotion.WorldTeleporterRiseMilliseconds,
+                    0f, 1f);
+                _position.Z = progress *
+                              LinkGameplayMotion.WorldTeleporterHeight;
+                if (progress < 1f)
+                    return;
+                _position.Set(new Vector3(
+                    _worldTeleporterDestination,
+                    LinkGameplayMotion.WorldTeleporterHeight));
+                _worldTeleporterPhase = WorldTeleporterPhase.DestinationWait;
+                _worldTeleporterPhaseStartedAt = elapsedMilliseconds;
+                _body.IsGrounded = false;
+                _body.Velocity = Vector3.Zero;
+                _worldTeleporterFallVelocity = 0f;
+                _holeResetPosition = _worldTeleporterDestination;
+                _holeResetField = GetHoleResetField(
+                    _position.X, _position.Y);
+                return;
+            }
+            if (_worldTeleporterPhase == WorldTeleporterPhase.DestinationWait &&
+                phaseElapsed >=
+                LinkGameplayMotion.WorldTeleporterDestinationWaitMilliseconds)
+            {
+                _worldTeleporterPhase = WorldTeleporterPhase.Fall;
+                _worldTeleporterPhaseStartedAt = elapsedMilliseconds;
+                _worldTeleporterFallVelocity = 0f;
+                return;
+            }
+            if (_worldTeleporterPhase != WorldTeleporterPhase.Fall ||
+                frameScale <= 0f)
+                return;
+
+            var remaining = frameScale;
+            while (remaining > 0f && _position.Z > 0f)
+            {
+                var step = Math.Min(1f, remaining);
+                _worldTeleporterFallVelocity =
+                    LinkGameplayMotion.ApplyGravity(
+                        _worldTeleporterFallVelocity,
+                        LinkGameplayMotion.Gravity, step);
+                _position.Z = Math.Max(
+                    0f, _position.Z +
+                        _worldTeleporterFallVelocity * step);
+                remaining -= step;
+            }
+            if (_position.Z > 0f)
+                return;
+
+            _position.Z = 0f;
+            _worldTeleporterFallVelocity = 0f;
+            _worldTeleporterPhase = WorldTeleporterPhase.None;
+            _worldTeleporterPhaseStartedAt = 0L;
+            _body.IsGrounded = true;
+            _body.Velocity = Vector3.Zero;
+            _body.VelocityTarget = Vector2.Zero;
+            _body.HoleAbsorption = Vector2.Zero;
+            _body.WasHolePulled = false;
+            _body.SpeedMultiply = 1f;
+            _airMoveVelocity = Vector2.Zero;
+            _failedJourneySteps.Clear();
+            _journeyPlan = null;
+            _journeyPointIndex = 0;
+            _nextJourneyAt = 0L;
+            _manualDestinationActive = false;
+            _journeyBlockedSince = 0L;
+            _journeyProgressPointIndex = -1;
+            _journeyBestTargetDistance = float.MaxValue;
+            _hasPreviousJourneyStart = false;
+            _entryPortalIdToAvoid = null;
+            _journeyVariant++;
+            StartJourney(
+                map, viewport, scene, allowIslandLife,
+                elapsedMilliseconds,
+                continueFromCurrentPosition: true,
+                followLoadingZones: followLoadingZones,
+                allowViewportFollow: allowViewportFollow);
         }
 
         private void UpdateHoleResetPosition(LiveWallpaperMap map)

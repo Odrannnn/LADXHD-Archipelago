@@ -22,6 +22,7 @@ namespace ProjectZ
         PegasusCharge,
         PegasusDash,
         Hookshot,
+        EnterTeleporter,
         Exit,
         UnlockDoor
     }
@@ -167,10 +168,20 @@ namespace ProjectZ
             bool followLoadingZones = false,
             IReadOnlySet<int> visitedFieldKeys = null,
             string excludedPortalEntryId = null,
-            IReadOnlySet<int> openedChests = null)
+            IReadOnlySet<int> openedChests = null,
+            float? previousJourneyPixelX = null,
+            float? previousJourneyPixelY = null)
         {
             if (map == null || map.Is2DMap || viewport.Columns <= 0 || viewport.Rows <= 0)
                 return new LiveWallpaperJourneyPlan([]);
+
+            if (followLoadingZones && allowIslandLife &&
+                continuationPixelX.HasValue && continuationPixelY.HasValue &&
+                PositiveHash(scene, variant, 71) % 5 == 0 &&
+                TryCreateChestPlan(
+                    map, continuationPixelX.Value, continuationPixelY.Value,
+                    openedChests, variant, out var directChestPlan))
+                return directChestPlan;
 
             int minX;
             int minY;
@@ -202,7 +213,8 @@ namespace ProjectZ
                     map, endpoints,
                     continuationPixelX.Value, continuationPixelY.Value,
                     pathMinX, pathMinY, pathMaxX, pathMaxY,
-                    followLoadingZones && variant % 6 != 5)
+                    followLoadingZones && variant % 6 != 5,
+                    previousJourneyPixelX, previousJourneyPixelY)
                 : BuildPairs(
                     endpoints, minX, minY, maxX, maxY, edgeStartOnly,
                     followLoadingZones && variant % 6 != 5);
@@ -272,13 +284,27 @@ namespace ProjectZ
                 }
             }
 
-            var pairOffset = orderedPreferredExits
+            var preferForwardProgress = !followLoadingZones &&
+                                        previousJourneyPixelX.HasValue &&
+                                        previousJourneyPixelY.HasValue;
+            var pairOffset = orderedPreferredExits || preferForwardProgress
                 ? 0
                 : PositiveHash(scene, variant, 17) % pairs.Count;
             List<Point> fallbackPath = null;
             for (var attempt = 0; attempt < pairs.Count; attempt++)
             {
                 var pair = pairs[(pairOffset + attempt) % pairs.Count];
+                var behavior = PositiveHash(scene, variant, 71);
+                // Installed Hookshot anchors should be visible gameplay, not a
+                // last-ditch path used only when ordinary A* fails. This still
+                // uses the same range/corridor/landing validation below.
+                if (allowIslandLife && behavior % 5 == 1 &&
+                    TryCreateHookshotPlan(
+                        map, pair.Start, pair.End,
+                        pathMinX, pathMinY, pathMaxX, pathMaxY,
+                        PositiveHash(scene, variant, 97),
+                        out var deliberateHookshotPlan))
+                    return deliberateHookshotPlan;
                 // A loading-zone journey is only complete when Link can actually
                 // stand in the neighbouring overworld field. Previously every edge
                 // was marked Exit even when the tile across it was blocked, which
@@ -340,7 +366,6 @@ namespace ProjectZ
                     continue;
                 }
 
-                var behavior = PositiveHash(scene, variant, 71);
                 if (!followLoadingZones && behavior % 2 == 0 && TryAddScenicDetour(
                         map, basePath, pair.Start, pair.End,
                         pathMinX, pathMinY, pathMaxX, pathMaxY, behavior,
@@ -373,7 +398,7 @@ namespace ProjectZ
                         ? MarkLoadingZoneExit(roosterPlan)
                         : roosterPlan;
                 }
-                if (!followLoadingZones && allowIslandLife && behavior % 5 == 0 &&
+                if (allowIslandLife && behavior % 5 == 0 &&
                     TryAddChest(
                         map, basePath, minX, minY, maxX, maxY,
                         pathMinX, pathMinY, pathMaxX, pathMaxY, behavior,
@@ -400,6 +425,79 @@ namespace ProjectZ
                         map, continuationPixelX.Value, continuationPixelY.Value,
                         pathMinX, pathMinY, pathMaxX, pathMaxY, variant)
                     : new LiveWallpaperJourneyPlan([]);
+        }
+
+        public static bool TryCreateOverworldTeleporterPlan(
+            LiveWallpaperMap map,
+            LiveWallpaperMapViewport viewport,
+            float startPixelX,
+            float startPixelY,
+            int variant,
+            out LiveWallpaperJourneyPlan plan)
+        {
+            plan = null;
+            if (map == null || map.Is2DMap ||
+                map.Portals.Count(portal => portal.IsOverworldTeleporter) < 2)
+                return false;
+            GetOverworldFieldBounds(
+                map, 1, startPixelX, startPixelY,
+                out var minX, out var minY, out var maxX, out var maxY);
+            var sources = map.Portals.Where(portal =>
+                    portal.IsOverworldTeleporter &&
+                    portal.PixelX + 8 >= minX && portal.PixelX + 8 <= maxX &&
+                    portal.PixelY + 8 >= minY && portal.PixelY + 8 <= maxY)
+                .ToArray();
+            if (sources.Length == 0)
+                return false;
+            var sourceOffset = PositiveHash(
+                (int)startPixelX, variant, 127) % sources.Length;
+            var startX = Snap(Math.Clamp((int)MathF.Round(startPixelX), minX, maxX));
+            var startY = Snap(Math.Clamp((int)MathF.Round(startPixelY), minY, maxY));
+            for (var sourceAttempt = 0;
+                 sourceAttempt < sources.Length;
+                 sourceAttempt++)
+            {
+                var source = sources[(sourceOffset + sourceAttempt) % sources.Length];
+                var approaches = new[]
+                {
+                    new Point(source.PixelX + 8, source.PixelY + 25),
+                    new Point(source.PixelX + 8, source.PixelY + 1),
+                    new Point(source.PixelX - 3, source.PixelY + 13),
+                    new Point(source.PixelX + 19, source.PixelY + 13)
+                };
+                var approachOffset = PositiveHash(
+                    source.TeleporterId, variant, 131) % approaches.Length;
+                for (var approachAttempt = 0;
+                     approachAttempt < approaches.Length;
+                     approachAttempt++)
+                {
+                    var approach = approaches[
+                        (approachOffset + approachAttempt) % approaches.Length];
+                    approach = new Point(Snap(approach.X), Snap(approach.Y));
+                    if (!IsInside(approach, minX, minY, maxX, maxY) ||
+                        !IsWalkable(map, approach.X, approach.Y, true))
+                        continue;
+                    var path = FindPath(
+                        map, startX, startY, approach.X, approach.Y,
+                        minX, minY, maxX, maxY,
+                        includeHoles: true, includeBushes: false,
+                        includeStones: false, includeMoveStones: false);
+                    if (path.Count == 0)
+                        continue;
+                    var basePlan = TryCreateTraversableObjectPlan(
+                            map, path, out var objectPlan)
+                        ? objectPlan
+                        : ToPlan(map, path);
+                    var points = new List<LiveWallpaperJourneyPoint>(basePlan.Points)
+                    {
+                        new(source.PixelX + 8, source.PixelY + 13,
+                            LiveWallpaperJourneyAction.EnterTeleporter)
+                    };
+                    plan = new LiveWallpaperJourneyPlan(points.ToArray());
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static LiveWallpaperJourneyPlan CreateReachableFallback(
@@ -953,6 +1051,76 @@ namespace ProjectZ
                 for (var index = detourIndex + 1; index < basePath.Count; index++)
                     points.Add(ToJourneyPoint(map, basePath[index]));
                 plan = new LiveWallpaperJourneyPlan(points.ToArray());
+                return true;
+            }
+            return false;
+        }
+
+        public static bool TryCreateChestPlan(
+            LiveWallpaperMap map,
+            float startPixelX,
+            float startPixelY,
+            IReadOnlySet<int> openedChests,
+            int variant,
+            out LiveWallpaperJourneyPlan plan)
+        {
+            plan = null;
+            if (map == null || map.Is2DMap)
+                return false;
+            GetOverworldFieldBounds(
+                map, 1, startPixelX, startPixelY,
+                out var minX, out var minY, out var maxX, out var maxY);
+            var chests = map.Objects.Where(mapObject =>
+                    string.Equals(
+                        mapObject.Template, "chest", StringComparison.Ordinal) &&
+                    mapObject.Arguments.Count > 0 &&
+                    LiveWallpaperChestItem.TryResolve(
+                        mapObject.Arguments[0], out _) &&
+                    !(mapObject.Arguments.Count > 4 &&
+                      bool.TryParse(mapObject.Arguments[4], out var hitMode) &&
+                      hitMode) &&
+                    openedChests?.Contains(map.GetChestKey(
+                        mapObject.PixelX, mapObject.PixelY)) != true &&
+                    mapObject.PixelX + 8 >= minX &&
+                    mapObject.PixelX + 8 <= maxX &&
+                    mapObject.PixelY + 8 >= minY &&
+                    mapObject.PixelY + 8 <= maxY)
+                .ToArray();
+            if (chests.Length == 0)
+                return false;
+
+            var startX = Snap(Math.Clamp(
+                (int)MathF.Round(startPixelX), minX, maxX));
+            var startY = Snap(Math.Clamp(
+                (int)MathF.Round(startPixelY), minY, maxY));
+            var chestOffset = PositiveHash(startX, variant, 137) % chests.Length;
+            for (var attempt = 0; attempt < chests.Length; attempt++)
+            {
+                var chest = chests[(chestOffset + attempt) % chests.Length];
+                var approach = new Point(
+                    Snap(chest.PixelX + 8), Snap(chest.PixelY + 24));
+                if (!IsInside(approach, minX, minY, maxX, maxY) ||
+                    !IsWalkable(map, approach.X, approach.Y, true))
+                    continue;
+                var path = FindPath(
+                    map, startX, startY, approach.X, approach.Y,
+                    minX, minY, maxX, maxY,
+                    includeHoles: true, includeBushes: false,
+                    includeStones: false, includeMoveStones: false);
+                if (path.Count == 0)
+                    continue;
+                var basePlan = TryCreateTraversableObjectPlan(
+                        map, path, out var objectPlan)
+                    ? objectPlan
+                    : ToPlan(map, path);
+                var points = basePlan.Points.ToArray();
+                points[^1] = new LiveWallpaperJourneyPoint(
+                    approach.X, approach.Y,
+                    LiveWallpaperJourneyAction.OpenChest,
+                    chestKey: map.GetChestKey(
+                        chest.PixelX, chest.PixelY),
+                    chestItemName: chest.Arguments[0]);
+                plan = new LiveWallpaperJourneyPlan(points);
                 return true;
             }
             return false;
@@ -2104,7 +2272,9 @@ namespace ProjectZ
             int minY,
             int maxX,
             int maxY,
-            bool edgeEndpointsOnly)
+            bool edgeEndpointsOnly,
+            float? previousPixelX,
+            float? previousPixelY)
         {
             if (!TryResolveContinuationStart(
                     map, currentPixelX, currentPixelY,
@@ -2121,9 +2291,18 @@ namespace ProjectZ
                 var deltaX = endpoint.X - startX;
                 var deltaY = endpoint.Y - startY;
                 var distance = MathF.Sqrt(deltaX * deltaX + deltaY * deltaY);
+                var novelty = 0f;
+                if (previousPixelX.HasValue && previousPixelY.HasValue)
+                {
+                    var previousDeltaX = endpoint.X - previousPixelX.Value;
+                    var previousDeltaY = endpoint.Y - previousPixelY.Value;
+                    novelty = MathF.Sqrt(
+                        previousDeltaX * previousDeltaX +
+                        previousDeltaY * previousDeltaY) * 0.65f;
+                }
                 pairs.Add(new Pair(
                     start, endpoint,
-                    distance + (endpoint.IsDoor ? 90f : 0f)));
+                    distance + novelty + (endpoint.IsDoor ? 90f : 0f)));
             }
             pairs.Sort((left, right) => right.Score.CompareTo(left.Score));
             return pairs;

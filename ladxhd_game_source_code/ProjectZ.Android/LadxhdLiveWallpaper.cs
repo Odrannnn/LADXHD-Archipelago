@@ -1022,6 +1022,11 @@ namespace ProjectZ.Android
             FilterBitmap = false,
             Alpha = 255
         };
+        private readonly Paint _systemBarVignettePaint = new Paint
+        {
+            AntiAlias = false,
+            FilterBitmap = false
+        };
         private readonly ColorFilter[] _cloakColorFilters = new ColorFilter[3];
         private readonly Dictionary<string, Bitmap> _spriteSheets =
             new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
@@ -1123,6 +1128,13 @@ namespace ProjectZ.Android
         private SpriteAsset _pegasusDust;
         private MapAsset _overworldMap;
         private readonly Context _context;
+        private readonly int _statusBarHeight;
+        private readonly int _navigationBarHeight;
+        private LinearGradient _topBarVignette;
+        private LinearGradient _bottomBarVignette;
+        private int _vignetteWidth;
+        private int _vignetteHeight;
+        private int _vignetteExtent;
         private string _activeMapName = "overworld.map";
         private float _activeMapCameraFocusX;
         private float _activeMapCameraFocusY;
@@ -1137,6 +1149,7 @@ namespace ProjectZ.Android
         private LiveWallpaperActorState[] _mapActorStates = [];
         private LiveWallpaperEnemyState[] _mapEnemyStates = [];
         private readonly Dictionary<int, int> _grandmotherDirections = new();
+        private readonly Dictionary<int, BowWowChainGameplay> _bowWowChains = new();
         private LiveWallpaperMapViewport? _followedViewport;
         private int _followedScene = -1;
         private int _followedSceneSetting = -1;
@@ -1152,6 +1165,7 @@ namespace ProjectZ.Android
         private int _mapTileCacheColumns;
         private int _mapTileCacheRows;
         private float _mapTileCacheTileSize;
+        private Color _mapBackdropColor = Color.Black;
         private int _wallpaperColorRevision;
         private readonly bool _performanceLogEnabled;
         private int _performanceFrameCount;
@@ -1172,6 +1186,10 @@ namespace ProjectZ.Android
         public LadxhdWallpaperScene(Context context)
         {
             _context = context.ApplicationContext ?? context;
+            _statusBarHeight = ResolveSystemBarHeight(
+                _context, "status_bar_height");
+            _navigationBarHeight = ResolveSystemBarHeight(
+                _context, "navigation_bar_height");
             _performanceLogEnabled = global::Android.Util.Log.IsLoggable(
                 "LadxhdPerf", global::Android.Util.LogPriority.Debug);
             _linkCloak = LoadLinkCloak(context);
@@ -1419,6 +1437,7 @@ namespace ProjectZ.Android
                 _overworldMap.Map.Actors.Count];
             _mapEnemyStates = new LiveWallpaperEnemyState[
                 _overworldMap.Map.Enemies.Count];
+            _bowWowChains.Clear();
             foreach (var decoration in _overworldMap.Map.Decorations)
             {
                 var key = decoration.AssetKey;
@@ -1608,7 +1627,7 @@ namespace ProjectZ.Android
             var performanceFrameStart = PerformanceTimestamp();
             var time = animated ? elapsed : 0L;
             ConfigureSunlight(timeOfDay, DateTime.Now.TimeOfDay.TotalMinutes, sunrise, sunset);
-            canvas.DrawColor(Color.Black);
+            canvas.DrawColor(_mapBackdropColor);
 
             // Defensively restore fully opaque bitmap rendering at the start of every frame.
             _bitmapPaint.Color = Color.White;
@@ -1648,6 +1667,14 @@ namespace ProjectZ.Android
                 _followedViewport, out var viewport);
             var performanceMap = PerformanceTimestamp() - performancePhaseStart;
             _lastDrawnViewport = viewport;
+            var mapClip = canvas.Save();
+            var mapLeft = viewport.Left - viewport.OriginX * viewport.TileSize;
+            var mapTop = viewport.Top - viewport.OriginY * viewport.TileSize;
+            canvas.ClipRect(
+                MathF.Max(0f, mapLeft),
+                MathF.Max(0f, mapTop),
+                MathF.Min(width, mapLeft + _overworldMap.Map.Width * viewport.TileSize),
+                MathF.Min(height, mapTop + _overworldMap.Map.Height * viewport.TileSize));
             performancePhaseStart = PerformanceTimestamp();
             DrawInstalledMapAnimatedTiles(canvas, viewport, time, animated);
             var performanceAnimated =
@@ -1709,7 +1736,10 @@ namespace ProjectZ.Android
                 PerformanceTimestamp() - performancePhaseStart;
             performancePhaseStart = PerformanceTimestamp();
             DrawMapLighting(canvas, viewport);
+            canvas.RestoreToCount(mapClip);
             DrawSceneTransition(canvas, width, height, scene, elapsed);
+            DrawSystemBarVignette(
+                canvas, width, height, viewport.TileSize);
             if (followLoadingZones && simulatedLink.HasValue)
                 TryFollowLinkThroughPortal(
                     simulatedLink.Value, width, height, xOffset);
@@ -1794,6 +1824,57 @@ namespace ProjectZ.Android
             canvas.DrawRect(0, 0, width, height, _overlayPaint);
         }
 
+        private static int ResolveSystemBarHeight(
+            Context context, string resourceName)
+        {
+            var resourceId = context.Resources?.GetIdentifier(
+                resourceName, "dimen", "android") ?? 0;
+            return resourceId > 0
+                ? context.Resources.GetDimensionPixelSize(resourceId)
+                : 0;
+        }
+
+        private void DrawSystemBarVignette(
+            Canvas canvas, int width, int height, float tileSize)
+        {
+            if (width <= 0 || height <= 0)
+                return;
+            var extent = Math.Clamp(
+                Math.Max(
+                    Math.Max(_statusBarHeight, _navigationBarHeight) +
+                    (int)MathF.Ceiling(tileSize),
+                    (int)MathF.Ceiling(tileSize * 1.5f)),
+                1, Math.Max(1, height / 3));
+            if (_topBarVignette == null ||
+                _bottomBarVignette == null ||
+                _vignetteWidth != width ||
+                _vignetteHeight != height ||
+                _vignetteExtent != extent)
+            {
+                _systemBarVignettePaint.SetShader(null);
+                _topBarVignette?.Dispose();
+                _bottomBarVignette?.Dispose();
+                _topBarVignette = new LinearGradient(
+                    0f, 0f, 0f, extent,
+                    Color.Argb(150, 0, 0, 0), Color.Transparent,
+                    Shader.TileMode.Clamp);
+                _bottomBarVignette = new LinearGradient(
+                    0f, height, 0f, height - extent,
+                    Color.Argb(175, 0, 0, 0), Color.Transparent,
+                    Shader.TileMode.Clamp);
+                _vignetteWidth = width;
+                _vignetteHeight = height;
+                _vignetteExtent = extent;
+            }
+            _systemBarVignettePaint.SetShader(_topBarVignette);
+            canvas.DrawRect(0f, 0f, width, extent, _systemBarVignettePaint);
+            _systemBarVignettePaint.SetShader(_bottomBarVignette);
+            canvas.DrawRect(
+                0f, height - extent, width, height,
+                _systemBarVignettePaint);
+            _systemBarVignettePaint.SetShader(null);
+        }
+
         private float DrawInstalledMap(
             Canvas canvas,
             int width,
@@ -1828,6 +1909,9 @@ namespace ProjectZ.Android
                 return viewport.GroundY;
 
             EnsureMapTileCache(viewport, tilesPerRow);
+            // Fill letterboxed/system-bar space from the current installed
+            // scene palette instead of exposing an unrelated black canvas.
+            canvas.DrawColor(_mapBackdropColor);
             if (_mapTileCache != null)
                 canvas.DrawBitmap(
                     _mapTileCache, viewport.Left, viewport.Top, _bitmapPaint);
@@ -1942,7 +2026,67 @@ namespace ProjectZ.Android
             _mapTileCacheColumns = viewport.Columns;
             _mapTileCacheRows = viewport.Rows;
             _mapTileCacheTileSize = viewport.TileSize;
+            _mapBackdropColor = ResolveMapBackdropColor(
+                _mapTileCache, _mapBackdropColor);
             _wallpaperColorRevision++;
+        }
+
+        private static Color ResolveMapBackdropColor(
+            Bitmap bitmap, Color fallback)
+        {
+            if (bitmap == null || bitmap.IsRecycled ||
+                bitmap.Width <= 0 || bitmap.Height <= 0)
+                return fallback;
+            Span<int> counts = stackalloc int[512];
+            Span<int> reds = stackalloc int[512];
+            Span<int> greens = stackalloc int[512];
+            Span<int> blues = stackalloc int[512];
+            var samples = 24;
+            for (var index = 0; index < samples; index++)
+            {
+                var x = samples == 1 ? 0 :
+                    index * (bitmap.Width - 1) / (samples - 1);
+                var y = samples == 1 ? 0 :
+                    index * (bitmap.Height - 1) / (samples - 1);
+                AddBackdropSample(bitmap, x, 0,
+                    counts, reds, greens, blues);
+                AddBackdropSample(bitmap, x, bitmap.Height - 1,
+                    counts, reds, greens, blues);
+                AddBackdropSample(bitmap, 0, y,
+                    counts, reds, greens, blues);
+                AddBackdropSample(bitmap, bitmap.Width - 1, y,
+                    counts, reds, greens, blues);
+            }
+            var best = -1;
+            for (var key = 0; key < counts.Length; key++)
+                if (counts[key] > 0 &&
+                    (best < 0 || counts[key] > counts[best]))
+                    best = key;
+            return best < 0 ? fallback : Color.Rgb(
+                reds[best] / counts[best],
+                greens[best] / counts[best],
+                blues[best] / counts[best]);
+        }
+
+        private static void AddBackdropSample(
+            Bitmap bitmap, int x, int y,
+            Span<int> counts, Span<int> reds,
+            Span<int> greens, Span<int> blues)
+        {
+            var pixel = bitmap.GetPixel(
+                Math.Clamp(x, 0, bitmap.Width - 1),
+                Math.Clamp(y, 0, bitmap.Height - 1));
+            if ((pixel >> 24 & 0xff) < 128)
+                return;
+            var red = pixel >> 16 & 0xff;
+            var green = pixel >> 8 & 0xff;
+            var blue = pixel & 0xff;
+            var key = (red >> 5 << 6) | (green >> 5 << 3) |
+                      (blue >> 5);
+            counts[key]++;
+            reds[key] += red;
+            greens[key] += green;
+            blues[key] += blue;
         }
 
         public WallpaperColors ComputeWallpaperColors()
@@ -1996,6 +2140,11 @@ namespace ProjectZ.Android
             _mapTileCache?.Dispose();
             _mapTileCache = null;
             _mapTileCacheMap = null;
+            _systemBarVignettePaint.SetShader(null);
+            _topBarVignette?.Dispose();
+            _topBarVignette = null;
+            _bottomBarVignette?.Dispose();
+            _bottomBarVignette = null;
             ReleaseSceneEffectRenderTargets();
         }
 
@@ -2008,6 +2157,26 @@ namespace ProjectZ.Android
             nextViewport = viewport;
             if (_overworldMap?.Map == null)
                 return false;
+
+            var linkScreenX = viewport.Left +
+                (link.MapX - viewport.OriginX) * viewport.TileSize;
+            var linkScreenY = viewport.Top +
+                (link.MapY - viewport.OriginY) * viewport.TileSize;
+            if ((linkScreenX < -viewport.TileSize ||
+                 linkScreenX > viewport.ScreenWidth + viewport.TileSize ||
+                 linkScreenY < -viewport.TileSize ||
+                 linkScreenY > viewport.ScreenHeight + viewport.TileSize) &&
+                viewport.TryFollowLinkThroughExit(
+                    link.MapX * 16f, link.MapY * 16f,
+                    _overworldMap.Map.Width, _overworldMap.Map.Height,
+                    out var teleportedViewport))
+            {
+                _cameraTargetOriginX = teleportedViewport.CameraOriginX;
+                _cameraTargetOriginY = teleportedViewport.CameraOriginY;
+                _cameraLastElapsed = elapsed;
+                nextViewport = teleportedViewport;
+                return true;
+            }
 
             var deltaMilliseconds = _cameraLastElapsed.HasValue
                 ? Math.Clamp(elapsed - _cameraLastElapsed.Value, 0L, 100L)
@@ -2766,6 +2935,23 @@ namespace ProjectZ.Android
                  actorIndex++)
             {
                 var actor = _overworldMap.Map.Actors[actorIndex];
+                if (!string.Equals(
+                        _activeMapName, "overworld.map",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    var focusPixelX = link.HasValue
+                        ? link.Value.MapX * 16f
+                        : (viewport.CameraOriginX +
+                           viewport.ScreenWidth /
+                           (2f * viewport.TileSize)) * 16f;
+                    var focusPixelY = link.HasValue
+                        ? link.Value.MapY * 16f
+                        : (viewport.CameraOriginY +
+                           viewport.ScreenHeight /
+                           (2f * viewport.TileSize)) * 16f;
+                    if (!IsActorInRoom(actor, focusPixelX, focusPixelY))
+                        continue;
+                }
                 if (!IsNearViewport(
                         viewport, actor.PixelX, actor.PixelY, 128f))
                     continue;
@@ -2777,6 +2963,24 @@ namespace ProjectZ.Android
                 _linkSimulation.UpdateLiveActorState(
                     _overworldMap.Map, actorIndex, actorState);
             }
+        }
+
+        private bool IsActorInRoom(
+            LiveWallpaperMapActor actor,
+            float focusPixelX,
+            float focusPixelY)
+        {
+            const float roomWidth = 160f;
+            const float roomHeight = 128f;
+            var offsetX = _overworldMap.Map.MapOffsetX * 16f;
+            var offsetY = _overworldMap.Map.MapOffsetY * 16f;
+            var actorRoomX = MathF.Floor((actor.PixelX - offsetX) / roomWidth);
+            var actorRoomY = MathF.Floor((actor.PixelY - offsetY) / roomHeight);
+            var focusRoomX = MathF.Floor(
+                (focusPixelX - offsetX) / roomWidth);
+            var focusRoomY = MathF.Floor(
+                (focusPixelY - offsetY) / roomHeight);
+            return actorRoomX == focusRoomX && actorRoomY == focusRoomY;
         }
 
         private void DrawInstalledMapActor(
@@ -2921,7 +3125,7 @@ namespace ProjectZ.Android
             }
             if (actor.Kind == LiveWallpaperMapActorKind.BowWow)
                 DrawInstalledBowWowChain(
-                    canvas, viewport, actor, actorState, scale);
+                    canvas, viewport, actor, actorState, actorIndex, scale);
             DrawSpriteAt(canvas, asset, elapsed, anchorX, anchorY, scale,
                 engineDriven: true, animated: animated);
             if (actor.Kind == LiveWallpaperMapActorKind.Person &&
@@ -3085,31 +3289,38 @@ namespace ProjectZ.Android
             LiveWallpaperMapViewport viewport,
             LiveWallpaperMapActor actor,
             LiveWallpaperActorState state,
+            int actorIndex,
             float scale)
         {
             if (_bowWowChain == null)
                 return;
-            var anchorX = viewport.Left +
-                ((actor.PixelX + 8f) / 16f - viewport.OriginX) *
-                viewport.TileSize;
-            var anchorY = viewport.Top +
-                ((actor.PixelY + 8f) / 16f - viewport.OriginY) *
-                viewport.TileSize;
-            var goalX = viewport.Left +
-                (state.EntityX / 16f - viewport.OriginX) *
-                viewport.TileSize;
-            var goalY = viewport.Top +
-                ((state.EntityY - state.Height - 4f) / 16f - viewport.OriginY) *
-                viewport.TileSize;
-            for (var index = 1; index <= 5; index++)
+            var start = new Microsoft.Xna.Framework.Vector3(
+                actor.PixelX + 8f, actor.PixelY + 8f, 0f);
+            var goal = new Microsoft.Xna.Framework.Vector3(
+                state.EntityX - state.ChainOffsetX,
+                state.EntityY - 4f - state.ChainOffsetY,
+                state.Height);
+            if (!_bowWowChains.TryGetValue(actorIndex, out var chain))
             {
-                var progress = index / 6f;
-                var linkX = anchorX + (goalX - anchorX) * progress;
-                var linkY = anchorY + (goalY - anchorY) * progress +
-                            MathF.Sin(progress * MathF.PI) * 2.5f * scale;
+                chain = new BowWowChainGameplay(
+                    new Microsoft.Xna.Framework.Vector2(start.X, start.Y));
+                _bowWowChains.Add(actorIndex, chain);
+            }
+            chain.Update(start, goal);
+            var oldAlpha = _bitmapPaint.Alpha;
+            _bitmapPaint.Alpha = (int)(255f * BowWowChainGameplay.Alpha);
+            foreach (var chainLink in chain.Links)
+            {
+                var linkX = viewport.Left +
+                    (chainLink.Position.X / 16f - viewport.OriginX) *
+                    viewport.TileSize;
+                var linkY = viewport.Top +
+                    ((chainLink.Position.Y - chainLink.Height) / 16f -
+                     viewport.OriginY) * viewport.TileSize;
                 DrawAtlasSpriteAt(
                     canvas, _bowWowChain, linkX, linkY, scale);
             }
+            _bitmapPaint.Alpha = oldAlpha;
         }
 
         private SpriteAsset ResolveMapPersonAsset(
@@ -3191,6 +3402,8 @@ namespace ProjectZ.Android
                 LiveWallpaperLinkRouteAction.RoosterFly => _linkFlying[direction],
                 LiveWallpaperLinkRouteAction.RoosterThrow => _linkThrowing[direction],
                 LiveWallpaperLinkRouteAction.Falling => _linkFalling,
+                LiveWallpaperLinkRouteAction.TeleporterUp => _linkStanding[direction],
+                LiveWallpaperLinkRouteAction.TeleporterFall => _linkStanding[direction],
                 LiveWallpaperLinkRouteAction.Attack => _linkAttacking[direction],
                 LiveWallpaperLinkRouteAction.Hookshot => _linkUsingItem[direction],
                 LiveWallpaperLinkRouteAction.ShowItem =>
@@ -3268,6 +3481,17 @@ namespace ProjectZ.Android
                     DrawLiftedStone(canvas, viewport, simulated);
                 return;
             }
+            var portalAlpha = simulated.Action switch
+            {
+                LiveWallpaperLinkRouteAction.TeleporterUp => Math.Clamp(
+                    1f - (simulated.ActionProgress - .75f) / .25f,
+                    0f, 1f),
+                LiveWallpaperLinkRouteAction.TeleporterFall =>
+                    simulated.ActionProgress,
+                _ => 1f
+            };
+            _bitmapPaint.Alpha = (int)MathF.Round(portalAlpha * 255f);
+            _cloakPaint.Alpha = _bitmapPaint.Alpha;
             var drawActiveStone = damageVisible &&
                                   simulated.ActiveLiftedStoneKey >= 0 &&
                                   simulated.StoneImpactKind ==
@@ -3299,6 +3523,8 @@ namespace ProjectZ.Android
             if (drawActiveStone && !drawStoneBeforeLink)
                 DrawLiftedStone(canvas, viewport, simulated);
             DrawChestItem(canvas, viewport, simulated);
+            _bitmapPaint.Alpha = 255;
+            _cloakPaint.Alpha = 255;
             _lastLinkAction = simulated.Action;
             if (pegasus && _pegasusDust?.Animation != null)
             {

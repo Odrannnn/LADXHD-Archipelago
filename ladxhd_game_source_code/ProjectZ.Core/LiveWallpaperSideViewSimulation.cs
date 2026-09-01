@@ -25,6 +25,14 @@ internal sealed class LiveWallpaperSideViewSimulation
     private bool _noRoute;
     private SideViewInput _input;
     private string _pendingPortal;
+    private int _autonomousSearches;
+    private bool _hookshotStaging;
+    private bool _hookshotActive;
+    private bool _hookshotPulling;
+    private Vector2 _hookshotPosition;
+    private Vector2 _hookshotContact;
+    private Vector2 _hookshotLanding;
+    private bool _hookshotFireRight;
     public SideViewBody Body => _body;
 
     public LiveWallpaperSideViewSimulation(LiveWallpaperMap map, Vector2 spawn, string entryId)
@@ -51,6 +59,9 @@ internal sealed class LiveWallpaperSideViewSimulation
         _noRoute = false;
         _allowReturn = false;
         _targetChunks = 0;
+        _hookshotStaging = false;
+        _hookshotActive = false;
+        _hookshotPulling = false;
     }
 
     public LiveWallpaperSimulatedLinkState Update(long elapsed, bool active)
@@ -62,12 +73,17 @@ internal sealed class LiveWallpaperSideViewSimulation
         var ticks = Math.Min(6, (int)((_remainder + 0.0001) / FrameMilliseconds));
         _remainder -= ticks * FrameMilliseconds;
 
-        if (active && _pendingPortal == null)
+        if (active && _pendingPortal == null && !_hookshotActive)
         {
             if (_search == null && _routeIndex >= _route.Count && elapsed >= _nextSearch && !_noRoute &&
                 (_body.Grounded || _body.Climbing || _body.Swimming))
+            {
+                if (!_target.HasValue && !_hookshotStaging &&
+                    _autonomousSearches++ % 4 == 0)
+                    TryQueueHookshotRoute();
                 _search = new LiveWallpaperSideViewPlanner(_map, _body, _entryId,
                     _entryLatched, _target, _allowReturn);
+            }
             if (_search != null)
             {
                 _search.Advance();
@@ -79,6 +95,7 @@ internal sealed class LiveWallpaperSideViewSimulation
                     _nextSearch = elapsed + 650;
                     if (_route.Count == 0)
                     {
+                        _hookshotStaging = false;
                         // An unreachable tap must not permanently disable
                         // autonomous navigation for this entire room.
                         if (_target.HasValue)
@@ -102,6 +119,11 @@ internal sealed class LiveWallpaperSideViewSimulation
         if (active && _pendingPortal == null)
         for (var tick = 0; tick < ticks; tick++)
         {
+            if (_hookshotActive)
+            {
+                AdvanceHookshot();
+                continue;
+            }
             _input = _routeIndex < _route.Count ? _route[_routeIndex++] : default;
             if (!LiveWallpaperSideViewPhysics.Step(_map, ref _body, _input))
             {
@@ -130,6 +152,19 @@ internal sealed class LiveWallpaperSideViewSimulation
                 // would postpone the next search on every subsequent tick.
                 _route = [];
                 _routeIndex = 0;
+                if (_routeReachedGoal && _hookshotStaging)
+                {
+                    _hookshotStaging = false;
+                    _hookshotActive = true;
+                    _hookshotPulling = false;
+                    _body.Direction = _hookshotFireRight ? 2 : 0;
+                    _hookshotPosition = _body.Position +
+                        new Vector2(_hookshotFireRight ? 5f : -5f, -4f);
+                    _target = null;
+                    _targetChunks = 0;
+                    _input = default;
+                    continue;
+                }
                 // A bounded search may end at a safe intermediate point.
                 // Keep the user's goal across those sections, but bound the
                 // number of sections attempted for an unreachable tap.
@@ -140,13 +175,123 @@ internal sealed class LiveWallpaperSideViewSimulation
             }
         }
 
-        var action = _body.Swimming ? LiveWallpaperLinkRouteAction.SideViewSwim :
+        var action = _hookshotActive ? LiveWallpaperLinkRouteAction.Hookshot :
+            _body.Swimming ? LiveWallpaperLinkRouteAction.SideViewSwim :
             _body.Climbing ? LiveWallpaperLinkRouteAction.Climb :
             !_body.Grounded ? (_body.FallVelocity < 0 ? LiveWallpaperLinkRouteAction.FeatherJump : LiveWallpaperLinkRouteAction.SideViewFall) :
             _input.Move.X != 0 ? LiveWallpaperLinkRouteAction.Walk : LiveWallpaperLinkRouteAction.Stand;
         var direction = _body.Climbing ? 1 : _body.Direction;
         if (_pendingPortal != null && _input.Move.Y < 0) direction = 1;
         return new LiveWallpaperSimulatedLinkState(_body.Position.X / 16, _body.Position.Y / 16,
-            0, direction, action, new LiveWallpaperLinkInput(_input.Move, _input.Jump));
+            0, direction, action, new LiveWallpaperLinkInput(_input.Move, _input.Jump),
+            hookshotVisible: _hookshotActive,
+            hookshotMapX: _hookshotPosition.X / 16,
+            hookshotMapY: _hookshotPosition.Y / 16);
+    }
+
+    private bool TryQueueHookshotRoute()
+    {
+        if (_map.HookshotTargets.Count == 0)
+            return false;
+        foreach (var target in _map.HookshotTargets)
+        {
+            // ObjLink2d fires four pixels above its body anchor. Use the
+            // lowest valid point on the installed grip first so a grounded
+            // firing position remains physically reachable.
+            var contactY = target.Y + Math.Max(1f, target.Height - 4f);
+            foreach (var fireRight in new[] { true, false })
+            for (var distance = 96f; distance >= 48f; distance -= 16f)
+            {
+                var contactX = fireRight ? target.X : target.X + target.Width;
+                var shot = new Vector2(
+                    fireRight ? contactX - distance : contactX + distance,
+                    contactY + 4f);
+                if (!_map.SideViewPositionInBounds(shot))
+                    continue;
+                var stagedBody = LiveWallpaperSideViewPhysics.Spawn(_map, shot);
+                if (!stagedBody.Grounded && !stagedBody.Climbing &&
+                    !stagedBody.Swimming)
+                    continue;
+                var hand = shot + new Vector2(fireRight ? 5f : -5f, -4f);
+                var contact = new Vector2(contactX, contactY);
+                var length = Vector2.Distance(hand, contact);
+                if (length < 40f ||
+                    length > LinkGameplayMotion.HookshotMaximumDistance ||
+                    !HasClearHookshotLine(hand, contact))
+                    continue;
+                var landing = new Vector2(
+                    fireRight ? target.X - 4f : target.X + target.Width + 4f,
+                    shot.Y);
+                if (!_map.SideViewPositionInBounds(landing) ||
+                    _map.IntersectsCollision(
+                        landing.X - 4f, landing.Y - 10f, 8f, 10f,
+                        includeHoles: false))
+                    continue;
+                _target = shot;
+                _hookshotPosition = hand;
+                _hookshotContact = contact;
+                _hookshotLanding = landing;
+                _hookshotFireRight = fireRight;
+                _hookshotStaging = true;
+                _noRoute = false;
+                _allowReturn = false;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private bool HasClearHookshotLine(Vector2 start, Vector2 contact)
+    {
+        var delta = contact - start;
+        var distance = delta.Length();
+        if (distance <= 0f)
+            return false;
+        var direction = delta / distance;
+        for (var travelled = 0f;
+             travelled + 3f < distance;
+             travelled += LinkGameplayMotion.HookshotSpeed)
+        {
+            var point = start + direction * travelled;
+            if (_map.IntersectsCollision(
+                    point.X - 2f, point.Y - 2f, 4f, 4f,
+                    includeHoles: false))
+                return false;
+        }
+        return true;
+    }
+
+    private void AdvanceHookshot()
+    {
+        var goal = _hookshotPulling ? _hookshotLanding : _hookshotContact;
+        var current = _hookshotPulling ? _body.Position : _hookshotPosition;
+        var delta = goal - current;
+        if (delta.LengthSquared() <=
+            LinkGameplayMotion.HookshotSpeed *
+            LinkGameplayMotion.HookshotSpeed)
+        {
+            if (!_hookshotPulling)
+            {
+                _hookshotPosition = _hookshotContact;
+                _hookshotPulling = true;
+                return;
+            }
+            _body = LiveWallpaperSideViewPhysics.Spawn(
+                _map, _hookshotLanding);
+            _hookshotPosition = _hookshotContact;
+            _hookshotActive = false;
+            _hookshotPulling = false;
+            _route = [];
+            _routeIndex = 0;
+            _search = null;
+            _nextSearch = (_lastTime ?? 0L) + 650L;
+            _noRoute = false;
+            return;
+        }
+        var step = Vector2.Normalize(delta) * LinkGameplayMotion.HookshotSpeed;
+        if (_hookshotPulling)
+            _body.Position += step;
+        else
+            _hookshotPosition += step;
     }
 }

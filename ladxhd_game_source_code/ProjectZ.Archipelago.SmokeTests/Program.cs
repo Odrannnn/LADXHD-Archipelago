@@ -12,6 +12,7 @@ using System.Net.Http.Json;
 using System.Net.WebSockets;
 using System.Reflection;
 using System.Text;
+using Microsoft.Xna.Framework;
 
 static void Assert(bool condition, string message)
 {
@@ -82,6 +83,7 @@ WallpaperTouchRoutingTests.Run();
 WallpaperPathingRecoveryTests.Run();
 WallpaperSideViewTests.Run();
 WallpaperLiveNavigationTests.Run();
+WallpaperTeleporterTests.Run();
 GameplayCrashRegressionTests.Run();
 MapTransitionArrivalTests.Run();
 ArchipelagoConnectionWarningTests.Run();
@@ -438,14 +440,14 @@ for (var row = 0; row < 16; row++)
     chestJourneyMapData.AppendLine(
         string.Join(',', Enumerable.Repeat("0", 20)));
 chestJourneyMapData.Append(
-    "1\nchest\n1\n0;160;112;ruby50;;wallpaper_chest;0;false\n");
+    "1\nchest\n1\n0;160;144;ruby50;;wallpaper_chest;0;false\n");
 Assert(LiveWallpaperMap.TryLoad(
            new StringReader(chestJourneyMapData.ToString()),
            out var chestJourneyMap),
        "The wallpaper chest journey fixture must load as a valid installed map.");
 Assert(LiveWallpaperMapViewport.TryCreateCentered(
            160, 128, chestJourneyMap.Width, chestJourneyMap.Height,
-           168, 136, 0.5f, out var chestJourneyViewport),
+           168, 168, 0.5f, out var chestJourneyViewport),
        "The wallpaper chest journey fixture must have a centered viewport.");
 LiveWallpaperJourneyPlan chestJourney = null;
 var chestJourneyVariant = -1;
@@ -461,7 +463,7 @@ for (var variant = 0; variant < 300; variant++)
     chestJourneyVariant = variant;
     break;
 }
-var chestKey = chestJourneyMap.GetChestKey(160, 112);
+var chestKey = chestJourneyMap.GetChestKey(160, 144);
 LiveWallpaperJourneyPoint? chestPoint = null;
 if (chestJourney != null)
 {
@@ -474,10 +476,24 @@ if (chestJourney != null)
     }
 }
 Assert(chestJourney != null && chestPoint.HasValue &&
-       chestPoint.Value.PixelX == 168 && chestPoint.Value.PixelY == 136 &&
+       chestPoint.Value.PixelX == 168 && chestPoint.Value.PixelY == 168 &&
        chestPoint.Value.ChestKey == chestKey &&
        chestPoint.Value.ChestItemName == "ruby50",
        "Wallpaper journeys must approach an unopened item chest from below using ObjChest's upward-facing interaction rule.");
+var followModeFoundChest = false;
+for (var variant = 0; variant < 300 && !followModeFoundChest; variant++)
+{
+    var candidate = LiveWallpaperJourneyPlanner.Create(
+        chestJourneyMap, chestJourneyViewport, 1, variant,
+        allowIslandLife: true,
+        continuationPixelX: 168,
+        continuationPixelY: 168,
+        followLoadingZones: true);
+    followModeFoundChest = candidate.Points.Any(point =>
+        point.Action == LiveWallpaperJourneyAction.OpenChest);
+}
+Assert(followModeFoundChest,
+       "Following Link through loading zones must not disable native chest interactions.");
 var alreadyOpenedChests = new HashSet<int> { chestKey };
 for (var variant = 0; variant < 300; variant++)
 {
@@ -518,6 +534,15 @@ Assert(LiveWallpaperAtlas.TryLoad(
        !LiveWallpaperAtlas.TryLoad(
            new StringReader("1\n1\nnote:1,2,-3,4,0,0\n"), "note", out _),
        "The live wallpaper must parse installed atlas entries and reject invalid bounds.");
+var bowWowChain = new BowWowChainGameplay(Vector2.Zero);
+bowWowChain.Update(Vector3.Zero, new Vector3(40, 0, 9));
+Assert(bowWowChain.Links.Count == BowWowChainGameplay.VisibleLinkCount &&
+       bowWowChain.Links.All(link => float.IsFinite(link.Position.X) &&
+           float.IsFinite(link.Position.Y) && link.Height >= 0f) &&
+       Math.Abs(BowWowChainGameplay.Alpha - 0.55f) < 0.001f &&
+       Vector2.Distance(bowWowChain.EndPosition, new Vector2(40, 0)) <=
+           BowWowChainGameplay.EndLinkLength + 0.001f,
+       "Wallpaper BowWow must use ObjChain's exact link count, opacity, height propagation and constrained endpoint.");
 Assert(LiveWallpaperLighting.Resolve(0, 4) == LiveWallpaperTimePhase.Night &&
        LiveWallpaperLighting.Resolve(0, 5) == LiveWallpaperTimePhase.Sunset &&
        LiveWallpaperLighting.Resolve(0, 7) == LiveWallpaperTimePhase.Day &&
